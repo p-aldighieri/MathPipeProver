@@ -12,10 +12,10 @@ import shutil
 from .config import RoleRuntimeConfig, WorkflowConfig
 from .ledger import build_knowledge_ledger, count_scope_assumptions, extract_tagged_lines
 from .markdown import to_markdown
-from .prompting import bundle_markdown, load_prompt_template, render_template
-from .providers import LLMRequest, ProviderHub
+from .prompting import build_role_context, bundle_markdown, load_prompt_template, render_template
+from .providers import LLMRequest, ProviderHub, estimate_tokens
 from .roles import ROLE_SPECS, stub_response
-from .router import RouterDecision, choose_router_decision
+from .router import ReviewVerdict, RouterDecision, choose_router_decision, parse_review_verdict
 from .storage import RunPaths, init_run_dir, load_run_paths, make_run_id, read_json, sanitize_name, write_json
 
 
@@ -30,10 +30,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _estimate_tokens(text: str) -> int:
-    if not text:
-        return 0
-    return max(1, int(len(text) / 4))
+_estimate_tokens = estimate_tokens
 
 
 def _blank_metric() -> dict:
@@ -84,12 +81,12 @@ def _record_token_usage(
     _ensure_branch_structures(state)
 
     metrics = state["metrics"]
-    metrics["calls"] += int(1)
-    metrics["input_tokens"] += int(input_tokens)
-    metrics["output_tokens"] += int(output_tokens)
-    metrics["total_tokens"] += int(total_tokens)
+    metrics["calls"] += 1
+    metrics["input_tokens"] += input_tokens
+    metrics["output_tokens"] += output_tokens
+    metrics["total_tokens"] += total_tokens
     if estimated:
-        metrics["estimated_calls"] += int(1)
+        metrics["estimated_calls"] += 1
 
     by_role = metrics["by_role"]
     role_metrics = by_role.setdefault(
@@ -104,23 +101,23 @@ def _record_token_usage(
             "model": model,
         },
     )
-    role_metrics["calls"] += int(1)
-    role_metrics["input_tokens"] += int(input_tokens)
-    role_metrics["output_tokens"] += int(output_tokens)
-    role_metrics["total_tokens"] += int(total_tokens)
+    role_metrics["calls"] += 1
+    role_metrics["input_tokens"] += input_tokens
+    role_metrics["output_tokens"] += output_tokens
+    role_metrics["total_tokens"] += total_tokens
     role_metrics["provider"] = provider
     role_metrics["model"] = model
     if estimated:
-        role_metrics["estimated_calls"] += int(1)
+        role_metrics["estimated_calls"] += 1
 
     bstate = state["branches"].setdefault(branch, {})
     bmetrics = bstate.setdefault("metrics", _blank_metric())
-    bmetrics["calls"] += int(1)
-    bmetrics["input_tokens"] += int(input_tokens)
-    bmetrics["output_tokens"] += int(output_tokens)
-    bmetrics["total_tokens"] += int(total_tokens)
+    bmetrics["calls"] += 1
+    bmetrics["input_tokens"] += input_tokens
+    bmetrics["output_tokens"] += output_tokens
+    bmetrics["total_tokens"] += total_tokens
     if estimated:
-        bmetrics["estimated_calls"] += int(1)
+        bmetrics["estimated_calls"] += 1
 
     token_event = {
         "ts": _now_iso(),
@@ -128,10 +125,10 @@ def _record_token_usage(
         "role": role,
         "provider": provider,
         "model": model,
-        "input_tokens": int(input_tokens),
-        "output_tokens": int(output_tokens),
-        "total_tokens": int(total_tokens),
-        "estimated": bool(estimated),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "estimated": estimated,
         "error": error,
     }
     token_path = run_dir / f"branches/{branch}/token_events.jsonl"
@@ -189,7 +186,7 @@ def _read_context_bundle(run_dir: Path, branch: str, role: str, config: Workflow
             continue
         content = path.read_text(encoding="utf-8", errors="replace")
         files_for_bundle.append((rel, content))
-    return bundle_markdown(files_for_bundle)
+    return build_role_context(role, files_for_bundle)
 
 
 def _write_role_output(
@@ -494,6 +491,7 @@ def _call_role_model(
         user_prompt=prompt,
         temperature=runtime.temperature,
         max_output_tokens=runtime.max_output_tokens,
+        reasoning_effort=runtime.reasoning_effort,
     )
 
     try:
@@ -659,6 +657,7 @@ def _route_next(
         user_prompt=user_prompt,
         temperature=runtime.temperature,
         max_output_tokens=runtime.max_output_tokens,
+        reasoning_effort=runtime.reasoning_effort,
     )
 
     router_error = ""
@@ -1073,9 +1072,10 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             allowed_scope, scope_reason = _scope_decision(run_dir, branch, config)
 
             bstate["review_cycles"] = cycle
+            verdict = parse_review_verdict(reviewer_content)
+            bstate["last_verdict"] = verdict.level
             _write_run_state(paths, state)
 
-            reviewer_pass = "PASS" in reviewer_content.upper() and "FAIL" not in reviewer_content.upper()
             if not allowed_scope:
                 decision = _route_next(
                     phase="reviewer",
@@ -1090,7 +1090,7 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
                     prompts_root=prompts_root,
                 )
                 phase = _tag_to_phase(decision.selected) or "stop_fail_scope"
-            elif reviewer_pass:
+            elif verdict.is_pass:
                 decision = _route_next(
                     phase="reviewer",
                     allowed_tags=["CONSOLIDATOR", "PROVER"],
@@ -1104,27 +1104,16 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
                     prompts_root=prompts_root,
                 )
                 phase = _tag_to_phase(decision.selected) or "consolidator"
-            else:
+            elif verdict.needs_small_fix:
+                # Small patch: loop back to prover if cycles remain
                 if cycle >= config.max_prover_cycles:
-                    decision = _route_next(
-                        phase="reviewer",
-                        allowed_tags=["STOP_STALL", "PROVER"],
-                        fallback_tag="STOP_STALL",
-                        extra="review FAIL and max cycles reached",
-                        run_dir=run_dir,
-                        branch=branch,
-                        state=state,
-                        config=config,
-                        hub=hub,
-                        prompts_root=prompts_root,
-                    )
-                    phase = _tag_to_phase(decision.selected) or "stop_stall"
+                    phase = "stop_stall"
                 else:
                     decision = _route_next(
                         phase="reviewer",
-                        allowed_tags=["PROVER", "STOP_STALL"],
+                        allowed_tags=["PROVER"],
                         fallback_tag="PROVER",
-                        extra="review FAIL, retry prover",
+                        extra="review PATCH_SMALL, minor fix needed",
                         run_dir=run_dir,
                         branch=branch,
                         state=state,
@@ -1133,9 +1122,42 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
                         prompts_root=prompts_root,
                     )
                     phase = _tag_to_phase(decision.selected) or "prover"
+            elif verdict.needs_big_fix:
+                # Big patch: loop back to breakdown to restructure
+                if cycle >= config.max_prover_cycles:
+                    phase = "stop_stall"
+                else:
+                    decision = _route_next(
+                        phase="reviewer",
+                        allowed_tags=["BREAKDOWN", "PROVER", "STOP_STALL"],
+                        fallback_tag="BREAKDOWN",
+                        extra="review PATCH_BIG, restructure needed",
+                        run_dir=run_dir,
+                        branch=branch,
+                        state=state,
+                        config=config,
+                        hub=hub,
+                        prompts_root=prompts_root,
+                    )
+                    phase = _tag_to_phase(decision.selected) or "breakdown"
+            else:
+                # REDO: strategy-level failure, kill branch
+                decision = _route_next(
+                    phase="reviewer",
+                    allowed_tags=["STOP_STALL", "PROVER"],
+                    fallback_tag="STOP_STALL",
+                    extra="review REDO, strategy-level failure",
+                    run_dir=run_dir,
+                    branch=branch,
+                    state=state,
+                    config=config,
+                    hub=hub,
+                    prompts_root=prompts_root,
+                )
+                phase = _tag_to_phase(decision.selected) or "stop_stall"
 
             bstate["current_phase"] = phase
-            _append_event(run_dir, branch, f"reviewer cycle={cycle} next={phase}")
+            _append_event(run_dir, branch, f"reviewer cycle={cycle} verdict={verdict.level} next={phase}")
             _write_run_state(paths, state)
             continue
 

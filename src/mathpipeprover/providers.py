@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
+import time
 from typing import Any
 from urllib import error, request
 
@@ -19,6 +20,7 @@ class LLMRequest:
     user_prompt: str
     temperature: float
     max_output_tokens: int
+    reasoning_effort: str = "high"
 
 
 @dataclass
@@ -133,9 +135,7 @@ class ProviderHub:
                 },
             ],
             "max_output_tokens": req.max_output_tokens,
-            # Reduce chance of spending budget on reasoning without returning text.
-            "reasoning": {"effort": "minimal"},
-            "text": {"verbosity": "low"},
+            "reasoning": {"effort": req.reasoning_effort},
         }
         if req.temperature is not None:
             payload["temperature"] = req.temperature
@@ -156,27 +156,56 @@ class ProviderHub:
         active_payload = dict(payload)
         raw: dict[str, Any] = {}
         text = ""
-        for _ in range(4):
+        # Reasoning models need much higher caps — reasoning tokens don't count
+        # toward visible output, so the model may need 4x+ the requested output
+        # to produce enough reasoning + text.
+        max_retry_tokens = max(req.max_output_tokens * 4, 8192)
+        for attempt in range(4):
+            if attempt > 0:
+                time.sleep(min(2 ** attempt, 8))
+
             raw = call_openai_once(active_payload)
             text = _extract_openai_text(raw)
             if text:
                 break
 
+            # If all output tokens went to reasoning with none left for text,
+            # lower reasoning effort on retry (high→medium→low).
+            if _openai_all_reasoning_no_text(raw):
+                effort = active_payload.get("reasoning", {}).get("effort", "high")
+                downgrade = {"high": "medium", "medium": "low"}
+                if effort in downgrade:
+                    active_payload["reasoning"] = {"effort": downgrade[effort]}
+                    current = int(active_payload.get("max_output_tokens", req.max_output_tokens) or req.max_output_tokens)
+                    active_payload["max_output_tokens"] = min(max(current * 2, 128), max_retry_tokens)
+                    active_payload.pop("temperature", None)
+                    continue
+
             if _openai_needs_more_tokens(raw):
                 current = int(active_payload.get("max_output_tokens", req.max_output_tokens) or req.max_output_tokens)
-                active_payload["max_output_tokens"] = min(max(current * 2, 128), 2048)
+                active_payload["max_output_tokens"] = min(max(current * 2, 128), max_retry_tokens)
                 active_payload.pop("temperature", None)
                 continue
 
             if _openai_has_zero_output(raw):
                 current = int(active_payload.get("max_output_tokens", req.max_output_tokens) or req.max_output_tokens)
-                active_payload["max_output_tokens"] = min(max(current * 2, 128), 2048)
+                active_payload["max_output_tokens"] = min(max(current * 2, 128), max_retry_tokens)
                 active_payload.pop("temperature", None)
                 continue
 
             break
 
         if not text:
+            # Dump raw response for debugging
+            import sys
+            print(f"[DEBUG] OpenAI empty text response for model={req.model} reasoning_effort={req.reasoning_effort}", file=sys.stderr)
+            print(f"[DEBUG] Raw keys: {list(raw.keys())}", file=sys.stderr)
+            print(f"[DEBUG] Status: {raw.get('status')}", file=sys.stderr)
+            print(f"[DEBUG] Usage: {raw.get('usage')}", file=sys.stderr)
+            output = raw.get("output", [])
+            if isinstance(output, list):
+                for i, item in enumerate(output[:3]):
+                    print(f"[DEBUG] output[{i}] type={item.get('type') if isinstance(item, dict) else type(item)}", file=sys.stderr)
             raise ProviderError("OpenAI response did not include text output")
         usage = _extract_openai_usage(raw, req=req, text=text)
         return LLMResponse(text=text, raw=raw, usage=usage)
@@ -262,19 +291,37 @@ class ProviderHub:
 
 
 def _extract_openai_text(raw: dict[str, Any]) -> str:
+    # Top-level shortcut field (Responses API convenience)
     if isinstance(raw.get("output_text"), str) and raw["output_text"].strip():
         return raw["output_text"].strip()
 
+    # Responses API output array format
     output = raw.get("output", [])
     chunks: list[str] = []
     if isinstance(output, list):
         for item in output:
+            if not isinstance(item, dict):
+                continue
+            # Direct text on the output item (some response formats)
+            if isinstance(item.get("text"), str) and item["text"].strip():
+                chunks.append(item["text"])
+            # Nested content array (standard Responses API format)
             for content in item.get("content", []):
                 if isinstance(content, dict):
-                    if isinstance(content.get("text"), str):
+                    if isinstance(content.get("text"), str) and content["text"].strip():
                         chunks.append(content["text"])
-                    elif isinstance(content.get("output_text"), str):
+                    elif isinstance(content.get("output_text"), str) and content["output_text"].strip():
                         chunks.append(content["output_text"])
+
+    # Chat Completions API format (fallback)
+    choices = raw.get("choices", [])
+    if isinstance(choices, list):
+        for choice in choices:
+            if isinstance(choice, dict):
+                message = choice.get("message", {})
+                if isinstance(message, dict) and isinstance(message.get("content"), str):
+                    chunks.append(message["content"])
+
     return "\n".join(part.strip() for part in chunks if part.strip()).strip()
 
 
@@ -287,6 +334,20 @@ def _openai_needs_more_tokens(raw: dict[str, Any]) -> bool:
     if not isinstance(details, dict):
         return False
     return str(details.get("reason", "")).lower() == "max_output_tokens"
+
+
+def _openai_all_reasoning_no_text(raw: dict[str, Any]) -> bool:
+    """Detect when the model spent all output tokens on reasoning with none for visible text."""
+    usage = raw.get("usage", {})
+    if not isinstance(usage, dict):
+        return False
+    output_details = usage.get("output_tokens_details", {})
+    if not isinstance(output_details, dict):
+        return False
+    reasoning = int(output_details.get("reasoning_tokens", 0) or 0)
+    total_out = int(usage.get("output_tokens", 0) or 0)
+    # All output went to reasoning (or nearly all), leaving nothing for visible text
+    return reasoning > 0 and total_out > 0 and (total_out - reasoning) < 10
 
 
 def _openai_has_zero_output(raw: dict[str, Any]) -> bool:
@@ -316,10 +377,11 @@ def _extract_gemini_text(raw: dict[str, Any]) -> str:
     return "\n".join(part.strip() for part in chunks if part.strip()).strip()
 
 
-def _estimate_token_count(text: str) -> int:
+def estimate_tokens(text: str) -> int:
+    """Estimate token count as ~1 token per 4 characters."""
     if not text:
         return 0
-    return max(1, int(len(text) / 4))
+    return max(1, len(text) // 4)
 
 
 def _extract_openai_usage(raw: dict[str, Any], req: LLMRequest, text: str) -> TokenUsage:
@@ -331,8 +393,8 @@ def _extract_openai_usage(raw: dict[str, Any], req: LLMRequest, text: str) -> To
         if total > 0:
             return TokenUsage(input_tokens=inp, output_tokens=out, total_tokens=total, estimated=False)
 
-    inp_est = _estimate_token_count(req.system_prompt + "\n" + req.user_prompt)
-    out_est = _estimate_token_count(text)
+    inp_est = estimate_tokens(req.system_prompt + "\n" + req.user_prompt)
+    out_est = estimate_tokens(text)
     return TokenUsage(input_tokens=inp_est, output_tokens=out_est, total_tokens=inp_est + out_est, estimated=True)
 
 
@@ -345,8 +407,8 @@ def _extract_anthropic_usage(raw: dict[str, Any], req: LLMRequest, text: str) ->
         if total > 0:
             return TokenUsage(input_tokens=inp, output_tokens=out, total_tokens=total, estimated=False)
 
-    inp_est = _estimate_token_count(req.system_prompt + "\n" + req.user_prompt)
-    out_est = _estimate_token_count(text)
+    inp_est = estimate_tokens(req.system_prompt + "\n" + req.user_prompt)
+    out_est = estimate_tokens(text)
     return TokenUsage(input_tokens=inp_est, output_tokens=out_est, total_tokens=inp_est + out_est, estimated=True)
 
 
@@ -359,6 +421,6 @@ def _extract_gemini_usage(raw: dict[str, Any], req: LLMRequest, text: str) -> To
         if total > 0:
             return TokenUsage(input_tokens=inp, output_tokens=out, total_tokens=total, estimated=False)
 
-    inp_est = _estimate_token_count(req.system_prompt + "\n" + req.user_prompt)
-    out_est = _estimate_token_count(text)
+    inp_est = estimate_tokens(req.system_prompt + "\n" + req.user_prompt)
+    out_est = estimate_tokens(text)
     return TokenUsage(input_tokens=inp_est, output_tokens=out_est, total_tokens=inp_est + out_est, estimated=True)

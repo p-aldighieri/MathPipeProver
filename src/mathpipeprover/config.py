@@ -14,6 +14,7 @@ class RoleRuntimeConfig:
     model: str
     temperature: float
     max_output_tokens: int
+    reasoning_effort: str = "high"
 
 
 @dataclass
@@ -78,14 +79,14 @@ DEFAULT_ROLE_ACCESS: dict[str, dict[str, list[str]]] = {
 
 
 DEFAULT_ROLE_RUNTIME: dict[str, RoleRuntimeConfig] = {
-    "workflow_router": RoleRuntimeConfig("stub", "gpt-5-nano", 0.0, 64),
-    "formalizer": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200),
-    "literature": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200),
-    "searcher": RoleRuntimeConfig("stub", "gpt-5-mini", 0.3, 1200),
-    "breakdown": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200),
-    "prover": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200),
-    "reviewer": RoleRuntimeConfig("stub", "gpt-5-nano", 0.0, 600),
-    "consolidator": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1600),
+    "workflow_router": RoleRuntimeConfig("stub", "gpt-5-nano", 0.0, 64, reasoning_effort="low"),
+    "formalizer": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200, reasoning_effort="high"),
+    "literature": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200, reasoning_effort="medium"),
+    "searcher": RoleRuntimeConfig("stub", "gpt-5-mini", 0.3, 1200, reasoning_effort="high"),
+    "breakdown": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200, reasoning_effort="high"),
+    "prover": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200, reasoning_effort="high"),
+    "reviewer": RoleRuntimeConfig("stub", "gpt-5-nano", 0.0, 600, reasoning_effort="high"),
+    "consolidator": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1600, reasoning_effort="medium"),
 }
 
 
@@ -110,6 +111,7 @@ def _parse_role_runtime(role_runtime_data: dict[str, Any]) -> dict[str, RoleRunt
             model=str(incoming.get("model", defaults.model)),
             temperature=float(incoming.get("temperature", defaults.temperature)),
             max_output_tokens=int(incoming.get("max_output_tokens", defaults.max_output_tokens)),
+            reasoning_effort=str(incoming.get("reasoning_effort", defaults.reasoning_effort)),
         )
     return parsed
 

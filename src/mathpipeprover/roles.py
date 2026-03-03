@@ -20,42 +20,51 @@ ROLE_SPECS: dict[str, RoleSpec] = {
     "formalizer": RoleSpec(
         name="formalizer",
         instructions=(
-            "Restate claim with clear quantifiers. Keep user assumptions explicit. "
-            "If anything new is introduced, tag each line with [ASSUMPTION+] or [SCOPE]."
+            "Transform the informal claim into a precise formal statement with explicit quantifiers and domains. "
+            "List all user assumptions tagged [USER]. Tag any new assumptions [ASSUMPTION+] with justification. "
+            "Tag scope ambiguities with [SCOPE]. Identify the mathematical domain and claim type."
         ),
     ),
     "literature": RoleSpec(
         name="literature",
         instructions=(
-            "Retrieve relevant known results and techniques. Tag evidence lines with [LIT]. "
+            "Survey relevant known theorems, techniques, and proof approaches. Tag evidence with [LIT]. "
+            "Identify applicable proof techniques and assess difficulty. Note known counterexamples to related statements. "
             "Do not claim proof validity from retrieval alone."
         ),
     ),
     "searcher": RoleSpec(
         name="searcher",
         instructions=(
-            "Propose 2-4 routes with likely failure modes. If route narrows scope, tag with [SCOPE]."
+            "Propose 2-4 genuinely distinct proof strategies, each with: core technique, key intermediate steps, "
+            "likely failure point, and complexity estimate. Rank by feasibility with most promising first. "
+            "Number each route starting from 1. Tag scope-narrowing routes with [SCOPE]."
         ),
     ),
     "breakdown": RoleSpec(
         name="breakdown",
         instructions=(
-            "Create lemma-level breakdown. Keep it editable by prover. "
-            "Future changes should be tagged [BREAKDOWN_AMEND]."
+            "Decompose the proof into numbered lemmas with dependency order. Each lemma needs: precise statement, "
+            "dependencies, technique hint, difficulty estimate. Identify the critical lemma (hardest step). "
+            "Include glue steps connecting lemmas to the final conclusion. The plan should be editable via [BREAKDOWN_AMEND]."
         ),
     ),
     "prover": RoleSpec(
         name="prover",
         instructions=(
-            "Advance proof steps. If you need to change assumptions, tag [ASSUMPTION+]/[ASSUMPTION-]. "
-            "If breakdown must change, tag [BREAKDOWN_AMEND]."
+            "Advance the proof by proving lemmas from the breakdown. Every step must have explicit justification "
+            "(known theorem, previous lemma, or direct computation). Tag conclusions [DERIVED], new assumptions "
+            "[ASSUMPTION+]/[ASSUMPTION-], and breakdown change requests [BREAKDOWN_AMEND]. "
+            "Be explicit about gaps. Reference lemmas by number. Maintain a status summary of what's proved."
         ),
     ),
     "reviewer": RoleSpec(
         name="reviewer",
         instructions=(
-            "Review logic and scope drift. Return PASS or FAIL. "
-            "Tag detected scope changes with [SCOPE]."
+            "Check each proof step for logical validity, completeness, and correct citations. Check scope compliance. "
+            "Issue a structured verdict: VERDICT: PASS (correct and complete), VERDICT: PATCH_SMALL (minor fixable issues), "
+            "VERDICT: PATCH_BIG (needs restructuring), or VERDICT: REDO (fundamentally flawed approach). "
+            "Be precise about errors. Tag scope changes with [SCOPE]."
         ),
     ),
     "scope_keeper": RoleSpec(
@@ -67,7 +76,9 @@ ROLE_SPECS: dict[str, RoleSpec] = {
     "consolidator": RoleSpec(
         name="consolidator",
         instructions=(
-            "Write final human-readable proof report and include unresolved risks."
+            "Assemble the final proof report: unified narrative with formal statement, strategy used, "
+            "definitions, ordered lemma proofs, main result assembly, proof status (complete/partial/conditional), "
+            "assumptions used, unresolved risks, and evidence trail."
         ),
     ),
 }
@@ -96,7 +107,7 @@ def stub_response(role: str, cycle: int = 0) -> str:
             )
         return "## Step Attempt\n[DERIVED] Closed remaining gap.\n"
     if role == "reviewer":
-        return "## Verdict\nPASS\n"
+        return "## Verdict\nVERDICT: PASS\n"
     if role == "scope_keeper":
         return "## Scope Decision\nNo policy violations detected.\n"
     if role == "consolidator":

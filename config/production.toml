@@ -28,48 +28,56 @@ provider = "openai"
 model = "gpt-5-nano"
 temperature = 0.0
 max_output_tokens = 96
+reasoning_effort = "low"
 
 [role_runtime.formalizer]
 provider = "openai"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 900
+max_output_tokens = 32000
+reasoning_effort = "high"
 
 [role_runtime.literature]
 provider = "external_agent"
 model = "browser-agent"
 temperature = 0.0
-max_output_tokens = 1200
+max_output_tokens = 128000
+reasoning_effort = "medium"
 
 [role_runtime.searcher]
 provider = "openai"
 model = "gpt-5-mini"
 temperature = 0.25
-max_output_tokens = 900
+max_output_tokens = 64000
+reasoning_effort = "high"
 
 [role_runtime.breakdown]
 provider = "openai"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 900
+max_output_tokens = 32000
+reasoning_effort = "high"
 
 [role_runtime.prover]
 provider = "openai"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 1400
+max_output_tokens = 32000
+reasoning_effort = "high"
 
 [role_runtime.reviewer]
 provider = "openai"
 model = "gpt-5-nano"
 temperature = 0.0
-max_output_tokens = 600
+max_output_tokens = 32000
+reasoning_effort = "low"
 
 [role_runtime.consolidator]
 provider = "openai"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 1500
+max_output_tokens = 32000
+reasoning_effort = "medium"
 
 [role_access.workflow_router]
 read = ["claim.md", "run_state.json", "branches/{branch}/context/*.md", "branches/{branch}/events.md"]

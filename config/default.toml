@@ -28,48 +28,49 @@ provider = "stub"
 model = "gpt-5-nano"
 temperature = 0.0
 max_output_tokens = 64
+reasoning_effort = "low"
 
 [role_runtime.formalizer]
 provider = "stub"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 1200
+max_output_tokens = 32000
 
 [role_runtime.literature]
 provider = "stub"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 1200
+max_output_tokens = 128000
 
 [role_runtime.searcher]
 provider = "stub"
 model = "gpt-5-mini"
 temperature = 0.3
-max_output_tokens = 1200
+max_output_tokens = 64000
 
 [role_runtime.breakdown]
 provider = "stub"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 1200
+max_output_tokens = 32000
 
 [role_runtime.prover]
 provider = "stub"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 1200
+max_output_tokens = 32000
 
 [role_runtime.reviewer]
 provider = "stub"
 model = "gpt-5-nano"
 temperature = 0.0
-max_output_tokens = 600
+max_output_tokens = 32000
 
 [role_runtime.consolidator]
 provider = "stub"
 model = "gpt-5-mini"
 temperature = 0.2
-max_output_tokens = 1600
+max_output_tokens = 32000
 
 # Markdown-first role I/O permissions.
 # Patterns are relative to each run directory.
