@@ -96,6 +96,8 @@ Then translate the informal reasoning into rigorous steps.
 - **If you discover the approach is fundamentally flawed**, say so clearly — don't paper over gaps.
 - **If a reviewer previously flagged an issue**, address it directly — cite the reviewer's specific concern and show how you fixed it.
 
+{scope_policy}
+
 ## Mode: {mode}
 ## Branch: {branch}
 ## Phase: {current_phase}

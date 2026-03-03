@@ -68,6 +68,8 @@ Combine the formalized claim, proved lemmas, and reviewer assessments into a sin
 - **Brevity for simple proofs**: don't pad a 5-line proof into 3 pages.
 - **Completeness for complex proofs**: include enough detail that each step can be verified.
 
+{scope_policy}
+
 ## Mode: {mode}
 ## Branch: {branch}
 ## Phase: {current_phase}

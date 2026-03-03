@@ -85,6 +85,8 @@ Reason: (why the approach is fundamentally broken)
 - **PATCH_BIG vs PATCH_SMALL**: if the prover can fix it without changing the lemma structure, it's SMALL. If lemmas need to be added/removed/restructured, it's BIG.
 - The verdict line must appear exactly as shown: `VERDICT: LEVEL` on its own line.
 
+{scope_policy}
+
 ## Mode: {mode}
 ## Branch: {branch}
 ## Phase: {current_phase}

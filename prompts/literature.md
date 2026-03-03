@@ -50,6 +50,8 @@ Survey relevant known results, techniques, and theorems that could inform the pr
 - Prefer well-known, verified results over obscure references.
 - If this is a well-known textbook result, say so and point to the standard proof approach.
 
+{scope_policy}
+
 ## Mode: {mode}
 ## Branch: {branch}
 ## Phase: {current_phase}

@@ -12,6 +12,7 @@ import shutil
 from .config import RoleRuntimeConfig, WorkflowConfig
 from .ledger import build_knowledge_ledger, count_scope_assumptions, extract_tagged_lines
 from .markdown import to_markdown
+from .policies import build_scope_policy
 from .prompting import build_role_context, bundle_markdown, load_prompt_template, render_template
 from .providers import LLMRequest, ProviderHub, estimate_tokens
 from .roles import ROLE_SPECS, stub_response
@@ -240,6 +241,26 @@ def _scope_decision(run_dir: Path, branch: str, config: WorkflowConfig) -> tuple
     counts = count_scope_assumptions(tagged)
     policy = config.policy
 
+    # When the scope gate is disabled (e.g. flexible mode), still write
+    # delta files for observability but always allow.
+    if not policy.require_scope_gate:
+        delta_text = (
+            "# Assumption Delta\n\n"
+            f"- Added assumptions: {counts.assumptions_added}\n"
+            f"- Removed assumptions: {counts.assumptions_removed}\n"
+            f"- Scope changes: {counts.scope_changes}\n"
+            f"- Mode: {policy.mode}\n"
+        )
+        decision_text = (
+            "# Scope Decision\n\n"
+            "- Allowed: yes\n"
+            "- Reason: scope gate disabled\n"
+        )
+        ctx.mkdir(parents=True, exist_ok=True)
+        (ctx / "assumption_delta.md").write_text(delta_text, encoding="utf-8")
+        (ctx / "scope_decision.md").write_text(decision_text, encoding="utf-8")
+        return True, "scope gate disabled"
+
     allowed = True
     reasons: list[str] = []
 
@@ -446,12 +467,15 @@ def _call_role_model(
     role_spec = ROLE_SPECS.get(role)
     role_instructions = role_spec.instructions if role_spec else "Return markdown output."
 
+    scope_policy = build_scope_policy(config.policy, role)
+
     template = load_prompt_template(
         prompts_root,
         role,
         (
             "You are role {role}.\n\n"
             "Role instructions:\n{role_instructions}\n\n"
+            "{scope_policy}\n\n"
             "Workflow mode: {mode}\n"
             "Current phase: {current_phase}\n"
             "Branch: {branch}\n\n"
@@ -470,6 +494,7 @@ def _call_role_model(
             "current_phase": str(state.get("current_phase", "unknown")),
             "branch": branch,
             "context_bundle": context_bundle,
+            "scope_policy": scope_policy,
         },
     )
 
@@ -484,10 +509,14 @@ def _call_role_model(
             state=state,
         )
 
+    system_prompt = role_instructions
+    if scope_policy:
+        system_prompt = f"{role_instructions}\n\n{scope_policy}"
+
     req = LLMRequest(
         provider=runtime.provider,
         model=runtime.model,
-        system_prompt=role_instructions,
+        system_prompt=system_prompt,
         user_prompt=prompt,
         temperature=runtime.temperature,
         max_output_tokens=runtime.max_output_tokens,

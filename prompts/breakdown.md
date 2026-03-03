@@ -62,6 +62,8 @@ Lemma 2 → Lemma 3
 - The breakdown should be **editable** — the Prover may request amendments via `[BREAKDOWN_AMEND]` tags.
 - Order matters: put independent lemmas first so they can be proven without waiting.
 
+{scope_policy}
+
 ## Mode: {mode}
 ## Branch: {branch}
 ## Phase: {current_phase}

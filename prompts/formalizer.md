@@ -67,6 +67,8 @@ Then translate to the precise formal statement.
 - If the claim is trivially true or trivially false, say so explicitly.
 - If you recognize this as a well-known result, name it (e.g., "This is the Cauchy-Schwarz inequality").
 
+{scope_policy}
+
 ## Mode: {mode}
 ## Branch: {branch}
 ## Phase: {current_phase}

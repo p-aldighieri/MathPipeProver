@@ -70,7 +70,9 @@ ROLE_SPECS: dict[str, RoleSpec] = {
     "scope_keeper": RoleSpec(
         name="scope_keeper",
         instructions=(
-            "Evaluate assumption/scope changes against current mode policy and decide accept/reject."
+            "Mechanical backstop: count [ASSUMPTION+] and [SCOPE] tags against mode limits. "
+            "Primary scope enforcement is handled by scope-policy paragraphs injected into "
+            "each role's prompt (especially the reviewer). This role exists only as a safety net."
         ),
     ),
     "consolidator": RoleSpec(

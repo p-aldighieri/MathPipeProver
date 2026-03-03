@@ -55,6 +55,8 @@ Number each route starting from 1. The orchestrator parses numbered routes to cr
 - Consider the claim's domain: algebraic claims may benefit from different strategies than analytic ones.
 - If there's a standard textbook approach, include it as route 1.
 
+{scope_policy}
+
 ## Mode: {mode}
 ## Branch: {branch}
 ## Phase: {current_phase}
