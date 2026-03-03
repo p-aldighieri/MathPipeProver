@@ -1,0 +1,108 @@
+[workflow]
+mode = "semi_strict"
+enable_literature = true
+max_branches = 3
+max_prover_cycles = 4
+max_total_tokens = 450000
+max_tokens_per_branch = 200000
+max_total_calls = 5000
+max_calls_per_branch = 1800
+run_root = "runs"
+prompts_root = "prompts"
+router_enabled = true
+provider_timeout_seconds = 60
+
+[providers]
+browser_agent = "external_agent"
+
+[smoke_models]
+openai = "gpt-5-nano"
+anthropic = "claude-3-5-haiku-latest"
+gemini = "gemini-2.0-flash"
+
+# Cost-aware profile:
+# - cheap router/reviewer
+# - stronger prover/consolidator
+[role_runtime.workflow_router]
+provider = "openai"
+model = "gpt-5-nano"
+temperature = 0.0
+max_output_tokens = 96
+
+[role_runtime.formalizer]
+provider = "openai"
+model = "gpt-5-mini"
+temperature = 0.2
+max_output_tokens = 900
+
+[role_runtime.literature]
+provider = "external_agent"
+model = "browser-agent"
+temperature = 0.0
+max_output_tokens = 1200
+
+[role_runtime.searcher]
+provider = "openai"
+model = "gpt-5-mini"
+temperature = 0.25
+max_output_tokens = 900
+
+[role_runtime.breakdown]
+provider = "openai"
+model = "gpt-5-mini"
+temperature = 0.2
+max_output_tokens = 900
+
+[role_runtime.prover]
+provider = "openai"
+model = "gpt-5-mini"
+temperature = 0.2
+max_output_tokens = 1400
+
+[role_runtime.reviewer]
+provider = "openai"
+model = "gpt-5-nano"
+temperature = 0.0
+max_output_tokens = 600
+
+[role_runtime.consolidator]
+provider = "openai"
+model = "gpt-5-mini"
+temperature = 0.2
+max_output_tokens = 1500
+
+[role_access.workflow_router]
+read = ["claim.md", "run_state.json", "branches/{branch}/context/*.md", "branches/{branch}/events.md"]
+write = ["branches/{branch}/router/router_*.md"]
+
+[role_access.formalizer]
+read = ["claim.md", "branches/{branch}/context/*.md"]
+write = ["branches/{branch}/context/formalizer.md"]
+
+[role_access.literature]
+read = ["claim.md", "branches/{branch}/context/formalizer.md"]
+write = ["branches/{branch}/context/literature.md"]
+
+[role_access.searcher]
+read = ["claim.md", "branches/{branch}/context/formalizer.md", "branches/{branch}/context/literature.md"]
+write = ["branches/{branch}/context/strategy.md"]
+
+[role_access.breakdown]
+read = ["branches/{branch}/context/formalizer.md", "branches/{branch}/context/strategy.md"]
+write = ["branches/{branch}/context/breakdown.md"]
+
+[role_access.prover]
+read = ["branches/{branch}/context/*.md"]
+write = ["branches/{branch}/context/prover_*.md"]
+
+[role_access.reviewer]
+read = ["branches/{branch}/context/*.md"]
+write = ["branches/{branch}/context/reviewer_*.md"]
+
+[role_access.scope_keeper]
+read = ["branches/{branch}/context/*.md"]
+write = ["branches/{branch}/context/assumption_delta.md", "branches/{branch}/context/scope_decision.md"]
+
+[role_access.consolidator]
+read = ["claim.md", "branches/{branch}/context/*.md"]
+write = ["branches/{branch}/context/final_report.md"]

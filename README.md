@@ -1,0 +1,63 @@
+# MathPipeProver
+
+MathPipeProver is a markdown-first proof workflow harness.
+
+It is designed for fast experimentation with role-based proving pipelines while preserving branch-level context, scope controls, and resumable runs.
+
+## What it does now
+
+- CLI commands: `run`, `resume`, `inspect`, `report`, `smoke-providers`
+- Policy modes: `strict`, `semi_strict`, `flexible`
+- Cheap-model workflow router (`workflow_router`) emits structured decisions (`{"next":"TAG"}`)
+- Multi-branch strategy execution with branch pruning to `max_branches`
+- Branch-specific markdown context pools
+- Scope reconciliation via lightweight tags (`[SCOPE]`, `[ASSUMPTION+]`, `[ASSUMPTION-]`)
+- Assumption delta and knowledge ledger files per branch
+- Prover can amend breakdown using `[BREAKDOWN_AMEND]`
+- Resumable run state (`run_state.json`)
+- Real provider adapters for OpenAI, Anthropic, and Gemini
+- Optional `external_agent` provider path (request/response files for browser-agent workflows)
+- Prompt templates in `prompts/`
+- Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)
+- Budget controls (`max_total_tokens`, `max_tokens_per_branch`, `max_total_calls`, `max_calls_per_branch`)
+
+## Why markdown-first
+
+This project intentionally avoids heavy structured output requirements.
+Roles produce normal markdown with optional lightweight tags for cheap governance.
+
+## CLI
+
+```bash
+mpp run --claim-text "Your theorem here" --config config/default.toml
+mpp resume --run-id <run_id> --config config/default.toml
+mpp inspect --run-id <run_id> --config config/default.toml
+mpp report --run-id <run_id> --config config/default.toml
+mpp smoke-providers --config config/default.toml --providers openai anthropic gemini
+```
+
+`mpp inspect` includes total token counters for the run.
+`mpp report` includes branch outcomes and per-role usage breakdown.
+
+## Configuration highlights
+
+See `config/default.toml`:
+- workflow mode
+- router enable/disable and prompt root
+- token/call budget limits
+- max prover/reviewer cycles
+- max branch fan-out
+- per-role provider/model/temperature config
+- per-role file read/write patterns
+- smoke-test model selection
+- provider options (`stub`, `openai`, `anthropic`, `gemini`, `external_agent`)
+
+CLI behavior:
+- If a local `.env` exists in the project root, it is loaded automatically (overriding current shell values).
+
+## Planning docs
+
+- Main roadmap: `PLAN.md`
+- Execution checklist: `TODO.md`
+- Scaffold review: `docs/scaffolding_review.md`
+- Mode and governance details: `docs/modes_and_governance.md`

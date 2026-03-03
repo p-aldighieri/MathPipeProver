@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mathpipeprover"
+version = "0.1.0"
+description = "Markdown-first harness for mathematical proof workflows"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  {name = "MathPipeProver"}
+]
+dependencies = []
+
+[project.scripts]
+mpp = "mathpipeprover.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
