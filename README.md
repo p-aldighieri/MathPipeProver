@@ -79,6 +79,7 @@ The intended loop is:
 This first pass hard-codes the browser model policy to `ChatGPT 5.4 Pro` and the browser effort policy to `Extended Pro`.
 If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
 Browser submits now default to a 90-minute wait budget and maintain a heartbeat JSON beside each response file while waiting.
+They also accept repeated `--attach-file` arguments so branch-local proof artifacts can travel with a request without becoming durable project sources.
 
 Operational rules for proof work:
 

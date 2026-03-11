@@ -75,8 +75,12 @@ scripts/chatgpt_browser_agent.sh submit \
   --cdp-url "http://127.0.0.1:9222" \
   --project-url "https://chatgpt.com/g/g-p-6992190183fc8191aec8b0c2fad5c017-robust-trust-proof/project" \
   --request-file "runs/<run_id>/branches/main/external_agent/formalizer_request.md" \
+  --attach-file "runs/<run_id>/branches/main/context/breakdown.md" \
+  --attach-file "runs/<run_id>/branches/main/external_agent/prover_response.md" \
   --response-file "runs/<run_id>/branches/main/external_agent/formalizer_response.md"
 ```
+
+Use `--attach-file` for branch-local support files that should travel with the current chat but should not be promoted to project-wide sources.
 
 The script writes a JSON session log next to the response file by default:
 

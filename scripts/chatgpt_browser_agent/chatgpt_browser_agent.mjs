@@ -28,6 +28,7 @@ Options:
   --remove-source NAME         Remove a durable project source by visible name. Repeatable.
   --request-file PATH          Request markdown file produced by external_agent.
   --response-file PATH         Response markdown file to write back for resume.
+  --attach-file PATH           Extra chat attachment to upload with the request. Repeatable.
   --log-json PATH              Optional JSON session log path.
   --heartbeat-json PATH        Optional heartbeat JSON path.
   --help                       Show this help.
@@ -54,6 +55,7 @@ function parseArgs(argv) {
     removeSources: [],
     requestFile: "",
     responseFile: "",
+    attachFiles: [],
     logJson: "",
     heartbeatJson: "",
   };
@@ -91,6 +93,8 @@ function parseArgs(argv) {
       args.requestFile = rest.shift() || "";
     } else if (token === "--response-file") {
       args.responseFile = rest.shift() || "";
+    } else if (token === "--attach-file") {
+      args.attachFiles.push(rest.shift() || "");
     } else if (token === "--log-json") {
       args.logJson = rest.shift() || "";
     } else if (token === "--heartbeat-json") {
@@ -366,10 +370,15 @@ async function submitPrompt(page, requestText) {
   }
 }
 
-function buildAttachmentPrompt(requestFile) {
+function buildAttachmentPrompt(requestFile, attachFiles) {
   const fileName = path.basename(requestFile);
+  const extraNames = attachFiles.map((item) => path.basename(item));
+  const attachmentLine = extraNames.length > 0
+    ? `The supporting files are attached separately: ${extraNames.map((name) => `\`${name}\``).join(", ")}.`
+    : "There are no supporting attachments beyond the main request packet.";
   return [
     `Read the attached file \`${fileName}\` and answer that request directly.`,
+    attachmentLine,
     "Follow the role instructions exactly.",
     "Use the durable project sources when relevant.",
     "Return only the substantive markdown answer for the role.",
@@ -529,7 +538,7 @@ async function runSubmit(page, args) {
   }
 
   const requestText = await fs.readFile(args.requestFile, "utf8");
-  const submissionPrompt = buildAttachmentPrompt(args.requestFile);
+  const submissionPrompt = buildAttachmentPrompt(args.requestFile, args.attachFiles);
   const submittedAt = new Date().toISOString();
   const logPath = args.logJson || args.responseFile.replace(/\.md$/i, "_session.json");
   const heartbeatPath = args.heartbeatJson || args.responseFile.replace(/\.md$/i, "_heartbeat.json");
@@ -558,6 +567,9 @@ async function runSubmit(page, args) {
   await ensureBaseModel(page);
   await ensureExtendedPro(page);
   await attachFileToComposer(page, args.requestFile);
+  for (const attachmentPath of args.attachFiles) {
+    await attachFileToComposer(page, attachmentPath);
+  }
   await submitPrompt(page, submissionPrompt);
   await writeHeartbeat("submitted", { chat_url: page.url() });
 
@@ -588,6 +600,7 @@ async function runSubmit(page, args) {
     base_model: TARGET_BASE_MODEL_BUTTON_LABEL,
     effort_mode: TARGET_EFFORT_LABEL,
     submission_method: "file_attachment",
+    attachment_files: args.attachFiles.map((item) => path.resolve(item)),
     submission_prompt: submissionPrompt,
     add_sources: args.addSources.map((item) => path.resolve(item)),
     remove_sources: args.removeSources,
