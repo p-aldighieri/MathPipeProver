@@ -17,6 +17,8 @@ It is designed for fast experimentation with role-based proving pipelines while 
 - Resumable run state (`run_state.json`)
 - Real provider adapters for OpenAI, Anthropic, and Gemini
 - Optional `external_agent` provider path (request/response files for browser-agent workflows)
+- Browser ChatGPT runner for the `external_agent` path via `scripts/chatgpt_browser_agent.sh`
+- Heartbeat watcher and auto-resume supervisor for long-running browser roles
 - Prompt templates in `prompts/`
 - Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)
 - Budget controls (`max_total_tokens`, `max_tokens_per_branch`, `max_total_calls`, `max_calls_per_branch`)
@@ -55,9 +57,33 @@ See `config/default.toml`:
 CLI behavior:
 - If a local `.env` exists in the project root, it is loaded automatically (overriding current shell values).
 
+## Browser ChatGPT mode
+
+This repo now includes a first browser-backed implementation for the existing `external_agent` seam.
+
+Key pieces:
+
+- config profile: `config/browser_chatgpt.toml`
+- browser runner: `scripts/chatgpt_browser_agent.sh`
+- heartbeat watcher: `scripts/chatgpt_heartbeat_watch.sh`
+- auto-resume supervisor: `scripts/chatgpt_browser_supervisor.sh`
+- detailed usage: `docs/browser_chatgpt.md`
+
+The intended loop is:
+
+1. Run `mpp run` or `mpp resume` with `config/browser_chatgpt.toml`.
+2. MathPipeProver pauses with status `waiting_external_agent` when a role response is missing.
+3. Either fulfill the pending request manually with `scripts/chatgpt_browser_agent.sh submit ...` or let `scripts/chatgpt_browser_supervisor.sh` own the submit/watch/resume loop.
+4. If you use the supervisor, it watches the heartbeat JSON, relaunches after stale/error states, and resumes the run as soon as the response file is ready.
+
+This first pass hard-codes the browser model policy to `ChatGPT 5.4 Pro` and the browser effort policy to `Extended Pro`.
+If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
+Browser submits now default to a 90-minute wait budget and maintain a heartbeat JSON beside each response file while waiting.
+
 ## Planning docs
 
 - Main roadmap: `PLAN.md`
 - Execution checklist: `TODO.md`
 - Scaffold review: `docs/scaffolding_review.md`
 - Mode and governance details: `docs/modes_and_governance.md`
+- Browser ChatGPT workflow: `docs/browser_chatgpt.md`

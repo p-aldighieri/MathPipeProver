@@ -7,8 +7,10 @@ import sys
 
 from .config import load_config
 from .dotenv_loader import load_dotenv
+from .heartbeat import format_watch_result, watch_heartbeat
 from .orchestrator import inspect_run, report_run, resume_run, start_run
 from .providers import ProviderHub
+from .supervisor import supervise_external_agents
 
 
 def _read_claim(args: argparse.Namespace) -> str:
@@ -48,6 +50,28 @@ def build_parser() -> argparse.ArgumentParser:
         default=["openai", "anthropic", "gemini"],
         help="Subset to test (openai anthropic gemini)",
     )
+
+    heartbeat_p = sub.add_parser("watch-heartbeat", help="Wait for a browser-agent heartbeat to complete")
+    heartbeat_p.add_argument("--heartbeat-json", required=True)
+    heartbeat_p.add_argument("--response-file", default="")
+    heartbeat_p.add_argument("--poll-seconds", type=float, default=10.0)
+    heartbeat_p.add_argument("--stale-after-seconds", type=float, default=120.0)
+    heartbeat_p.add_argument("--max-wait-seconds", type=float, default=0.0)
+    heartbeat_p.add_argument("--notify", action="store_true", help="Show a macOS notification on terminal status")
+    heartbeat_p.add_argument("--notify-command", default="", help="Shell command run on terminal status")
+
+    supervise_p = sub.add_parser("supervise-external-agent", help="Launch browser submits and auto-resume on heartbeat completion")
+    supervise_p.add_argument("--run-id", required=True)
+    supervise_p.add_argument("--config", type=str, default="config/default.toml")
+    supervise_p.add_argument("--project-url", required=True)
+    supervise_p.add_argument("--cdp-url", default=os.environ.get("MPP_CHATGPT_CDP_URL", ""))
+    supervise_p.add_argument("--poll-seconds", type=float, default=10.0)
+    supervise_p.add_argument("--stale-after-seconds", type=float, default=120.0)
+    supervise_p.add_argument("--max-wait-seconds", type=float, default=5400.0)
+    supervise_p.add_argument("--notify", action="store_true")
+    supervise_p.add_argument("--notify-command", default="")
+    supervise_p.add_argument("--idle-poll-seconds", type=float, default=1.0)
+    supervise_p.add_argument("--max-submit-attempts", type=int, default=3)
 
     return parser
 
@@ -94,13 +118,17 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cwd = Path.cwd()
     load_dotenv(cwd / ".env", override=True)
-    config_path = Path(args.config)
-    if not config_path.is_absolute():
-        config_path = cwd / config_path
-
-    config = load_config(config_path)
+    config = None
+    config_path = None
+    if hasattr(args, "config"):
+        config_path = Path(args.config)
+        if not config_path.is_absolute():
+            config_path = cwd / config_path
+        config = load_config(config_path)
 
     if args.command == "run":
+        assert config is not None
+        assert config_path is not None
         claim = _read_claim(args)
         result = start_run(claim_text=claim, config=config, config_path=config_path, workspace_root=cwd)
         print(f"run_id={result.run_id}")
@@ -109,6 +137,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "resume":
+        assert config is not None
         result = resume_run(run_id=args.run_id, config=config, workspace_root=cwd)
         print(f"run_id={result.run_id}")
         print(f"status={result.status}")
@@ -116,15 +145,56 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "inspect":
+        assert config is not None
         print(inspect_run(run_id=args.run_id, config=config, workspace_root=cwd))
         return 0
 
     if args.command == "report":
+        assert config is not None
         print(report_run(run_id=args.run_id, config=config, workspace_root=cwd))
         return 0
 
     if args.command == "smoke-providers":
+        assert config_path is not None
         return _run_provider_smoke(config_path=config_path, providers=args.providers)
+
+    if args.command == "watch-heartbeat":
+        response_path = Path(args.response_file) if args.response_file else None
+        max_wait_seconds = args.max_wait_seconds if args.max_wait_seconds > 0 else None
+        result = watch_heartbeat(
+            heartbeat_path=Path(args.heartbeat_json),
+            response_path=response_path,
+            poll_seconds=args.poll_seconds,
+            stale_after_seconds=args.stale_after_seconds,
+            max_wait_seconds=max_wait_seconds,
+            notify=args.notify,
+            notify_command=args.notify_command,
+        )
+        print(format_watch_result(result), end="")
+        return {"completed": 0, "error": 1, "stale": 2, "timeout": 3}.get(result.status, 4)
+
+    if args.command == "supervise-external-agent":
+        assert config is not None
+        result = supervise_external_agents(
+            run_id=args.run_id,
+            config=config,
+            workspace_root=cwd,
+            project_url=args.project_url,
+            cdp_url=args.cdp_url,
+            poll_seconds=args.poll_seconds,
+            stale_after_seconds=args.stale_after_seconds,
+            max_wait_seconds=args.max_wait_seconds,
+            notify=args.notify,
+            notify_command=args.notify_command,
+            idle_poll_seconds=args.idle_poll_seconds,
+            max_submit_attempts=args.max_submit_attempts,
+        )
+        print(f"run_id={result.run_id}")
+        print(f"status={result.status}")
+        print(f"run_dir={result.run_dir}")
+        print(f"resumed_roles={result.resumed_roles}")
+        print(f"submit_launches={result.submit_launches}")
+        return 0
 
     return 1
 

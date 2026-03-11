@@ -27,6 +27,16 @@ class RunResult:
     status: str
 
 
+@dataclass
+class ExternalAgentPending(RuntimeError):
+    branch: str
+    role: str
+    response_path: Path
+
+    def __str__(self) -> str:
+        return f"external agent response missing for role={self.role} branch={self.branch}: {self.response_path}"
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -434,7 +444,7 @@ def _external_agent_role_output(
         estimated=True,
         error="external_agent_response_missing",
     )
-    return pending
+    raise ExternalAgentPending(branch=branch, role=role, response_path=response_path)
 
 
 def _call_role_model(
@@ -1344,20 +1354,36 @@ def _continue_run(paths: RunPaths, config: WorkflowConfig) -> RunResult:
     if state.get("status") in {"complete", "failed"} and state.get("current_phase") == "done":
         return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status=state["status"])
 
+    if state.get("status") == "waiting_external_agent":
+        state["status"] = "running"
+        state.pop("pending_external_agent", None)
+        _write_run_state(paths, state)
+
     hub = ProviderHub(timeout_seconds=config.provider_timeout_seconds)
     prompts_root = _resolve_prompts_root(paths, config)
 
-    if not state.get("prelude_done", False):
-        prelude_result = _run_prelude(paths, state, config, hub, prompts_root)
-        if prelude_result is not None:
-            return prelude_result
+    try:
+        if not state.get("prelude_done", False):
+            prelude_result = _run_prelude(paths, state, config, hub, prompts_root)
+            if prelude_result is not None:
+                return prelude_result
 
-    if not state.get("branches_spawned", False):
-        _spawn_strategy_branches(paths, state, config)
-        state["current_phase"] = "scheduler"
+        if not state.get("branches_spawned", False):
+            _spawn_strategy_branches(paths, state, config)
+            state["current_phase"] = "scheduler"
+            _write_run_state(paths, state)
+
+        return _run_scheduler(paths, state, config, hub, prompts_root)
+    except ExternalAgentPending as pending:
+        state["status"] = "waiting_external_agent"
+        state["pending_external_agent"] = {
+            "branch": pending.branch,
+            "role": pending.role,
+            "response_path": str(pending.response_path),
+        }
+        state["current_phase"] = f"waiting_external_agent:{pending.branch}:{pending.role}"
         _write_run_state(paths, state)
-
-    return _run_scheduler(paths, state, config, hub, prompts_root)
+        return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status="waiting_external_agent")
 
 
 def inspect_run(run_id: str, config: WorkflowConfig, workspace_root: Path) -> str:
@@ -1398,6 +1424,14 @@ def inspect_run(run_id: str, config: WorkflowConfig, workspace_root: Path) -> st
     if state.get("winning_branch"):
         lines.append("")
         lines.append(f"Winner: {state.get('winning_branch')}")
+
+    if state.get("pending_external_agent"):
+        pending = state["pending_external_agent"]
+        lines.append("")
+        lines.append("Pending External Agent:")
+        lines.append(f"- branch={pending.get('branch')}")
+        lines.append(f"- role={pending.get('role')}")
+        lines.append(f"- response_path={pending.get('response_path')}")
 
     if state.get("pruned_branches"):
         lines.append("")

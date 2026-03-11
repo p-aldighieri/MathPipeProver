@@ -6,6 +6,7 @@ runs/
 .dist/
 build/
 .env
+scripts/chatgpt_browser_agent/node_modules/
 # Keep tests versioned.
 !tests/
 !tests/*.py
