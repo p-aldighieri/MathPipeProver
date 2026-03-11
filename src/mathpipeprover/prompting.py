@@ -21,34 +21,32 @@ def bundle_markdown(files: list[tuple[str, str]], max_chars_per_file: int = 5000
     if not files:
         return "(no readable markdown files)"
 
+    del max_chars_per_file  # Compatibility only. Role context is never truncated.
     lines: list[str] = []
     for rel_path, content in files:
-        body = content
-        if len(body) > max_chars_per_file:
-            body = body[:max_chars_per_file] + "\n\n[TRUNCATED]"
-        lines.append(f"## FILE: {rel_path}\n\n{body.strip()}\n")
+        lines.append(f"## FILE: {rel_path}\n\n{content.strip()}\n")
     return "\n".join(lines).strip() + "\n"
 
 
-# Per-role priority: files listed first are always included in full,
-# files listed second are included as summaries (first 60 lines),
-# everything else appears only as a file manifest line.
+# Per-role priority: files listed first are loaded first and grouped as primary
+# context. Files listed second are also loaded in full, but grouped separately
+# so the packet keeps a stable structure without truncating content.
 ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
     "formalizer": {
         "full": ["claim.md"],
-        "summary": [],
+        "secondary": [],
     },
     "literature": {
         "full": ["claim.md", "*/context/formalizer.md"],
-        "summary": [],
+        "secondary": [],
     },
     "searcher": {
         "full": ["claim.md", "*/context/formalizer.md"],
-        "summary": ["*/context/literature.md"],
+        "secondary": ["*/context/literature.md"],
     },
     "breakdown": {
         "full": ["*/context/formalizer.md", "*/context/strategy.md"],
-        "summary": [],
+        "secondary": [],
     },
     "prover": {
         "full": [
@@ -56,7 +54,7 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
             "*/context/breakdown.md",
             "*/context/breakdown_amendments.md",
         ],
-        "summary": [
+        "secondary": [
             "*/context/strategy.md",
             "*/context/reviewer_*.md",
         ],
@@ -67,7 +65,7 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
             "*/context/breakdown.md",
             "*/context/prover_*.md",
         ],
-        "summary": [
+        "secondary": [
             "*/context/strategy.md",
             "*/context/assumption_delta.md",
         ],
@@ -80,7 +78,7 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
             "*/context/prover_*.md",
             "*/context/knowledge_ledger.md",
         ],
-        "summary": [
+        "secondary": [
             "*/context/reviewer_*.md",
             "*/context/strategy.md",
         ],
@@ -90,7 +88,7 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
             "*/context/assumption_delta.md",
             "*/context/scope_decision.md",
         ],
-        "summary": ["*/context/formalizer.md"],
+        "secondary": ["*/context/formalizer.md"],
     },
 }
 
@@ -98,14 +96,6 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
 def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
     from fnmatch import fnmatch
     return any(fnmatch(rel_path, p) for p in patterns)
-
-
-def _summarize_file(content: str, max_lines: int = 60) -> str:
-    lines = content.splitlines()
-    if len(lines) <= max_lines:
-        return content
-    return "\n".join(lines[:max_lines]) + f"\n\n[... {len(lines) - max_lines} more lines omitted ...]"
-
 
 def build_role_context(
     role: str,
@@ -115,25 +105,23 @@ def build_role_context(
     """Build a curated context bundle for a specific role.
 
     - Priority files: included in full
-    - Summary files: first ~60 lines
+    - Secondary files: included in full
     - Other readable files: listed as manifest only (name + size)
     """
-    priorities = ROLE_CONTEXT_PRIORITY.get(role, {"full": [], "summary": []})
+    del max_chars_per_file  # Compatibility only. Role context is never truncated.
+    priorities = ROLE_CONTEXT_PRIORITY.get(role, {"full": [], "secondary": []})
     full_patterns = priorities["full"]
-    summary_patterns = priorities["summary"]
+    secondary_patterns = priorities["secondary"]
 
     full_files: list[tuple[str, str]] = []
-    summary_files: list[tuple[str, str]] = []
+    secondary_files: list[tuple[str, str]] = []
     manifest_files: list[tuple[str, int]] = []
 
     for rel_path, content in files:
         if _matches_any_pattern(rel_path, full_patterns):
-            body = content
-            if len(body) > max_chars_per_file:
-                body = body[:max_chars_per_file] + "\n\n[TRUNCATED]"
-            full_files.append((rel_path, body))
-        elif _matches_any_pattern(rel_path, summary_patterns):
-            summary_files.append((rel_path, _summarize_file(content)))
+            full_files.append((rel_path, content))
+        elif _matches_any_pattern(rel_path, secondary_patterns):
+            secondary_files.append((rel_path, content))
         else:
             manifest_files.append((rel_path, len(content)))
 
@@ -143,9 +131,9 @@ def build_role_context(
         for rel_path, body in full_files:
             sections.append(f"## FILE: {rel_path}\n\n{body.strip()}\n")
 
-    if summary_files:
-        sections.append("---\n## SUMMARIES (truncated; full content available on request)\n")
-        for rel_path, body in summary_files:
+    if secondary_files:
+        sections.append("---\n## ADDITIONAL LOADED FILES\n")
+        for rel_path, body in secondary_files:
             sections.append(f"### {rel_path}\n\n{body.strip()}\n")
 
     if manifest_files:

@@ -17,6 +17,8 @@ The browser runner in `scripts/chatgpt_browser_agent.sh` turns that contract int
 7. Write the reply to `branches/<branch>/external_agent/<role>_response.md`.
 8. Optionally write a JSON session log beside the response file.
 
+For proof projects, keep a durable proof-state markdown file attached as a project source and update it after each accepted reviewer pass or major proof amendment.
+
 ## First-run setup
 
 The runner uses a persistent Playwright profile. On the first run:
@@ -61,6 +63,7 @@ scripts/chatgpt_browser_agent.sh prepare \
   --cdp-url "http://127.0.0.1:9222" \
   --project-url "https://chatgpt.com/g/g-p-6992190183fc8191aec8b0c2fad5c017-robust-trust-proof/project" \
   --add-source "/absolute/path/to/objective_statement.md" \
+  --add-source "/absolute/path/to/proof_state.md" \
   --add-source "/absolute/path/to/Robust_trust_Dworczak_Smolin.pdf" \
   --remove-source "old_note.md"
 ```
@@ -121,6 +124,15 @@ The supervisor writes an event log to:
 
 It resets stale heartbeat files before relaunching a role so a dead prior worker does not poison the next attempt.
 
+## Context policy for long proofs
+
+- Never truncate branch-local proof artifacts. If a prover draft or review is long, attach the full file or split the role into a smaller step.
+- Treat the proof-state note as a durable project source, not as an ephemeral chat attachment.
+- If a branch already has a late-stage prover artifact, restart from that artifact rather than from `formalizer`.
+- If a prior reviewer request was assembled with incomplete context, treat the verdict as tainted and rerun review on the full prover file.
+- Scope prover requests to one lemma block or one reviewer delta at a time instead of passing the full branch by default.
+- Keep route selection, branch pruning, and breakdown approval under manual orchestrator inspection even when submission, polling, and logging are scripted.
+
 ## Config profile
 
 `config/browser_chatgpt.toml` is the first browser-only workflow profile.
@@ -153,6 +165,8 @@ mpp resume --run-id <run_id> --config config/browser_chatgpt.toml
 ```
 
 Repeat steps 2-4 until the run completes, or replace steps 2-4 entirely with the supervisor command above.
+
+For iterative proof development, update the durable proof-state source after each accepted reviewer pass before launching the next role.
 
 ## Long-running roles
 

@@ -80,6 +80,14 @@ This first pass hard-codes the browser model policy to `ChatGPT 5.4 Pro` and the
 If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
 Browser submits now default to a 90-minute wait budget and maintain a heartbeat JSON beside each response file while waiting.
 
+Operational rules for proof work:
+
+- Role context is never truncated. If a request is too large, narrow the role scope or attach the full working files in the browser workflow.
+- Maintain a durable proof-state source that records the active route, current skeleton, lemma status, and trustworthy reviewer verdicts.
+- Do not restart from `formalizer` when a late-stage branch already exists. Re-review the latest full prover artifact first if an earlier reviewer packet may have been tainted by missing context.
+- Prefer lemma-scoped prover cycles and delta-scoped reviewer cycles over one-shot full-proof requests.
+- Keep routing decisions and breakdown approval under orchestrator review even if the browser loop is automated.
+
 ## Planning docs
 
 - Main roadmap: `PLAN.md`
