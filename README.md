@@ -94,5 +94,6 @@ Operational rules for proof work:
 - Main roadmap: `PLAN.md`
 - Execution checklist: `TODO.md`
 - Scaffold review: `docs/scaffolding_review.md`
+- Soft scaffolding guide: `docs/soft_scaffolding.md`
 - Mode and governance details: `docs/modes_and_governance.md`
 - Browser ChatGPT workflow: `docs/browser_chatgpt.md`

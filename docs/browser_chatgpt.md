@@ -80,7 +80,9 @@ scripts/chatgpt_browser_agent.sh submit \
   --response-file "runs/<run_id>/branches/main/external_agent/formalizer_response.md"
 ```
 
-Use `--attach-file` for branch-local support files that should travel with the current chat but should not be promoted to project-wide sources.
+Use `--attach-file` only for branch-local support files that should travel with the current chat but should not be promoted to project-wide sources.
+
+Do not use `--attach-file` as a substitute for refreshing durable project context. Files such as `proof_state.md` or a branch strategy note must be removed and re-added through the project `Sources` tab so the project-level context stays current across chats.
 
 The script writes a JSON session log next to the response file by default:
 
@@ -132,6 +134,7 @@ It resets stale heartbeat files before relaunching a role so a dead prior worker
 
 - Never truncate branch-local proof artifacts. If a prover draft or review is long, attach the full file or split the role into a smaller step.
 - Treat the proof-state note as a durable project source, not as an ephemeral chat attachment.
+- When a durable source changes locally, refresh it in the project `Sources` tab before the next chat. Do not assume a composer attachment updates project context.
 - If a branch already has a late-stage prover artifact, restart from that artifact rather than from `formalizer`.
 - If a prior reviewer request was assembled with incomplete context, treat the verdict as tainted and rerun review on the full prover file.
 - Scope prover requests to one lemma block or one reviewer delta at a time instead of passing the full branch by default.

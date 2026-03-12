@@ -3,17 +3,24 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
 
 const TARGET_BASE_MODEL_BUTTON_LABEL = "5.4 Pro";
-const TARGET_BASE_MODEL_MENU_LABEL = "Pro 5.4";
+const TARGET_BASE_MODEL_MENU_LABELS = [
+  "Pro 5.4",
+  "5.4 Pro",
+  "ChatGPT 5.4 Pro",
+];
 const TARGET_EFFORT_LABEL = "Extended Pro";
 
 function usage() {
   return `Usage:
   chatgpt_browser_agent.mjs prepare --project-url URL [options]
   chatgpt_browser_agent.mjs submit --project-url URL --request-file PATH --response-file PATH [options]
+  chatgpt_browser_agent.mjs recover --chat-url URL --response-file PATH [options]
+  chatgpt_browser_agent.mjs inspect --chat-url URL [options]
 
 Options:
   --project-url URL            ChatGPT project URL.
@@ -29,6 +36,7 @@ Options:
   --request-file PATH          Request markdown file produced by external_agent.
   --response-file PATH         Response markdown file to write back for resume.
   --attach-file PATH           Extra chat attachment to upload with the request. Repeatable.
+  --chat-url URL              Existing chat URL to reopen for recovery.
   --log-json PATH              Optional JSON session log path.
   --heartbeat-json PATH        Optional heartbeat JSON path.
   --help                       Show this help.
@@ -56,6 +64,7 @@ function parseArgs(argv) {
     requestFile: "",
     responseFile: "",
     attachFiles: [],
+    chatUrl: "",
     logJson: "",
     heartbeatJson: "",
   };
@@ -95,6 +104,8 @@ function parseArgs(argv) {
       args.responseFile = rest.shift() || "";
     } else if (token === "--attach-file") {
       args.attachFiles.push(rest.shift() || "");
+    } else if (token === "--chat-url") {
+      args.chatUrl = rest.shift() || "";
     } else if (token === "--log-json") {
       args.logJson = rest.shift() || "";
     } else if (token === "--heartbeat-json") {
@@ -227,7 +238,23 @@ async function ensureBaseModel(page) {
   }
 
   await modelButton.click();
-  await page.getByRole("menuitem", { name: TARGET_BASE_MODEL_MENU_LABEL, exact: true }).click();
+  let clicked = false;
+  for (const label of TARGET_BASE_MODEL_MENU_LABELS) {
+    const exactItem = page.getByRole("menuitem", { name: label, exact: true });
+    if ((await exactItem.count()) > 0) {
+      await exactItem.first().click();
+      clicked = true;
+      break;
+    }
+  }
+  if (!clicked) {
+    const fallbackItem = page
+      .getByRole("menuitem")
+      .filter({ hasText: /(?:chatgpt\s*)?5\.4\s*pro|pro\s*5\.4/i })
+      .first();
+    await fallbackItem.waitFor({ state: "visible", timeout: 10000 });
+    await fallbackItem.click();
+  }
   await page
     .getByRole("button", { name: new RegExp(`current model is ${TARGET_BASE_MODEL_BUTTON_LABEL.replace(".", "\\.")}`, "i") })
     .first()
@@ -276,12 +303,23 @@ async function addSource(page, filePath) {
     return;
   }
 
-  const [chooser] = await Promise.all([
-    page.waitForEvent("filechooser"),
-    page.getByRole("button", { name: "Choose File" }).first().click(),
-  ]);
-  await chooser.setFiles(resolved);
-  await page.getByText(baseName, { exact: true }).waitFor({ state: "visible", timeout: 30000 });
+  const fileInputs = page.locator('input[type="file"]:not([accept="image/*"])');
+  if ((await fileInputs.count()) === 0) {
+    throw new Error("Could not find a project source file input on the Sources tab.");
+  }
+  await fileInputs.last().setInputFiles(resolved);
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    if (await sourceExists(page, baseName)) {
+      return;
+    }
+    const duplicateModal = page.getByTestId("modal-file-already-exists");
+    if ((await duplicateModal.count()) > 0) {
+      throw new Error(`Project source '${baseName}' already exists and was not removed before refresh.`);
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`Timed out waiting for project source '${baseName}' to appear.`);
 }
 
 async function attachFileToComposer(page, filePath) {
@@ -299,6 +337,15 @@ async function attachFileToComposer(page, filePath) {
 
   await page.getByText(baseName, { exact: true }).waitFor({ state: "visible", timeout: 30000 });
   await page.waitForTimeout(1000);
+}
+
+async function clearComposerAttachments(page) {
+  const removeButtons = page.getByRole("button", { name: "Remove file", exact: true });
+  const count = await removeButtons.count();
+  for (let index = 0; index < count; index += 1) {
+    await removeButtons.first().click();
+    await page.waitForTimeout(200);
+  }
 }
 
 async function clickSourceActionsByName(page, sourceName) {
@@ -333,7 +380,14 @@ async function removeSource(page, sourceName) {
 
   await clickSourceActionsByName(page, sourceName);
   await page.getByRole("menuitem", { name: "Remove", exact: true }).click();
-  await page.waitForTimeout(1000);
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    if (!(await sourceExists(page, sourceName))) {
+      return;
+    }
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`Timed out waiting for project source '${sourceName}' to be removed.`);
 }
 
 async function submitPrompt(page, requestText) {
@@ -391,18 +445,23 @@ async function latestAssistantText(page) {
     const assistantTexts = [];
 
     for (const article of articles) {
-      const heading = article.querySelector("h3,h4,h5,h6")?.innerText?.trim() || "";
-      if (!heading.startsWith("ChatGPT said")) {
+      const clone = article.cloneNode(true);
+      clone.querySelectorAll("button").forEach((button) => button.remove());
+      const raw = (clone.innerText || "").trim();
+      if (!raw) {
         continue;
       }
 
-      const clone = article.cloneNode(true);
-      clone.querySelectorAll("button").forEach((button) => button.remove());
-      const raw = (clone.innerText || "").trim().replace(/^ChatGPT said:\s*/i, "").trim();
-      if (!raw || /^Thought for\b/i.test(raw)) {
+      const hasAssistantPrefix = /^ChatGPT said:/i.test(raw);
+      if (!hasAssistantPrefix) {
         continue;
       }
-      assistantTexts.push(raw);
+
+      const cleaned = raw.replace(/^ChatGPT said:\s*/i, "").trim();
+      if (!cleaned || /^Thought for\b/i.test(cleaned)) {
+        continue;
+      }
+      assistantTexts.push(cleaned);
     }
 
     return assistantTexts.length > 0 ? assistantTexts[assistantTexts.length - 1] : "";
@@ -433,7 +492,8 @@ function restoreClipboardText(text) {
   }
 }
 
-async function extractAssistantResponse(page) {
+async function extractAssistantResponse(page, fallbackOverride = "") {
+  const fallbackText = (fallbackOverride || await latestAssistantText(page)).trim();
   const previousClipboard = readClipboardText();
 
   try {
@@ -449,17 +509,26 @@ async function extractAssistantResponse(page) {
 
     if (copied) {
       await page.waitForTimeout(1200);
-      const copiedText = readClipboardText();
-      if (copiedText && copiedText.trim() && !copiedText.includes("[TRUNCATED]")) {
-        return copiedText.trim();
+      const copiedText = (readClipboardText() || "").trim();
+      if (copiedText && !copiedText.includes("[TRUNCATED]")) {
+        if (!fallbackText) {
+          return copiedText;
+        }
+        // Reject obviously bad clipboard captures, such as a single URL or a much
+        // shorter fragment than the full assistant turn still visible in the DOM.
+        if (copiedText === fallbackText) {
+          return copiedText;
+        }
+        if (copiedText.length >= Math.max(200, Math.floor(fallbackText.length * 0.6))) {
+          return copiedText;
+        }
       }
     }
   } finally {
     restoreClipboardText(previousClipboard);
   }
 
-  const fallback = await latestAssistantText(page);
-  return fallback.trim();
+  return fallbackText;
 }
 
 async function isLikelyGenerating(page) {
@@ -532,6 +601,60 @@ async function runPrepare(page, args) {
   }
 }
 
+async function runRecover(page, args) {
+  if (!args.chatUrl || !args.responseFile) {
+    throw new Error("recover requires --chat-url and --response-file.");
+  }
+
+  await page.goto(args.chatUrl, { waitUntil: "domcontentloaded" });
+  await ensureChatReady(page, args.waitForLoginSeconds);
+  await page.waitForTimeout(1500);
+  const stableText = await waitForStableAssistantReply(page, 2, 30).catch(async () => {
+    return (await latestAssistantText(page)).trim();
+  });
+  const responseText = await extractAssistantResponse(page, stableText);
+  if (!responseText.trim()) {
+    throw new Error("Could not recover a non-empty assistant reply from the chat.");
+  }
+
+  await fs.mkdir(path.dirname(args.responseFile), { recursive: true });
+  await fs.writeFile(args.responseFile, `${responseText.trim()}\n`, "utf8");
+
+  const logPath = args.logJson || args.responseFile.replace(/\.md$/i, "_session.json");
+  await writeJsonLog(logPath, {
+    command: "recover",
+    chat_url: args.chatUrl,
+    response_file: path.resolve(args.responseFile),
+    recovered_at: new Date().toISOString(),
+    response_chars: responseText.length,
+    response_text: responseText,
+  });
+}
+
+async function runInspect(page, args) {
+  if (!args.chatUrl) {
+    throw new Error("inspect requires --chat-url.");
+  }
+
+  await page.goto(args.chatUrl, { waitUntil: "domcontentloaded" });
+  await ensureChatReady(page, args.waitForLoginSeconds);
+  await page.waitForTimeout(1000);
+
+  const latestText = (await latestAssistantText(page)).trim();
+  const generating = await isLikelyGenerating(page);
+  const hash = crypto.createHash("sha256").update(latestText).digest("hex");
+
+  console.log(JSON.stringify({
+    command: "inspect",
+    chat_url: page.url(),
+    generating,
+    response_chars: latestText.length,
+    response_hash: hash,
+    response_preview: latestText.slice(0, 240),
+    inspected_at: new Date().toISOString(),
+  }));
+}
+
 async function runSubmit(page, args) {
   if (!args.requestFile || !args.responseFile) {
     throw new Error("submit requires --request-file and --response-file.");
@@ -566,6 +689,7 @@ async function runSubmit(page, args) {
   await openProject(page, args.projectUrl, args.waitForLoginSeconds);
   await ensureBaseModel(page);
   await ensureExtendedPro(page);
+  await clearComposerAttachments(page);
   await attachFileToComposer(page, args.requestFile);
   for (const attachmentPath of args.attachFiles) {
     await attachFileToComposer(page, attachmentPath);
@@ -573,7 +697,7 @@ async function runSubmit(page, args) {
   await submitPrompt(page, submissionPrompt);
   await writeHeartbeat("submitted", { chat_url: page.url() });
 
-  await waitForStableAssistantReply(page, args.pollSeconds, args.maxWaitSeconds, async (state) => {
+  const stableText = await waitForStableAssistantReply(page, args.pollSeconds, args.maxWaitSeconds, async (state) => {
     await writeHeartbeat("waiting_reply", {
       chat_url: state.chatUrl,
       generating: state.generating,
@@ -582,7 +706,7 @@ async function runSubmit(page, args) {
       deadline_at: state.deadlineAt,
     });
   });
-  const responseText = await extractAssistantResponse(page);
+  const responseText = await extractAssistantResponse(page, stableText);
   const completedAt = new Date().toISOString();
   await fs.mkdir(path.dirname(args.responseFile), { recursive: true });
   await fs.writeFile(args.responseFile, `${responseText.trim()}\n`, "utf8");
@@ -627,10 +751,10 @@ async function main() {
     return;
   }
 
-  if (!["prepare", "submit"].includes(args.command)) {
-    throw new Error(`Unknown command '${args.command}'. Use prepare or submit.`);
+  if (!["prepare", "submit", "recover", "inspect"].includes(args.command)) {
+    throw new Error(`Unknown command '${args.command}'. Use prepare, submit, recover, or inspect.`);
   }
-  if (!args.projectUrl) {
+  if (!args.projectUrl && !["recover", "inspect"].includes(args.command)) {
     throw new Error("Missing --project-url (or MPP_CHATGPT_PROJECT_URL).");
   }
 
@@ -640,8 +764,12 @@ async function main() {
   try {
     if (args.command === "prepare") {
       await runPrepare(page, args);
-    } else {
+    } else if (args.command === "submit") {
       await runSubmit(page, args);
+    } else if (args.command === "recover") {
+      await runRecover(page, args);
+    } else {
+      await runInspect(page, args);
     }
   } finally {
     await runtime.close();

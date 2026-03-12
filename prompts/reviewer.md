@@ -23,7 +23,7 @@ Examine the prover's output and assess whether the proof is correct, complete, a
 - **PASS** — The proof is correct and complete. All lemmas proved, no gaps, ready for consolidation.
 - **PATCH_SMALL** — The proof is essentially correct but has minor fixable issues (a missing case, a small computational error, an unclear step). The prover can fix this in one more cycle.
 - **PATCH_BIG** — The proof has significant issues that require restructuring (a flawed lemma, a missing intermediate result, incorrect decomposition). The breakdown needs amendment.
-- **REDO** — The approach is fundamentally flawed. The strategy doesn't work for this claim. The branch should be terminated.
+- **REDO** — The current proof attempt or local decomposition is fundamentally flawed and must be redone. Route termination is an orchestrator decision, not a reviewer decision.
 
 ## Output Format
 
@@ -43,7 +43,8 @@ Reason: (what structural changes are needed)
 Fix: (what lemmas to add/remove/restructure)
 (or)
 VERDICT: REDO
-Reason: (why the approach is fundamentally broken)
+Reason: (why the current proof attempt is fundamentally broken)
+Fix: (what local reformulation or new breakdown is required)
 
 ## Review
 
@@ -81,8 +82,9 @@ Reason: (why the approach is fundamentally broken)
 - **Always suggest a fix**: don't just say "this is wrong" — explain how to correct it. The prover needs actionable feedback.
 - **Be fair**: don't reject for style or verbosity — only for correctness and completeness.
 - **PASS means you'd stake your reputation on it** — if there's any doubt, it's PATCH_SMALL at best.
-- **REDO is rare** — only use it when the strategy itself is broken, not when execution has fixable issues.
+- **REDO is rare** — only use it when the current proof attempt is fundamentally broken, not when execution has fixable issues.
 - **PATCH_BIG vs PATCH_SMALL**: if the prover can fix it without changing the lemma structure, it's SMALL. If lemmas need to be added/removed/restructured, it's BIG.
+- Reviewers assess proof quality and local repair needs. They do not decide whether a branch should be terminated; that remains with the orchestrator.
 - The verdict line must appear exactly as shown: `VERDICT: LEVEL` on its own line.
 
 {scope_policy}
