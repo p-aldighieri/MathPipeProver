@@ -13,6 +13,10 @@ The point of this mode is not to make the orchestrator passive. In soft scaffold
 - refreshing durable sources
 - deciding when a route is alive, blocked, or needs repair
 
+The orchestrator must not "play dumb" in browser mode.
+It should not merely relay role outputs or mechanically follow pipeline tags when the mathematical state says otherwise.
+It is expected to synthesize evidence across steps, notice when a branch is effectively dead or conditionally settled, narrow the next move, and choose the next theorem-producing route with judgment.
+
 ## What Belongs In MathPipeProver
 
 MathPipeProver should contain the reusable infrastructure for browser-backed orchestration:
@@ -47,6 +51,12 @@ In browser soft-scaffolding mode, the orchestrator has to do more:
 6. recover from browser/UI failures without losing mathematical state
 
 This means the orchestrator is part workflow engine and part proof manager.
+In practice, good soft scaffolding looks like a strong human research assistant:
+
+- read the proof state before launching the next role
+- reinterpret reviewer output as local mathematical diagnostics
+- override stale or low-signal pipeline momentum when the proof frontier has changed
+- prefer one sharp lemma over one more generic "try proving the theorem" pass
 
 ## Durable Sources vs Temporary Attachments
 

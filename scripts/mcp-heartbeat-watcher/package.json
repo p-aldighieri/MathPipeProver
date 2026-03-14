@@ -1,0 +1,12 @@
+{
+  "name": "mcp-heartbeat-watcher",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mcp-heartbeat-watcher": "./index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  }
+}

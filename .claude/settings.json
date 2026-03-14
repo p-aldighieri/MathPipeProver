@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "heartbeat-watcher": {
+      "command": "node",
+      "args": ["scripts/mcp-heartbeat-watcher/index.mjs"]
+    }
+  }
+}
