@@ -116,6 +116,83 @@ Recommended pattern:
 3. one scoped packet
 4. only the minimal temporary files needed for that step
 
+## Source File Strategy
+
+There are two distinct layers of context in the browser workflow. Mixing them leads to bloated project sources and missing per-step context.
+
+### Layer 1: Durable Project Sources (background state)
+
+These live in the ChatGPT project `Sources` tab and persist across all chats. They provide background state that every role might need.
+
+Typical durable sources:
+
+- paper PDF
+- alternative proof / theorem sketch PDF
+- objective statement
+- proof-state file (updated after each accepted result)
+- current stable route memo (if one exists)
+
+Rules:
+
+- keep this set small (4-6 files max)
+- refresh explicitly when the local file changes (remove old version, re-upload new)
+- never add per-step artifacts here (packets, logs, prover drafts)
+- remove stale route memos before adding the new one
+
+### Layer 2: Temporary Composer Attachments (per-step context)
+
+These are attached via the `+` button in the composer for a single chat. They provide the specific working context for the current role.
+
+Typical temporary attachments:
+
+- the role packet itself (if not pasted inline)
+- the prior role's response that this step builds on (e.g., formalizer response for a prover pass)
+- a specific gap register or obstruction note
+- a scoped breakdown or route memo relevant only to the current step
+
+Rules:
+
+- attach files that the model needs to READ, not just reference
+- do not duplicate durable sources as attachments
+- prefer attaching 1-3 focused files over pasting long content inline
+- if a prior response is critical input (e.g., formalizer gap register feeds the prover), attach it as a file rather than summarizing it in the prompt
+
+### What NOT to put in either layer
+
+- full conversation logs (too large, redundant with the chat itself)
+- multiple prior prover drafts (pick the latest trustworthy one)
+- files from unrelated branches or projects
+
+## Prompt Scoping Policy
+
+Extended Pro thinking time scales with prompt complexity. A prompt that asks for 6 CRITICAL gaps to be filled at once will produce a 30+ minute thinking phase and may lose coherence across sections.
+
+### Preferred scope per submission
+
+- **1-2 focused proof tasks** per prover submission
+- **1 lemma block** per reviewer submission
+- **1 route** per breakdown submission
+
+### When broader scope is acceptable
+
+- formalizer passes (reading + cataloguing is naturally broad)
+- consolidator passes (synthesis of already-verified blocks)
+- final glue steps when all local lemmas are banked
+
+### When to split
+
+Split the submission if:
+
+- the task involves both a derivation AND its verification (split into prover → reviewer)
+- multiple gaps are logically independent (submit in parallel or sequence)
+- the total prompt + context exceeds ~4000 words (narrow the scope, attach files instead)
+
+### Anti-patterns
+
+- "prove Blocks C through F in one pass" — too broad, thinking phase explodes
+- pasting a full prior response as inline text instead of attaching it as a file — wastes prompt space
+- asking the model to both derive AND translate to a different framework in one step
+
 ## Prompting Differences From The API Pipeline
 
 The browser workflow needs slightly different prompts from the API path.
@@ -173,6 +250,9 @@ For browser-driven theorem work, the proof repo should be considered the source 
 3. The orchestrator must actively curate scope.
 4. Durable proof-state files are essential.
 5. Browser recovery needs both automation and human-grade judgment.
+6. Asking for too many gaps to be filled in one prover pass produces long thinking times and risks incoherent output. Scope to 1-2 focused tasks per submission.
+7. Prior role responses (e.g., formalizer gap register) should be attached as temporary files for the next role, not embedded inline in the prompt text. The model reads attached files more reliably than long inline content.
+8. Durable project sources are for background state; per-step working files go as composer attachments. Never mix the two layers.
 
 ## Recommended Next Engineering Follow-Ups
 
