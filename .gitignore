@@ -8,6 +8,11 @@ build/
 .env
 scripts/chatgpt_browser_agent/node_modules/
 scripts/mcp-heartbeat-watcher/node_modules/
+.claude/settings.local.json
+.mcp.json
+.playwright-mcp/
+.tmp-*.mjs
+.tmp-*.sh
 # Keep tests versioned.
 !tests/
 !tests/*.py
