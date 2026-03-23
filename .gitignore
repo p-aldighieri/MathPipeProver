@@ -13,6 +13,7 @@ scripts/mcp-heartbeat-watcher/node_modules/
 .playwright-mcp/
 .tmp-*.mjs
 .tmp-*.sh
+output/
 # Keep tests versioned.
 !tests/
 !tests/*.py

@@ -12,6 +12,7 @@ const TARGET_BASE_MODEL_MENU_LABELS = [
   "Pro 5.4",
   "5.4 Pro",
   "ChatGPT 5.4 Pro",
+  "Pro",
 ];
 const TARGET_EFFORT_LABEL = "Extended Pro";
 
@@ -233,7 +234,12 @@ async function ensureBaseModel(page) {
   await modelButton.waitFor({ state: "visible", timeout: 10000 });
 
   const currentLabel = await modelButton.getAttribute("aria-label");
-  if ((currentLabel || "").includes(TARGET_BASE_MODEL_BUTTON_LABEL)) {
+  const currentText = ((await modelButton.innerText().catch(() => "")) || "").trim();
+  const currentCombined = `${currentLabel || ""} ${currentText}`.toLowerCase();
+  if (
+    currentCombined.includes(TARGET_BASE_MODEL_BUTTON_LABEL.toLowerCase()) ||
+    /\bpro\b/.test(currentText.toLowerCase())
+  ) {
     return;
   }
 
@@ -248,17 +254,11 @@ async function ensureBaseModel(page) {
     }
   }
   if (!clicked) {
-    const fallbackItem = page
-      .getByRole("menuitem")
-      .filter({ hasText: /(?:chatgpt\s*)?5\.4\s*pro|pro\s*5\.4/i })
-      .first();
+    const fallbackItem = page.getByRole("menuitem", { name: /(?:chatgpt\s*)?5\.4\s*pro|pro\s*5\.4|\bpro\b/i }).first();
     await fallbackItem.waitFor({ state: "visible", timeout: 10000 });
     await fallbackItem.click();
   }
-  await page
-    .getByRole("button", { name: new RegExp(`current model is ${TARGET_BASE_MODEL_BUTTON_LABEL.replace(".", "\\.")}`, "i") })
-    .first()
-    .waitFor({ state: "visible", timeout: 10000 });
+  await page.waitForTimeout(500);
 }
 
 async function ensureExtendedPro(page) {
@@ -292,6 +292,46 @@ async function openChatsTab(page) {
   }
 }
 
+async function listSources(page) {
+  return await page.evaluate(() => {
+    const bodyLines = (document.body.innerText || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const names = new Set();
+    for (let index = 0; index < bodyLines.length - 1; index += 1) {
+      if (bodyLines[index + 1].startsWith("File")) {
+        names.add(bodyLines[index]);
+      }
+    }
+
+    if (names.size > 0) {
+      return [...names].sort((left, right) => left.localeCompare(right));
+    }
+
+    const actionButtons = [...document.querySelectorAll('button[aria-label="Source actions"]')];
+
+    for (const button of actionButtons) {
+      let current = button.parentElement;
+      for (let depth = 0; depth < 6 && current; depth += 1) {
+        const lines = (current.innerText || "")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .filter((line) => line !== "Source actions" && line !== "Remove");
+        if (lines.length > 0) {
+          names.add(lines[0]);
+          break;
+        }
+        current = current.parentElement;
+      }
+    }
+
+    return [...names].sort((left, right) => left.localeCompare(right));
+  });
+}
+
 async function sourceExists(page, sourceName) {
   return (await page.getByText(sourceName, { exact: true }).count()) > 0;
 }
@@ -307,7 +347,23 @@ async function addSource(page, filePath) {
   if ((await fileInputs.count()) === 0) {
     throw new Error("Could not find a project source file input on the Sources tab.");
   }
-  await fileInputs.last().setInputFiles(resolved);
+
+  const inputCount = await fileInputs.count();
+  for (let index = 0; index < inputCount; index += 1) {
+    await fileInputs.nth(index).setInputFiles(resolved);
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      if (await sourceExists(page, baseName)) {
+        return;
+      }
+      const duplicateModal = page.getByTestId("modal-file-already-exists");
+      if ((await duplicateModal.count()) > 0) {
+        throw new Error(`Project source '${baseName}' already exists and was not removed before refresh.`);
+      }
+      await page.waitForTimeout(250);
+    }
+  }
+
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     if (await sourceExists(page, baseName)) {
@@ -464,8 +520,64 @@ async function latestAssistantText(page) {
       assistantTexts.push(cleaned);
     }
 
-    return assistantTexts.length > 0 ? assistantTexts[assistantTexts.length - 1] : "";
+    if (assistantTexts.length > 0) {
+      return assistantTexts[assistantTexts.length - 1];
+    }
+
+    const body = (document.body.innerText || "").trim();
+    const marker = "ChatGPT said:";
+    const start = body.lastIndexOf(marker);
+    if (start === -1) {
+      return "";
+    }
+
+    let tail = body.slice(start + marker.length).trim();
+    for (const stopMarker of [
+      "\n\nExtended Pro",
+      "\n\nChatGPT can make mistakes.",
+      "\n\nAdd files and more",
+      "\n\nStart Voice",
+    ]) {
+      const stop = tail.indexOf(stopMarker);
+      if (stop !== -1) {
+        tail = tail.slice(0, stop).trim();
+      }
+    }
+    return tail;
   });
+}
+
+async function assistantTurnHasCopyButton(page) {
+  return await page.evaluate(() => {
+    const articles = [...document.querySelectorAll('article[data-testid^="conversation-turn-"]')];
+    const assistantArticle = [...articles].reverse().find((article) =>
+      /^ChatGPT said:/i.test((article.innerText || "").trim())
+    );
+    if (!assistantArticle) {
+      return [...document.querySelectorAll("button")].some((button) =>
+        (button.getAttribute("aria-label") || "").toLowerCase().includes("copy response")
+      );
+    }
+    return Boolean(assistantArticle.querySelector('[data-testid="copy-turn-action-button"]'));
+  });
+}
+
+function isInterimAssistantText(text) {
+  const normalized = (text || "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (normalized.length > 400) {
+    return false;
+  }
+
+  return (
+    normalized.includes("reading documents") ||
+    normalized.includes("searching the web") ||
+    normalized.includes("thinking") ||
+    normalized.includes("analyzing")
+  );
 }
 
 function readClipboardText() {
@@ -498,8 +610,21 @@ async function extractAssistantResponse(page, fallbackOverride = "") {
 
   try {
     const copied = await page.evaluate(() => {
-      const buttons = [...document.querySelectorAll('[data-testid="copy-turn-action-button"]')];
-      const button = buttons.at(-1);
+      const articles = [...document.querySelectorAll('article[data-testid^="conversation-turn-"]')];
+      const assistantArticle = [...articles].reverse().find((article) =>
+        /^ChatGPT said:/i.test((article.innerText || "").trim())
+      );
+      if (!assistantArticle) {
+        const pageButton = [...document.querySelectorAll("button")].find((button) =>
+          (button.getAttribute("aria-label") || "").toLowerCase().includes("copy response")
+        );
+        if (!pageButton) {
+          return false;
+        }
+        pageButton.click();
+        return true;
+      }
+      const button = assistantArticle.querySelector('[data-testid="copy-turn-action-button"]');
       if (!button) {
         return false;
       }
@@ -535,7 +660,13 @@ async function isLikelyGenerating(page) {
   return await page.evaluate(() => {
     return [...document.querySelectorAll("button")].some((button) => {
       const label = `${button.getAttribute("aria-label") || ""} ${(button.innerText || "").trim()}`.toLowerCase();
-      return label.includes("stop") || label.includes("pause");
+      return (
+        label.includes("stop streaming") ||
+        label.includes("stop generating") ||
+        label.includes("stop response") ||
+        label.includes("pause generating") ||
+        label.includes("pause streaming")
+      );
     });
   });
 }
@@ -544,10 +675,18 @@ async function waitForStableAssistantReply(page, pollSeconds, maxWaitSeconds, on
   const deadline = Date.now() + maxWaitSeconds * 1000;
   let lastText = "";
   let stableCycles = 0;
+  let unchangedCycles = 0;
 
   while (Date.now() < deadline) {
     const currentText = await latestAssistantText(page);
     const generating = await isLikelyGenerating(page);
+    const readyToCopy = await assistantTurnHasCopyButton(page);
+
+    if (currentText && currentText === lastText) {
+      unchangedCycles += 1;
+    } else {
+      unchangedCycles = 0;
+    }
 
     if (currentText && currentText === lastText && !generating) {
       stableCycles += 1;
@@ -565,12 +704,20 @@ async function waitForStableAssistantReply(page, pollSeconds, maxWaitSeconds, on
         currentTextLength: currentText.length,
         lastTextLength: lastText.length,
         generating,
+        readyToCopy,
         stableCycles,
         deadlineAt: new Date(deadline).toISOString(),
       });
     }
 
-    if (lastText && stableCycles >= 2) {
+    if (lastText && stableCycles >= 2 && readyToCopy && !isInterimAssistantText(lastText)) {
+      return lastText;
+    }
+
+    // The ChatGPT UI can leave a stale stop button behind after the text has
+    // already stabilized. If the assistant text stops changing for long enough,
+    // trust the stable text rather than waiting forever on a false positive.
+    if (lastText && unchangedCycles >= 4 && readyToCopy && !isInterimAssistantText(lastText)) {
       return lastText;
     }
 
@@ -589,16 +736,27 @@ async function runPrepare(page, args) {
   await openProject(page, args.projectUrl, args.waitForLoginSeconds);
   await ensureBaseModel(page);
   await ensureExtendedPro(page);
-
-  if (args.addSources.length > 0 || args.removeSources.length > 0) {
-    await openSourcesTab(page);
-    for (const sourceName of args.removeSources) {
-      await removeSource(page, sourceName);
-    }
-    for (const sourcePath of args.addSources) {
-      await addSource(page, sourcePath);
-    }
+  await openSourcesTab(page);
+  await page.waitForTimeout(1500);
+  for (const sourceName of args.removeSources) {
+    await removeSource(page, sourceName);
   }
+  for (const sourcePath of args.addSources) {
+    await addSource(page, sourcePath);
+  }
+  await page.waitForTimeout(1000);
+  const sourceNames = await listSources(page);
+  console.log(JSON.stringify({
+    command: "prepare",
+    project_url: args.projectUrl,
+    base_model: TARGET_BASE_MODEL_BUTTON_LABEL,
+    effort_mode: TARGET_EFFORT_LABEL,
+    add_sources: args.addSources.map((item) => path.resolve(item)),
+    remove_sources: args.removeSources,
+    source_names: sourceNames,
+    source_count: sourceNames.length,
+    prepared_at: new Date().toISOString(),
+  }));
 }
 
 async function runRecover(page, args) {
@@ -609,7 +767,7 @@ async function runRecover(page, args) {
   await page.goto(args.chatUrl, { waitUntil: "domcontentloaded" });
   await ensureChatReady(page, args.waitForLoginSeconds);
   await page.waitForTimeout(1500);
-  const stableText = await waitForStableAssistantReply(page, 2, 30).catch(async () => {
+  const stableText = await waitForStableAssistantReply(page, args.pollSeconds, args.maxWaitSeconds).catch(async () => {
     return (await latestAssistantText(page)).trim();
   });
   const responseText = await extractAssistantResponse(page, stableText);
