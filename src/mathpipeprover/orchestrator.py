@@ -16,7 +16,7 @@ from .policies import build_scope_policy
 from .prompting import build_role_context, bundle_markdown, load_prompt_template, render_template
 from .providers import LLMRequest, ProviderHub, estimate_tokens
 from .roles import ROLE_SPECS, stub_response
-from .router import ReviewVerdict, RouterDecision, choose_router_decision, parse_review_verdict
+from .router import ReviewVerdict, RouterDecision, choose_router_decision, parse_review_control, parse_review_verdict
 from .storage import RunPaths, init_run_dir, load_run_paths, make_run_id, read_json, sanitize_name, write_json
 
 
@@ -353,6 +353,15 @@ def _resolve_prompts_root(paths: RunPaths, config: WorkflowConfig) -> Path:
         return candidate
     workspace_root = paths.root.parent
     return workspace_root / candidate
+
+
+def _recommended_phase_from_review_control(review_control: dict[str, str], allowed_tags: list[str]) -> str | None:
+    raw = review_control.get("recommended_next_phase", "").strip().upper()
+    if not raw:
+        return None
+    if raw in allowed_tags:
+        return _tag_to_phase(raw)
+    return None
 
 
 def _get_role_runtime(config: WorkflowConfig, role: str) -> RoleRuntimeConfig:
@@ -1111,6 +1120,9 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             allowed_scope, scope_reason = _scope_decision(run_dir, branch, config)
 
             bstate["review_cycles"] = cycle
+            review_control = parse_review_control(reviewer_content)
+            if review_control:
+                bstate["last_review_control"] = review_control
             verdict = parse_review_verdict(reviewer_content)
             bstate["last_verdict"] = verdict.level
             _write_run_state(paths, state)
@@ -1130,47 +1142,87 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
                 )
                 phase = _tag_to_phase(decision.selected) or "stop_fail_scope"
             elif verdict.is_pass:
-                decision = _route_next(
-                    phase="reviewer",
-                    allowed_tags=["CONSOLIDATOR", "PROVER"],
-                    fallback_tag="CONSOLIDATOR",
-                    extra="review PASS",
-                    run_dir=run_dir,
-                    branch=branch,
-                    state=state,
-                    config=config,
-                    hub=hub,
-                    prompts_root=prompts_root,
+                recommended_phase = _recommended_phase_from_review_control(
+                    review_control,
+                    ["CONSOLIDATOR", "PROVER"],
                 )
-                phase = _tag_to_phase(decision.selected) or "consolidator"
+                if recommended_phase:
+                    phase = recommended_phase
+                else:
+                    decision = _route_next(
+                        phase="reviewer",
+                        allowed_tags=["CONSOLIDATOR", "PROVER"],
+                        fallback_tag="CONSOLIDATOR",
+                        extra="review PASS",
+                        run_dir=run_dir,
+                        branch=branch,
+                        state=state,
+                        config=config,
+                        hub=hub,
+                        prompts_root=prompts_root,
+                    )
+                    phase = _tag_to_phase(decision.selected) or "consolidator"
             elif verdict.needs_small_fix:
                 # Small patch: loop back to prover if cycles remain
                 if cycle >= config.max_prover_cycles:
                     phase = "stop_stall"
                 else:
-                    decision = _route_next(
-                        phase="reviewer",
-                        allowed_tags=["PROVER"],
-                        fallback_tag="PROVER",
-                        extra="review PATCH_SMALL, minor fix needed",
-                        run_dir=run_dir,
-                        branch=branch,
-                        state=state,
-                        config=config,
-                        hub=hub,
-                        prompts_root=prompts_root,
-                    )
-                    phase = _tag_to_phase(decision.selected) or "prover"
+                    recommended_phase = _recommended_phase_from_review_control(review_control, ["PROVER"])
+                    if recommended_phase:
+                        phase = recommended_phase
+                    else:
+                        decision = _route_next(
+                            phase="reviewer",
+                            allowed_tags=["PROVER"],
+                            fallback_tag="PROVER",
+                            extra="review PATCH_SMALL, minor fix needed",
+                            run_dir=run_dir,
+                            branch=branch,
+                            state=state,
+                            config=config,
+                            hub=hub,
+                            prompts_root=prompts_root,
+                        )
+                        phase = _tag_to_phase(decision.selected) or "prover"
             elif verdict.needs_big_fix:
                 # Big patch: loop back to breakdown to restructure
                 if cycle >= config.max_prover_cycles:
                     phase = "stop_stall"
                 else:
+                    recommended_phase = _recommended_phase_from_review_control(
+                        review_control,
+                        ["BREAKDOWN", "PROVER", "STOP_STALL"],
+                    )
+                    if recommended_phase:
+                        phase = recommended_phase
+                    else:
+                        decision = _route_next(
+                            phase="reviewer",
+                            allowed_tags=["BREAKDOWN", "PROVER", "STOP_STALL"],
+                            fallback_tag="BREAKDOWN",
+                            extra="review PATCH_BIG, restructure needed",
+                            run_dir=run_dir,
+                            branch=branch,
+                            state=state,
+                            config=config,
+                            hub=hub,
+                            prompts_root=prompts_root,
+                        )
+                        phase = _tag_to_phase(decision.selected) or "breakdown"
+            else:
+                # REDO: strategy-level failure, kill branch
+                recommended_phase = _recommended_phase_from_review_control(
+                    review_control,
+                    ["STOP_STALL", "PROVER"],
+                )
+                if recommended_phase:
+                    phase = recommended_phase
+                else:
                     decision = _route_next(
                         phase="reviewer",
-                        allowed_tags=["BREAKDOWN", "PROVER", "STOP_STALL"],
-                        fallback_tag="BREAKDOWN",
-                        extra="review PATCH_BIG, restructure needed",
+                        allowed_tags=["STOP_STALL", "PROVER"],
+                        fallback_tag="STOP_STALL",
+                        extra="review REDO, strategy-level failure",
                         run_dir=run_dir,
                         branch=branch,
                         state=state,
@@ -1178,22 +1230,7 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
                         hub=hub,
                         prompts_root=prompts_root,
                     )
-                    phase = _tag_to_phase(decision.selected) or "breakdown"
-            else:
-                # REDO: strategy-level failure, kill branch
-                decision = _route_next(
-                    phase="reviewer",
-                    allowed_tags=["STOP_STALL", "PROVER"],
-                    fallback_tag="STOP_STALL",
-                    extra="review REDO, strategy-level failure",
-                    run_dir=run_dir,
-                    branch=branch,
-                    state=state,
-                    config=config,
-                    hub=hub,
-                    prompts_root=prompts_root,
-                )
-                phase = _tag_to_phase(decision.selected) or "stop_stall"
+                    phase = _tag_to_phase(decision.selected) or "stop_stall"
 
             bstate["current_phase"] = phase
             _append_event(run_dir, branch, f"reviewer cycle={cycle} verdict={verdict.level} next={phase}")

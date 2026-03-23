@@ -1,4 +1,4 @@
-from mathpipeprover.router import choose_router_decision, parse_next_from_json, parse_next_tag, parse_review_verdict
+from mathpipeprover.router import choose_router_decision, parse_next_from_json, parse_next_tag, parse_review_control, parse_review_verdict
 
 
 def test_parse_next_tag() -> None:
@@ -33,6 +33,38 @@ def test_verdict_structured_format() -> None:
     assert v.level == "PATCH_SMALL"
     assert v.needs_small_fix is True
     assert v.is_pass is False
+
+
+def test_verdict_heading_style_patch_big() -> None:
+    text = "# VERDICT: PATCH_BIG\n\nThis already rules out PASS."
+    v = parse_review_verdict(text)
+    assert v.level == "PATCH_BIG"
+    assert v.needs_big_fix is True
+    assert v.is_pass is False
+
+
+def test_parse_review_control_block() -> None:
+    text = """```review_control
+verdict: PATCH_BIG
+route_status: viable
+recommended_next_phase: BREAKDOWN
+proof_status: incomplete
+```"""
+    payload = parse_review_control(text)
+    assert payload["verdict"] == "PATCH_BIG"
+    assert payload["route_status"] == "viable"
+    assert payload["recommended_next_phase"] == "BREAKDOWN"
+
+
+def test_verdict_prefers_review_control_block() -> None:
+    text = """```review_control
+verdict: PATCH_BIG
+```
+
+This text mentions PASS elsewhere, but the control block should win.
+"""
+    v = parse_review_verdict(text)
+    assert v.level == "PATCH_BIG"
 
 
 def test_verdict_standalone_pass() -> None:

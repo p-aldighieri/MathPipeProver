@@ -29,7 +29,14 @@ Examine the prover's output and assess whether the proof is correct, complete, a
 
 **CRITICAL: The verdict MUST appear first**, before the detailed analysis. This ensures the verdict is never lost to output truncation.
 
-```markdown
+````markdown
+```review_control
+verdict: PASS
+route_status: viable
+recommended_next_phase: CONSOLIDATOR
+proof_status: complete
+```
+
 ## Verdict
 
 VERDICT: PASS
@@ -64,7 +71,7 @@ Fix: (what local reformulation or new breakdown is required)
 | # | Location | Severity | Problem | Suggested Fix |
 |---|----------|----------|---------|---------------|
 | 1 | Lemma 2, step 3 | ERROR | inequality reversed for x<0 | Split into cases x>=0 and x<0 |
-```
+````
 
 ## Common Error Patterns to Watch For
 
@@ -87,8 +94,9 @@ Fix: (what local reformulation or new breakdown is required)
 - If the same structural blocker persists across cycles, say so explicitly and state whether the route still looks viable. Do not keep issuing vague PATCH_BIG verdicts without explaining the route-level status.
 - For PATCH_BIG, give the smallest concrete rewrite plan that could still save the route, capped at three major changes.
 - Include a short durable summary of the route status, the main blocker, and the next recommended phase so that stable context can be promoted after review.
+- The first fenced `review_control` block is for the orchestrator. Fill it honestly and keep it consistent with the prose verdict below.
 - Reviewers assess proof quality and local repair needs. They do not decide whether a branch should be terminated; that remains with the orchestrator.
-- The verdict line must appear exactly as shown: `VERDICT: LEVEL` on its own line.
+- The verdict line must appear exactly as shown: `VERDICT: LEVEL` on its own line, with no leading `#`, bullet, or other markdown prefix.
 
 {scope_policy}
 
