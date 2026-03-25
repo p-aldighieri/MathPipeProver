@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any, Iterable
 
 from .config import WorkflowConfig
@@ -156,17 +157,18 @@ def invoke_claude_print(
 
 def build_claude_resume_prompt(*, run_id: str, config_path: Path, workspace_root: Path) -> str:
     repo_root = _repo_root()
+    python_cmd = "python" if sys.platform == "win32" else "python3"
     py_cmd = (
         f'cd "{workspace_root}" && '
         f'PYTHONPATH="{repo_root / "src"}${{PYTHONPATH:+:$PYTHONPATH}}" '
-        f'python3 -m mathpipeprover.cli resume '
+        f'{python_cmd} -m mathpipeprover.cli resume '
         f'--run-id "{run_id}" '
         f'--config "{config_path}"'
     )
     continue_cmd = (
         f'cd "{workspace_root}" && '
         f'PYTHONPATH="{repo_root / "src"}${{PYTHONPATH:+:$PYTHONPATH}}" '
-        f'python3 -m mathpipeprover.cli orchestrator-continue '
+        f'{python_cmd} -m mathpipeprover.cli orchestrator-continue '
         f'--run-id "{run_id}" '
         f'--config "{config_path}" '
         '--branch "<branch>" '
@@ -175,7 +177,7 @@ def build_claude_resume_prompt(*, run_id: str, config_path: Path, workspace_root
     stop_cmd = (
         f'cd "{workspace_root}" && '
         f'PYTHONPATH="{repo_root / "src"}${{PYTHONPATH:+:$PYTHONPATH}}" '
-        f'python3 -m mathpipeprover.cli orchestrator-stop '
+        f'{python_cmd} -m mathpipeprover.cli orchestrator-stop '
         f'--run-id "{run_id}" '
         f'--config "{config_path}" '
         '--status failed '
@@ -184,24 +186,38 @@ def build_claude_resume_prompt(*, run_id: str, config_path: Path, workspace_root
     )
     return (
         "A MathPipeProver external-agent response is ready. "
-        "Use shell tools only. Do not submit anything to the browser in this wake-up step.\n\n"
+        "You are a short-lived worker session woken by the supervisor daemon.\n\n"
+        "## Boundaries\n"
+        "- Do NOT watch heartbeats or block on heartbeat files. The supervisor owns heartbeat polling.\n"
+        "- Do NOT submit anything to the browser or launch the browser agent. The supervisor owns browser submission.\n"
+        "- Do NOT linger after making your decision. Exit promptly. The supervisor will wake you again when the next response is ready.\n"
+        "- Keep context clean: read only the files needed for the current decision. Do not accumulate stale state.\n\n"
+        "## Steps\n"
         "1. Inspect `run_state.json` to confirm the pending role.\n"
         "2. Run this exact shell command:\n"
-        f"{py_cmd}\n"
+        f"```\n{py_cmd}\n```\n"
         "3. Inspect `run_state.json` again.\n"
-        "4. If the run is waiting on another external-agent role, stop there. "
-        "If it is complete, stop there.\n"
-        "5. If the run is `waiting_orchestrator`, you must judge what happens next. "
+        "4. If the run is `waiting_external_agent` for another role, **stop immediately**. "
+        "The supervisor will handle the next submission and wake you when it completes.\n"
+        "5. If the run is `complete` or `failed`, **stop immediately**.\n"
+        "6. If the run is `waiting_orchestrator`, you must judge what happens next. "
         "Inspect the latest reviewer/scope files and then either:\n"
-        f"   - continue the branch with:\n{continue_cmd}\n"
+        f"   - continue the branch with:\n```\n{continue_cmd}\n```\n"
         "   and rerun the resume command once, or\n"
-        f"   - stop the run explicitly with:\n{stop_cmd}\n"
-        "6. For soft-scaffolding automation, do NOT stop solely because assumption counts, "
+        f"   - stop the run explicitly with:\n```\n{stop_cmd}\n```\n"
+        "7. For soft-scaffolding automation, do NOT stop solely because assumption counts, "
         "scope-budget thresholds, or PATCH_SMALL/PATCH_BIG reviewer verdicts were triggered. "
         "Those are advisory signals, not automatic terminal conditions. Prefer continuing the "
         "same branch whenever the route is still mathematically alive.\n"
-        "7. Do not leave the run in `waiting_orchestrator` without making a decision.\n\n"
-        "End with a very short status note only."
+        "8. Do not leave the run in `waiting_orchestrator` without making a decision.\n\n"
+        "## Source housekeeping\n"
+        "Before exiting, check whether the ChatGPT project's durable sources need updating for "
+        "the next role. If a branch was completed or pruned, its route memo should be removed. "
+        "If the proof-state changed materially (e.g. after a consolidator pass or route pivot), "
+        "the proof-state source should be refreshed. Write any needed changes to "
+        "`runs/<run>/source_update_pending.json` as `{\"add\": [...paths], \"remove\": [...names]}`. "
+        "The supervisor will apply them on the next submission. Keep durable sources to 4-6 files max.\n\n"
+        "End with a one-line status note and exit."
     )
 
 

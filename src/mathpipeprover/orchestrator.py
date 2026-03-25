@@ -1282,6 +1282,15 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             elif verdict.needs_small_fix:
                 # Small patch: loop back to prover if cycles remain
                 if cycle >= config.max_prover_cycles:
+                    if config.orchestrator_controls_stop:
+                        _handoff_to_orchestrator(
+                            paths,
+                            state,
+                            branch,
+                            stop_phase="stop_stall",
+                            suggested_phase="prover",
+                            reason="max prover cycles reached on small fix",
+                        )
                     phase = "stop_stall"
                 else:
                     recommended_phase = _recommended_phase_from_review_control(review_control, ["PROVER"])
@@ -1304,6 +1313,15 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             elif verdict.needs_big_fix:
                 # Big patch: loop back to breakdown to restructure
                 if cycle >= config.max_prover_cycles:
+                    if config.orchestrator_controls_stop:
+                        _handoff_to_orchestrator(
+                            paths,
+                            state,
+                            branch,
+                            stop_phase="stop_stall",
+                            suggested_phase="breakdown",
+                            reason="max prover cycles reached on big fix",
+                        )
                     phase = "stop_stall"
                 else:
                     recommended_phase = _recommended_phase_from_review_control(

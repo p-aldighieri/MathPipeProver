@@ -91,6 +91,14 @@ def _detached_supervisor_paths(run_dir: Path) -> tuple[Path, Path, Path]:
 def _pid_is_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    if sys.platform == "win32":
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x100000, False, pid)  # SYNCHRONIZE
+        if handle:
+            kernel32.CloseHandle(handle)
+            return True
+        return False
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -213,6 +221,8 @@ def _build_real_submit_launcher(
         ]
         if cdp_url:
             cmd.extend(["--cdp-url", cdp_url])
+        if sys.platform == "win32":
+            cmd = ["bash"] + cmd
         return subprocess.Popen(cmd, cwd=workspace_root)
 
     return launch
@@ -284,19 +294,23 @@ def launch_detached_supervisor(
     env = os.environ.copy()
     src_path = str((_repo_root() / "src").resolve())
     current_pythonpath = env.get("PYTHONPATH", "").strip()
-    env["PYTHONPATH"] = f"{src_path}:{current_pythonpath}" if current_pythonpath else src_path
+    sep = ";" if sys.platform == "win32" else ":"
+    env["PYTHONPATH"] = f"{src_path}{sep}{current_pythonpath}" if current_pythonpath else src_path
 
     with log_path.open("a", encoding="utf-8") as log_handle:
-        process = subprocess.Popen(
-            cmd,
+        popen_kwargs: dict[str, Any] = dict(
             cwd=workspace_root,
             stdin=subprocess.DEVNULL,
             stdout=log_handle,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
-            close_fds=True,
             env=env,
         )
+        if sys.platform == "win32":
+            popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        else:
+            popen_kwargs["start_new_session"] = True
+            popen_kwargs["close_fds"] = True
+        process = subprocess.Popen(cmd, **popen_kwargs)
 
     pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
     metadata = {
