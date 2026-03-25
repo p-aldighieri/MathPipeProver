@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 import tomllib
@@ -31,6 +31,7 @@ class WorkflowConfig:
     run_root: str
     prompts_root: str
     router_enabled: bool
+    orchestrator_controls_stop: bool
     provider_timeout_seconds: int
     role_runtime: dict[str, RoleRuntimeConfig]
     provider_browser_agent: str
@@ -127,6 +128,19 @@ def load_config(path: Path) -> WorkflowConfig:
 
     mode = str(wf.get("mode", "semi_strict"))
     policy = load_mode_policy(mode)
+    policy_overrides: dict[str, Any] = {}
+    if "policy_allow_scope_changes" in wf:
+        policy_overrides["allow_scope_changes"] = bool(wf.get("policy_allow_scope_changes"))
+    if "policy_allow_new_assumptions" in wf:
+        policy_overrides["allow_new_assumptions"] = bool(wf.get("policy_allow_new_assumptions"))
+    if "policy_max_scope_changes_per_branch" in wf:
+        policy_overrides["max_scope_changes_per_branch"] = int(wf.get("policy_max_scope_changes_per_branch"))
+    if "policy_max_new_assumptions_per_branch" in wf:
+        policy_overrides["max_new_assumptions_per_branch"] = int(wf.get("policy_max_new_assumptions_per_branch"))
+    if "policy_require_scope_gate" in wf:
+        policy_overrides["require_scope_gate"] = bool(wf.get("policy_require_scope_gate"))
+    if policy_overrides:
+        policy = replace(policy, **policy_overrides)
 
     parsed_role_access: dict[str, dict[str, list[str]]] = {}
     for role, defaults in DEFAULT_ROLE_ACCESS.items():
@@ -153,6 +167,7 @@ def load_config(path: Path) -> WorkflowConfig:
         run_root=str(wf.get("run_root", "runs")),
         prompts_root=str(wf.get("prompts_root", "prompts")),
         router_enabled=bool(wf.get("router_enabled", True)),
+        orchestrator_controls_stop=bool(wf.get("orchestrator_controls_stop", False)),
         provider_timeout_seconds=int(wf.get("provider_timeout_seconds", 60)),
         role_runtime=_parse_role_runtime(role_runtime_data),
         provider_browser_agent=str(providers.get("browser_agent", "external_agent")),

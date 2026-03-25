@@ -154,6 +154,73 @@ async function getComposer(page) {
   throw new Error("Timed out waiting for the ChatGPT composer.");
 }
 
+async function maybeSelectSingleAccountChoice(page) {
+  return await page.evaluate(() => {
+    const bodyText = (document.body.innerText || "").toLowerCase();
+    if (!/(choose|select|pick)\s+an\s+account|continue as/i.test(bodyText)) {
+      return { clicked: false, reason: "not_account_chooser" };
+    }
+
+    const isVisible = (element) => {
+      if (!(element instanceof HTMLElement)) {
+        return false;
+      }
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+    };
+
+    const excluded = [
+      /use another account/i,
+      /use a different account/i,
+      /another account/i,
+      /different account/i,
+      /cancel/i,
+      /back/i,
+      /learn more/i,
+      /privacy/i,
+      /terms/i,
+      /help/i,
+    ];
+    const preferred = [
+      /continue as/i,
+      /@/,
+      /\.com\b/i,
+      /gmail/i,
+      /google/i,
+      /openai/i,
+    ];
+
+    const elements = [...document.querySelectorAll("button, a, [role='button']")]
+      .filter(isVisible)
+      .map((element) => {
+        const text = (element.innerText || element.getAttribute("aria-label") || "").trim();
+        return { element, text };
+      })
+      .filter(({ text }) => text.length > 0)
+      .filter(({ text }) => !excluded.some((pattern) => pattern.test(text)));
+
+    const accountLike = elements.filter(({ element, text }) => {
+      if (preferred.some((pattern) => pattern.test(text))) {
+        return true;
+      }
+      const parentText = (element.parentElement?.innerText || "").trim();
+      return /@/.test(parentText) || /(choose|select|pick)\s+an\s+account/i.test(parentText);
+    });
+
+    if (accountLike.length !== 1) {
+      return {
+        clicked: false,
+        reason: "ambiguous_account_chooser",
+        candidates: accountLike.slice(0, 5).map(({ text }) => text),
+      };
+    }
+
+    accountLike[0].element.click();
+    return { clicked: true, label: accountLike[0].text };
+  });
+}
+
 async function ensureChatReady(page, waitForLoginSeconds) {
   const deadline = Date.now() + waitForLoginSeconds * 1000;
   let noticeShown = false;
@@ -166,6 +233,12 @@ async function ensureChatReady(page, waitForLoginSeconds) {
     }
 
     const bodyText = await page.locator("body").innerText().catch(() => "");
+    const accountChoice = await maybeSelectSingleAccountChoice(page).catch(() => ({ clicked: false }));
+    if (accountChoice.clicked) {
+      console.error(`Selected account chooser entry automatically: ${accountChoice.label}`);
+      await page.waitForTimeout(1500);
+      continue;
+    }
     if (!noticeShown && /log in|sign up|continue with/i.test(bodyText)) {
       console.error("ChatGPT login required in the persistent browser profile. Complete login in the opened browser window.");
       noticeShown = true;
@@ -283,6 +356,7 @@ async function openSourcesTab(page) {
     throw new Error("Could not find the Sources tab on the project page.");
   }
   await sourcesTab.click();
+  await page.waitForTimeout(500);
 }
 
 async function openChatsTab(page) {
@@ -294,6 +368,30 @@ async function openChatsTab(page) {
 
 async function listSources(page) {
   return await page.evaluate(() => {
+    const ignoredLines = new Set([
+      "Source actions",
+      "Remove",
+      "File",
+      "Files",
+      "Source",
+      "Sources",
+      "Add sources",
+      "Uploads",
+    ]);
+    const filenamePattern = /\.[A-Za-z0-9]{1,8}$/;
+    const pickLikelyName = (lines) => {
+      for (const line of lines) {
+        if (filenamePattern.test(line)) {
+          return line;
+        }
+      }
+      for (const line of lines) {
+        if (!ignoredLines.has(line) && !/^uploaded\b/i.test(line) && !/^added\b/i.test(line)) {
+          return line;
+        }
+      }
+      return "";
+    };
     const bodyLines = (document.body.innerText || "")
       .split("\n")
       .map((line) => line.trim())
@@ -319,9 +417,10 @@ async function listSources(page) {
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean)
-          .filter((line) => line !== "Source actions" && line !== "Remove");
-        if (lines.length > 0) {
-          names.add(lines[0]);
+          .filter((line) => !ignoredLines.has(line));
+        const candidate = pickLikelyName(lines);
+        if (candidate) {
+          names.add(candidate);
           break;
         }
         current = current.parentElement;
@@ -333,7 +432,14 @@ async function listSources(page) {
 }
 
 async function sourceExists(page, sourceName) {
-  return (await page.getByText(sourceName, { exact: true }).count()) > 0;
+  if ((await page.getByText(sourceName, { exact: true }).count()) > 0) {
+    return true;
+  }
+  if ((await page.getByText(sourceName, { exact: false }).count()) > 0) {
+    return true;
+  }
+  const sourceNames = await listSources(page);
+  return sourceNames.includes(sourceName);
 }
 
 async function addSource(page, filePath) {
@@ -351,8 +457,9 @@ async function addSource(page, filePath) {
   const inputCount = await fileInputs.count();
   for (let index = 0; index < inputCount; index += 1) {
     await fileInputs.nth(index).setInputFiles(resolved);
-    const deadline = Date.now() + 5000;
+    const deadline = Date.now() + 10000;
     while (Date.now() < deadline) {
+      await openSourcesTab(page).catch(() => {});
       if (await sourceExists(page, baseName)) {
         return;
       }
@@ -366,6 +473,7 @@ async function addSource(page, filePath) {
 
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
+    await openSourcesTab(page).catch(() => {});
     if (await sourceExists(page, baseName)) {
       return;
     }
@@ -376,6 +484,52 @@ async function addSource(page, filePath) {
     await page.waitForTimeout(250);
   }
   throw new Error(`Timed out waiting for project source '${baseName}' to appear.`);
+}
+
+async function verifySources(page, expectedPresent, expectedAbsent, waitForLoginSeconds) {
+  let lastNames = [];
+  let lastMissing = [...expectedPresent];
+  let lastLingering = [];
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) {
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await ensureChatReady(page, waitForLoginSeconds);
+      await ensureBaseModel(page);
+      await ensureExtendedPro(page);
+    }
+
+    await openSourcesTab(page);
+    await page.waitForTimeout(1000);
+
+    const names = await listSources(page);
+    const confirmed = new Set(names);
+    for (const name of expectedPresent) {
+      if (await sourceExists(page, name)) {
+        confirmed.add(name);
+      }
+    }
+    for (const name of expectedAbsent) {
+      if (await sourceExists(page, name)) {
+        confirmed.add(name);
+      }
+    }
+
+    lastNames = [...confirmed].sort((left, right) => left.localeCompare(right));
+    lastMissing = expectedPresent.filter((name) => !confirmed.has(name));
+    lastLingering = expectedAbsent.filter((name) => confirmed.has(name));
+    if (lastMissing.length === 0 && lastLingering.length === 0) {
+      return {
+        sourceNames: lastNames,
+        missingSources: lastMissing,
+        lingeringSources: lastLingering,
+      };
+    }
+  }
+
+  throw new Error(
+    `Durable source verification failed. Missing: ${lastMissing.join(", ") || "(none)"}; lingering: ${lastLingering.join(", ") || "(none)"}; observed: ${lastNames.join(", ") || "(none)"}`
+  );
 }
 
 async function attachFileToComposer(page, filePath) {
@@ -744,8 +898,8 @@ async function runPrepare(page, args) {
   for (const sourcePath of args.addSources) {
     await addSource(page, sourcePath);
   }
-  await page.waitForTimeout(1000);
-  const sourceNames = await listSources(page);
+  const expectedPresent = args.addSources.map((item) => path.basename(path.resolve(item)));
+  const verification = await verifySources(page, expectedPresent, args.removeSources, args.waitForLoginSeconds);
   console.log(JSON.stringify({
     command: "prepare",
     project_url: args.projectUrl,
@@ -753,8 +907,11 @@ async function runPrepare(page, args) {
     effort_mode: TARGET_EFFORT_LABEL,
     add_sources: args.addSources.map((item) => path.resolve(item)),
     remove_sources: args.removeSources,
-    source_names: sourceNames,
-    source_count: sourceNames.length,
+    source_names: verification.sourceNames,
+    source_count: verification.sourceNames.length,
+    confirmed_sources: verification.sourceNames,
+    missing_sources: verification.missingSources,
+    lingering_sources: verification.lingeringSources,
     prepared_at: new Date().toISOString(),
   }));
 }

@@ -68,6 +68,14 @@ scripts/chatgpt_browser_agent.sh prepare \
   --remove-source "old_note.md"
 ```
 
+`prepare` should be treated as a verified sync step, not a best-effort hint. If the requested durable set is not confirmed:
+
+1. reopen the project page
+2. re-check `ChatGPT 5.4 Pro` and `Extended Pro`
+3. reopen `Sources`
+4. retry the missing file one at a time
+5. confirm the final source list before continuing
+
 ### Fulfill one external-agent request
 
 ```bash
@@ -93,6 +101,8 @@ The script also writes a heartbeat JSON next to the response file by default whi
 - `formalizer_response_heartbeat.json`
 
 The heartbeat is updated on each polling cycle with the current status, chat URL, latest response length, and deadline. This makes it easy to distinguish an alive long-running role from a dead worker.
+
+If the heartbeat has a real `chat_url` but the response file is still missing, treat that as a recovery candidate first. Inspect or recover the existing chat before deciding the role must be resubmitted from scratch.
 
 ### Watch one heartbeat
 
@@ -139,6 +149,7 @@ It resets stale heartbeat files before relaunching a role so a dead prior worker
 - If a prior reviewer request was assembled with incomplete context, treat the verdict as tainted and rerun review on the full prover file.
 - Scope prover requests to one lemma block or one reviewer delta at a time instead of passing the full branch by default.
 - Keep route selection, branch pruning, and breakdown approval under manual orchestrator inspection even when submission, polling, and logging are scripted.
+- Do not stop at the first browser anomaly. In soft scaffolding mode, the orchestrator should re-check project URL, model, effort, durable sources, and live chat state before escalating to a human.
 
 ## Config profile
 
@@ -181,6 +192,47 @@ For iterative proof development, update the durable proof-state source after eac
 - Override with `--max-wait-seconds` if a role needs a different budget.
 - Use the heartbeat JSON beside the response file to check whether the worker is still active.
 - Use `scripts/chatgpt_browser_supervisor.sh` if you want the run to auto-resume instead of relying on manual polling.
+
+## Claude Code CLI orchestration
+
+If Claude Code is the human-visible orchestrator, do not rely on a blocked Claude
+session staying alive until the browser finishes. The more reliable pattern is:
+
+1. start Claude with an explicit `--session-id <uuid>`
+2. let it run until MathPipeProver reaches `waiting_external_agent`
+3. let the browser supervisor own submit/poll/recovery
+4. when the response file is ready, wake the exact saved Claude session with
+   `claude -p -r <session_id> ...`
+
+`mpp supervise-external-agent` now supports this with:
+
+```bash
+mpp supervise-external-agent \
+  --run-id "<run_id>" \
+  --config /absolute/path/to/config/browser_chatgpt_soft.toml \
+  --project-url "https://chatgpt.com/g/.../project" \
+  --cdp-url "http://127.0.0.1:9333" \
+  --claude-session-id "<uuid>"
+```
+
+Optional flags:
+
+- `--claude-bin` if `claude` is not on PATH
+- `--claude-permission-mode` to control the resumed CLI session (`bypassPermissions` is the practical default for watcher-owned automation)
+- `--claude-dangerously-skip-permissions` is enabled by default and should stay on for watcher-owned autonomous Claude runs
+- `--claude-add-dir /absolute/path/to/MathPipeProver` when Claude needs repo access outside the current workspace
+
+For soft scaffolding, set `orchestrator_controls_stop = true` in the workflow config. In that mode, reviewer/scope/budget stop tags do not auto-finalize the run. Instead the run enters `waiting_orchestrator`, and the resumed Claude or Codex session must explicitly choose one of:
+
+- `mpp orchestrator-continue --run-id ... --branch ... --phase ...`
+- `mpp orchestrator-stop --run-id ... --status failed|complete --branch ... --reason "..."`
+
+For watcher-owned autonomous Claude Code runs, expect active self-repair rather than passive waiting:
+
+- inspect the live chat URL before declaring a response lost
+- retry source sync when the requested durable files are not confirmed
+- handle straightforward account-choice continuation automatically
+- escalate only when authentication or browser transport is genuinely blocked
 
 ## Current hard-coded behavior
 

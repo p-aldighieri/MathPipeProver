@@ -1,0 +1,73 @@
+[workflow]
+mode = "semi_strict"
+enable_literature = false
+max_branches = 1
+max_prover_cycles = 1
+max_total_tokens = 200000
+max_tokens_per_branch = 100000
+max_total_calls = 2000
+max_calls_per_branch = 500
+run_root = "runs/session_bridge_smoke_20260323"
+prompts_root = "prompts"
+router_enabled = false
+orchestrator_controls_stop = true
+provider_timeout_seconds = 60
+
+[providers]
+browser_agent = "external_agent"
+
+[role_runtime.workflow_router]
+provider = "stub"
+model = "router-disabled"
+temperature = 0.0
+max_output_tokens = 64
+reasoning_effort = "low"
+
+[role_runtime.formalizer]
+provider = "external_agent"
+model = "claude-session-bridge-smoke"
+temperature = 0.0
+max_output_tokens = 16000
+reasoning_effort = "high"
+
+[role_runtime.literature]
+provider = "stub"
+model = "stub"
+temperature = 0.0
+max_output_tokens = 256
+reasoning_effort = "low"
+
+[role_runtime.searcher]
+provider = "stub"
+model = "stub"
+temperature = 0.0
+max_output_tokens = 256
+reasoning_effort = "low"
+
+[role_runtime.breakdown]
+provider = "stub"
+model = "stub"
+temperature = 0.0
+max_output_tokens = 256
+reasoning_effort = "low"
+
+[role_runtime.prover]
+provider = "stub"
+model = "stub"
+temperature = 0.0
+max_output_tokens = 256
+reasoning_effort = "low"
+
+[role_runtime.reviewer]
+provider = "stub"
+model = "stub"
+temperature = 0.0
+max_output_tokens = 256
+reasoning_effort = "low"
+
+[role_runtime.consolidator]
+provider = "stub"
+model = "stub"
+temperature = 0.0
+max_output_tokens = 256
+reasoning_effort = "low"

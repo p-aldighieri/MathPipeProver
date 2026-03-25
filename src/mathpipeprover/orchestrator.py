@@ -37,6 +37,20 @@ class ExternalAgentPending(RuntimeError):
         return f"external agent response missing for role={self.role} branch={self.branch}: {self.response_path}"
 
 
+@dataclass
+class OrchestratorDecisionPending(RuntimeError):
+    branch: str
+    stop_phase: str
+    suggested_phase: str
+    reason: str
+
+    def __str__(self) -> str:
+        return (
+            "orchestrator review required for "
+            f"branch={self.branch} stop_phase={self.stop_phase} suggested_phase={self.suggested_phase or '-'}: {self.reason}"
+        )
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -73,6 +87,73 @@ def _ensure_branch_structures(state: dict) -> None:
         bstate.setdefault("score", 0.0)
         if "metrics" not in bstate:
             bstate["metrics"] = _blank_metric()
+
+
+def _clear_orchestrator_decision(state: dict, branch: str = "") -> None:
+    state.pop("pending_orchestrator_decision", None)
+    if branch:
+        bstate = state.get("branches", {}).get(branch, {})
+        bstate.pop("pending_orchestrator_decision", None)
+
+
+def _clear_external_agent_artifacts(run_dir: Path, branch: str, from_phase: str) -> None:
+    ordered_roles = ["formalizer", "literature", "searcher", "breakdown", "prover", "reviewer", "consolidator"]
+    if from_phase not in ordered_roles:
+        return
+
+    ext_dir = run_dir / f"branches/{branch}/external_agent"
+    if not ext_dir.exists():
+        return
+
+    archive_dir = ext_dir / "archive"
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    for role in ordered_roles[ordered_roles.index(from_phase) :]:
+        for suffix in ("request.md", "response.md", "response_heartbeat.json", "response_session.json"):
+            src = ext_dir / f"{role}_{suffix}"
+            if not src.exists():
+                continue
+            archived = archive_dir / f"{stamp}_{src.name}"
+            shutil.move(str(src), str(archived))
+
+
+def _handoff_to_orchestrator(
+    paths: RunPaths,
+    state: dict,
+    branch: str,
+    *,
+    stop_phase: str,
+    suggested_phase: str,
+    reason: str,
+) -> None:
+    run_dir = paths.run_dir
+    bstate = state["branches"][branch]
+    decision_payload = {
+        "branch": branch,
+        "stop_phase": stop_phase,
+        "suggested_phase": suggested_phase,
+        "reason": reason,
+    }
+    bstate["status"] = "orchestrator_review"
+    bstate["current_phase"] = "orchestrator_review"
+    bstate["last_reason"] = reason
+    bstate["pending_orchestrator_decision"] = decision_payload
+    state["status"] = "waiting_orchestrator"
+    state["current_phase"] = f"waiting_orchestrator:{branch}:{stop_phase}"
+    state["pending_orchestrator_decision"] = decision_payload
+    _append_event(
+        run_dir,
+        branch,
+        f"orchestrator handoff: stop_phase={stop_phase} suggested_phase={suggested_phase or '-'} reason={reason}",
+    )
+    _write_run_state(paths, state)
+    raise OrchestratorDecisionPending(
+        branch=branch,
+        stop_phase=stop_phase,
+        suggested_phase=suggested_phase,
+        reason=reason,
+    )
 
 
 def _record_token_usage(
@@ -923,6 +1004,15 @@ def _run_prelude(paths: RunPaths, state: dict, config: WorkflowConfig, hub: Prov
     while phase in {"formalizer", "literature", "searcher"}:
         ok, reason, global_budget = _check_budget_limits(state, branch, config)
         if not ok:
+            if config.orchestrator_controls_stop:
+                _handoff_to_orchestrator(
+                    paths,
+                    state,
+                    branch,
+                    stop_phase="stop_budget",
+                    suggested_phase=phase,
+                    reason=reason,
+                )
             state["status"] = "failed"
             state["current_phase"] = "stop_budget"
             state["branches"][branch]["status"] = "fail_budget"
@@ -954,6 +1044,15 @@ def _run_prelude(paths: RunPaths, state: dict, config: WorkflowConfig, hub: Prov
 
         ok, reason, _ = _check_budget_limits(state, branch, config)
         if not ok:
+            if config.orchestrator_controls_stop:
+                _handoff_to_orchestrator(
+                    paths,
+                    state,
+                    branch,
+                    stop_phase="stop_budget",
+                    suggested_phase=phase,
+                    reason=reason,
+                )
             state["status"] = "failed"
             state["current_phase"] = "stop_budget"
             state["branches"][branch]["status"] = "fail_budget"
@@ -1016,6 +1115,15 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
     while True:
         ok, reason, global_budget = _check_budget_limits(state, branch, config)
         if not ok:
+            if config.orchestrator_controls_stop:
+                _handoff_to_orchestrator(
+                    paths,
+                    state,
+                    branch,
+                    stop_phase="stop_budget",
+                    suggested_phase=phase,
+                    reason=reason,
+                )
             bstate["status"] = "fail_budget"
             bstate["current_phase"] = "stop_budget"
             bstate["last_reason"] = reason
@@ -1061,6 +1169,15 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
         if phase == "prover":
             cycle = int(bstate.get("review_cycles", 0)) + 1
             if cycle > config.max_prover_cycles:
+                if config.orchestrator_controls_stop:
+                    _handoff_to_orchestrator(
+                        paths,
+                        state,
+                        branch,
+                        stop_phase="stop_stall",
+                        suggested_phase="breakdown",
+                        reason="max prover cycles reached",
+                    )
                 bstate["status"] = "stall"
                 bstate["current_phase"] = "stop_stall"
                 bstate["last_reason"] = "max prover cycles reached"
@@ -1270,18 +1387,45 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             continue
 
         if phase == "stop_fail_scope":
+            if config.orchestrator_controls_stop:
+                _handoff_to_orchestrator(
+                    paths,
+                    state,
+                    branch,
+                    stop_phase=phase,
+                    suggested_phase="breakdown",
+                    reason="scope rejected",
+                )
             bstate["status"] = "fail_scope"
             bstate["last_reason"] = "scope rejected"
             _append_event(run_dir, branch, "run terminated: FAIL_SCOPE")
             return
 
         if phase == "stop_stall":
+            if config.orchestrator_controls_stop:
+                _handoff_to_orchestrator(
+                    paths,
+                    state,
+                    branch,
+                    stop_phase=phase,
+                    suggested_phase="breakdown",
+                    reason="stalled",
+                )
             bstate["status"] = "stall"
             bstate["last_reason"] = "stalled"
             _append_event(run_dir, branch, "run terminated: STALL")
             return
 
         if phase == "stop_budget":
+            if config.orchestrator_controls_stop:
+                _handoff_to_orchestrator(
+                    paths,
+                    state,
+                    branch,
+                    stop_phase=phase,
+                    suggested_phase="breakdown",
+                    reason="budget exceeded",
+                )
             bstate["status"] = "fail_budget"
             bstate["last_reason"] = "budget exceeded"
             _append_event(run_dir, branch, "run terminated: FAIL_BUDGET")
@@ -1305,6 +1449,10 @@ def _run_scheduler(paths: RunPaths, state: dict, config: WorkflowConfig, hub: Pr
     run_dir = paths.run_dir
 
     while True:
+        if state.get("status") == "waiting_orchestrator":
+            _write_run_state(paths, state)
+            return RunResult(run_id=state["run_id"], run_dir=run_dir, status="waiting_orchestrator")
+
         active = [b for b in state.get("branch_order", []) if state["branches"].get(b, {}).get("status") == "running"]
         if not active:
             break
@@ -1383,10 +1531,143 @@ def resume_run(run_id: str, config: WorkflowConfig, workspace_root: Path) -> Run
     return _continue_run(paths, config)
 
 
+def orchestrator_continue_run(
+    *,
+    run_id: str,
+    config: WorkflowConfig,
+    workspace_root: Path,
+    branch: str,
+    phase: str,
+) -> RunResult:
+    run_root = workspace_root / config.run_root
+    paths = load_run_paths(run_root, run_id)
+    state = read_json(paths.state_path)
+    _ensure_metrics(state)
+    _ensure_branch_structures(state)
+
+    if state.get("status") != "waiting_orchestrator":
+        raise RuntimeError(f"Run {run_id} is not waiting on orchestrator judgment.")
+    if branch not in state.get("branches", {}):
+        raise RuntimeError(f"Unknown branch '{branch}' for run {run_id}.")
+
+    allowed_phases = {"formalizer", "literature", "searcher", "breakdown", "prover", "reviewer", "consolidator"}
+    normalized_phase = phase.strip().lower()
+    if normalized_phase not in allowed_phases:
+        raise RuntimeError(f"Unsupported orchestrator continue phase '{phase}'.")
+
+    bstate = state["branches"][branch]
+    _clear_external_agent_artifacts(paths.run_dir, branch, normalized_phase)
+    bstate["status"] = "running"
+    bstate["current_phase"] = normalized_phase
+    bstate["last_reason"] = f"continued by orchestrator into {normalized_phase}"
+    _clear_orchestrator_decision(state, branch)
+    state["status"] = "running"
+    state["current_phase"] = "scheduler"
+    _append_event(paths.run_dir, branch, f"orchestrator continue: next={normalized_phase}")
+    _write_run_state(paths, state)
+    return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status="running")
+
+
+def orchestrator_revive_run(
+    *,
+    run_id: str,
+    config: WorkflowConfig,
+    workspace_root: Path,
+    branch: str,
+    stop_phase: str = "",
+    suggested_phase: str = "",
+    reason: str = "",
+) -> RunResult:
+    run_root = workspace_root / config.run_root
+    paths = load_run_paths(run_root, run_id)
+    state = read_json(paths.state_path)
+    _ensure_metrics(state)
+    _ensure_branch_structures(state)
+
+    if branch not in state.get("branches", {}):
+        raise RuntimeError(f"Unknown branch '{branch}' for run {run_id}.")
+
+    bstate = state["branches"][branch]
+    inferred_stop_phase = stop_phase.strip().lower() or str(bstate.get("current_phase", "")).strip().lower()
+    if not inferred_stop_phase.startswith("stop_"):
+        inferred_stop_phase = "stop_stall"
+
+    suggested = suggested_phase.strip().lower()
+    if not suggested:
+        suggested = "breakdown" if inferred_stop_phase in {"stop_fail_scope", "stop_stall", "stop_budget"} else "prover"
+
+    decision_payload = {
+        "branch": branch,
+        "stop_phase": inferred_stop_phase,
+        "suggested_phase": suggested,
+        "reason": reason or bstate.get("last_reason", "") or "revived terminal soft-scaffolding run",
+    }
+
+    bstate["status"] = "orchestrator_review"
+    bstate["current_phase"] = "orchestrator_review"
+    bstate["last_reason"] = decision_payload["reason"]
+    bstate["pending_orchestrator_decision"] = decision_payload
+    state["status"] = "waiting_orchestrator"
+    state["current_phase"] = f"waiting_orchestrator:{branch}:{inferred_stop_phase}"
+    state["pending_orchestrator_decision"] = decision_payload
+    state["winning_branch"] = ""
+    state.pop("pending_external_agent", None)
+    _append_event(
+        paths.run_dir,
+        branch,
+        f"orchestrator revive: stop_phase={inferred_stop_phase} suggested_phase={suggested} reason={decision_payload['reason']}",
+    )
+    _write_run_state(paths, state)
+    return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status="waiting_orchestrator")
+
+
+def orchestrator_stop_run(
+    *,
+    run_id: str,
+    config: WorkflowConfig,
+    workspace_root: Path,
+    final_status: str = "failed",
+    branch: str = "",
+    reason: str = "",
+) -> RunResult:
+    run_root = workspace_root / config.run_root
+    paths = load_run_paths(run_root, run_id)
+    state = read_json(paths.state_path)
+    _ensure_metrics(state)
+    _ensure_branch_structures(state)
+
+    if final_status not in {"failed", "complete"}:
+        raise RuntimeError(f"Unsupported orchestrator stop status '{final_status}'.")
+
+    pending = state.get("pending_orchestrator_decision", {})
+    target_branch = branch or str(pending.get("branch", "") or (state.get("winning_branch") or "main"))
+    if target_branch and target_branch not in state.get("branches", {}):
+        raise RuntimeError(f"Unknown branch '{target_branch}' for run {run_id}.")
+
+    if target_branch:
+        bstate = state["branches"][target_branch]
+        bstate["current_phase"] = "done"
+        bstate["last_reason"] = reason or f"stopped by orchestrator as {final_status}"
+        bstate["status"] = "pass" if final_status == "complete" else "failed"
+        if final_status == "complete":
+            bstate["score"] = _branch_score(state, target_branch)
+            state["winning_branch"] = target_branch
+        _append_event(paths.run_dir, target_branch, f"orchestrator stop: status={final_status} reason={reason or '-'}")
+
+    _clear_orchestrator_decision(state, target_branch)
+    state["status"] = final_status
+    state["current_phase"] = "done"
+    _write_run_state(paths, state)
+    return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status=final_status)
+
+
 def _continue_run(paths: RunPaths, config: WorkflowConfig) -> RunResult:
     state = read_json(paths.state_path)
     _ensure_metrics(state)
     _ensure_branch_structures(state)
+
+    if state.get("status") == "waiting_orchestrator":
+        return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status="waiting_orchestrator")
 
     if state.get("status") in {"complete", "failed"} and state.get("current_phase") == "done":
         return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status=state["status"])
@@ -1421,6 +1702,8 @@ def _continue_run(paths: RunPaths, config: WorkflowConfig) -> RunResult:
         state["current_phase"] = f"waiting_external_agent:{pending.branch}:{pending.role}"
         _write_run_state(paths, state)
         return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status="waiting_external_agent")
+    except OrchestratorDecisionPending:
+        return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status="waiting_orchestrator")
 
 
 def inspect_run(run_id: str, config: WorkflowConfig, workspace_root: Path) -> str:

@@ -34,12 +34,23 @@ This command prints JSON including:
 - `base_model`
 - `effort_mode`
 - `source_names`
+- `confirmed_sources`
+- `missing_sources`
+- `lingering_sources`
 
 5. For one browser-backed role submission, run:
 
 ```bash
 scripts/chatgpt_browser_agent.sh submit --project-url URL --request-file PATH --response-file PATH [--cdp-url URL] [--attach-file PATH ...]
 ```
+
+6. Treat browser drift as part of the job, not as an automatic stop condition.
+
+- Re-open the project page and verify you are still in the intended project.
+- Re-check `ChatGPT 5.4 Pro` and `Extended Pro` before important prompts.
+- If `prepare` reports missing durable sources, retry one file at a time and verify again.
+- If a response file is missing but the heartbeat or chat URL exists, recover the existing chat before resubmitting.
+- If ChatGPT lands on an account chooser and there is a single clear account entry, select it and continue.
 
 ## Durable Source Policy
 
@@ -58,6 +69,7 @@ scripts/chatgpt_browser_agent.sh submit --project-url URL --request-file PATH --
 - Effort must be `Extended Pro`.
 - In automated repo tests, use the same visible Chrome/CDP route that the live workflow uses.
 - Treat CDP attach failure as a hard stop, not as a cue to invent another browser launch path.
+- Treat ambiguous login/auth state as a hard stop, but handle straightforward account-selection and source-verification repairs autonomously.
 
 ## References
 

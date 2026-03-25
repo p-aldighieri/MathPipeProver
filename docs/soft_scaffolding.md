@@ -57,6 +57,10 @@ In practice, good soft scaffolding looks like a strong human research assistant:
 - reinterpret reviewer output as local mathematical diagnostics
 - override stale or low-signal pipeline momentum when the proof frontier has changed
 - prefer one sharp lemma over one more generic "try proving the theorem" pass
+- actively inspect and repair browser state when model/effort/source/chat state drifts
+- keep stop authority at the orchestrator layer, not in automatic Python failure tags
+
+In soft mode, non-proof terminal conditions such as `FAIL_SCOPE`, `STALL`, or budget pressure should hand control back to the orchestrator for judgment. The run should not silently end just because the local pipeline hit one of those tags.
 
 ## Durable Sources vs Temporary Attachments
 
@@ -224,6 +228,25 @@ If a long ChatGPT run stops with no usable reply:
 - preserve the failed chat URL in the logs
 - do not overwrite a clean response target with wrapper text
 - resubmit in a fresh chat if the recovered content is not mathematical output
+
+## Autonomous Browser Repair
+
+In soft scaffolding mode, the orchestrator should not stop at the first browser inconsistency.
+
+If something looks off, it should actively check and repair the state with the available tools:
+
+- re-open the project page and verify the correct project URL
+- re-check `ChatGPT 5.4 Pro` and `Extended Pro`
+- open the `Sources` tab and confirm the requested durable files are actually present
+- if source sync looks incomplete, retry one file at a time and verify the post-sync list
+- inspect a live chat URL before deciding a worker is dead
+- recover from an existing chat when the answer is present but harvesting failed
+
+Only ask for human help after:
+
+- the browser state has been re-checked
+- source sync has been retried and still cannot be confirmed
+- or authentication / infrastructure truly blocks progress
 
 ## Recommended Storage Split
 

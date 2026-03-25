@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import time
 from typing import Any, Callable
 
-from .config import WorkflowConfig
+from .config import WorkflowConfig, load_config
 from .heartbeat import watch_heartbeat
 from .orchestrator import RunResult, resume_run
 from .storage import load_run_paths, read_json
@@ -34,8 +36,35 @@ class SupervisorResult:
     submit_launches: int
 
 
+@dataclass(frozen=True)
+class DetachedSupervisorLaunch:
+    run_id: str
+    run_dir: Path
+    pid: int
+    pid_path: Path
+    log_path: Path
+    metadata_path: Path
+    command: list[str]
+
+
+@dataclass(frozen=True)
+class DetachedSupervisorStatus:
+    run_id: str
+    run_dir: Path
+    pid: int | None
+    alive: bool
+    pid_path: Path
+    log_path: Path
+    metadata_path: Path
+    command: list[str]
+
+
 def _now_iso() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[2]
 
 
 def _append_supervisor_log(run_dir: Path, event: str, **fields: Any) -> None:
@@ -43,6 +72,32 @@ def _append_supervisor_log(run_dir: Path, event: str, **fields: Any) -> None:
     log_path = run_dir / "external_agent_supervisor.jsonl"
     with log_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, sort_keys=True) + "\n")
+
+
+def _detached_supervisor_dir(run_dir: Path) -> Path:
+    return run_dir / "session_bridge" / "supervisor"
+
+
+def _detached_supervisor_paths(run_dir: Path) -> tuple[Path, Path, Path]:
+    supervisor_dir = _detached_supervisor_dir(run_dir)
+    supervisor_dir.mkdir(parents=True, exist_ok=True)
+    return (
+        supervisor_dir / "detached_supervisor.pid",
+        supervisor_dir / "detached_supervisor.log",
+        supervisor_dir / "detached_supervisor.json",
+    )
+
+
+def _pid_is_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def _response_ready(path: Path) -> bool:
@@ -137,7 +192,7 @@ def _build_real_submit_launcher(
     poll_seconds: float,
     max_wait_seconds: float,
 ) -> Callable[[PendingExternalAgentTask], Any]:
-    script_path = workspace_root / "scripts" / "chatgpt_browser_agent.sh"
+    script_path = _repo_root() / "scripts" / "chatgpt_browser_agent.sh"
 
     def launch(task: PendingExternalAgentTask) -> subprocess.Popen[str]:
         cmd = [
@@ -161,6 +216,147 @@ def _build_real_submit_launcher(
         return subprocess.Popen(cmd, cwd=workspace_root)
 
     return launch
+
+
+def launch_detached_supervisor(
+    *,
+    run_id: str,
+    config_path: Path,
+    workspace_root: Path,
+    project_url: str,
+    cdp_url: str = "",
+    poll_seconds: float = 10.0,
+    stale_after_seconds: float = 120.0,
+    max_wait_seconds: float = 5400.0,
+    notify: bool = False,
+    notify_command: str = "",
+    idle_poll_seconds: float = 1.0,
+    max_submit_attempts: int = 3,
+    claude_session_id: str = "",
+    claude_bin: str = "claude",
+    claude_permission_mode: str = "bypassPermissions",
+    claude_dangerously_skip_permissions: bool = True,
+    claude_add_dirs: list[Path] | None = None,
+) -> DetachedSupervisorLaunch:
+    run_root = workspace_root / load_config(config_path).run_root
+    paths = load_run_paths(run_root, run_id)
+    pid_path, log_path, metadata_path = _detached_supervisor_paths(paths.run_dir)
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "mathpipeprover.cli",
+        "supervise-external-agent",
+        "--run-id",
+        run_id,
+        "--config",
+        str(config_path),
+        "--project-url",
+        project_url,
+        "--poll-seconds",
+        str(poll_seconds),
+        "--stale-after-seconds",
+        str(stale_after_seconds),
+        "--max-wait-seconds",
+        str(max_wait_seconds),
+        "--idle-poll-seconds",
+        str(idle_poll_seconds),
+        "--max-submit-attempts",
+        str(max_submit_attempts),
+    ]
+    if cdp_url:
+        cmd.extend(["--cdp-url", cdp_url])
+    if notify:
+        cmd.append("--notify")
+    if notify_command:
+        cmd.extend(["--notify-command", notify_command])
+    if claude_session_id:
+        cmd.extend(["--claude-session-id", claude_session_id])
+        cmd.extend(["--claude-bin", claude_bin])
+        cmd.extend(["--claude-permission-mode", claude_permission_mode])
+        if claude_dangerously_skip_permissions:
+            cmd.append("--claude-dangerously-skip-permissions")
+        else:
+            cmd.append("--no-claude-dangerously-skip-permissions")
+        for add_dir in claude_add_dirs or []:
+            cmd.extend(["--claude-add-dir", str(add_dir.resolve())])
+
+    env = os.environ.copy()
+    src_path = str((_repo_root() / "src").resolve())
+    current_pythonpath = env.get("PYTHONPATH", "").strip()
+    env["PYTHONPATH"] = f"{src_path}:{current_pythonpath}" if current_pythonpath else src_path
+
+    with log_path.open("a", encoding="utf-8") as log_handle:
+        process = subprocess.Popen(
+            cmd,
+            cwd=workspace_root,
+            stdin=subprocess.DEVNULL,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            close_fds=True,
+            env=env,
+        )
+
+    pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
+    metadata = {
+        "run_id": run_id,
+        "pid": process.pid,
+        "started_at": _now_iso(),
+        "cwd": str(workspace_root),
+        "config_path": str(config_path),
+        "project_url": project_url,
+        "cdp_url": cdp_url,
+        "claude_session_id": claude_session_id,
+        "log_path": str(log_path),
+        "pid_path": str(pid_path),
+        "command": cmd,
+    }
+    metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    _append_supervisor_log(paths.run_dir, "detached_supervisor_launch", pid=process.pid, log_path=str(log_path))
+    return DetachedSupervisorLaunch(
+        run_id=run_id,
+        run_dir=paths.run_dir,
+        pid=process.pid,
+        pid_path=pid_path,
+        log_path=log_path,
+        metadata_path=metadata_path,
+        command=cmd,
+    )
+
+
+def detached_supervisor_status(*, run_id: str, config: WorkflowConfig, workspace_root: Path) -> DetachedSupervisorStatus:
+    run_root = workspace_root / config.run_root
+    paths = load_run_paths(run_root, run_id)
+    pid_path, log_path, metadata_path = _detached_supervisor_paths(paths.run_dir)
+    command: list[str] = []
+    pid: int | None = None
+    if metadata_path.exists():
+        try:
+            payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            payload = {}
+        raw_command = payload.get("command", [])
+        if isinstance(raw_command, list):
+            command = [str(item) for item in raw_command]
+        raw_pid = payload.get("pid")
+        if isinstance(raw_pid, int):
+            pid = raw_pid
+    if pid is None and pid_path.exists():
+        raw = pid_path.read_text(encoding="utf-8").strip()
+        if raw.isdigit():
+            pid = int(raw)
+    alive = _pid_is_alive(pid) if pid is not None else False
+    return DetachedSupervisorStatus(
+        run_id=run_id,
+        run_dir=paths.run_dir,
+        pid=pid,
+        alive=alive,
+        pid_path=pid_path,
+        log_path=log_path,
+        metadata_path=metadata_path,
+        command=command,
+    )
 
 
 def supervise_external_agents(
@@ -195,8 +391,9 @@ def supervise_external_agents(
     while True:
         run_dir, state, task = _load_pending_task(run_id, config, workspace_root)
         state_status = str(state.get("status", ""))
-        if state_status in {"complete", "failed"}:
-            _append_supervisor_log(run_dir, "run_terminal", status=state_status)
+        if state_status in {"complete", "failed", "waiting_orchestrator"}:
+            event = "run_terminal" if state_status in {"complete", "failed"} else "run_orchestrator_handoff"
+            _append_supervisor_log(run_dir, event, status=state_status)
             return SupervisorResult(
                 run_id=run_id,
                 status=state_status,

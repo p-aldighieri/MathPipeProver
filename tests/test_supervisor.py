@@ -8,7 +8,12 @@ import time
 
 from mathpipeprover.config import WorkflowConfig, load_config
 from mathpipeprover.orchestrator import RunResult
-from mathpipeprover.supervisor import PendingExternalAgentTask, supervise_external_agents
+from mathpipeprover.supervisor import (
+    PendingExternalAgentTask,
+    detached_supervisor_status,
+    launch_detached_supervisor,
+    supervise_external_agents,
+)
 
 
 class _FakeHandle:
@@ -244,3 +249,44 @@ def test_supervisor_relaunches_after_stale_heartbeat(tmp_path: Path) -> None:
     assert result.resumed_roles == 1
     assert result.submit_launches == 1
     assert launch_count["value"] == 1
+
+
+class _FakePopen:
+    def __init__(self, cmd: list[str], **_: object) -> None:
+        self.cmd = cmd
+        self.pid = 424242
+
+
+def test_launch_detached_supervisor_writes_runtime_metadata(tmp_path: Path, monkeypatch) -> None:
+    config_path, config = _config(tmp_path)
+    run_dir = tmp_path / config.run_root / "run_detached"
+    run_dir.mkdir(parents=True)
+    _write_run_state(run_dir, {"run_id": "run_detached", "status": "waiting_external_agent"})
+
+    captured: dict[str, object] = {}
+
+    def fake_popen(cmd: list[str], **kwargs: object) -> _FakePopen:
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return _FakePopen(cmd, **kwargs)
+
+    monkeypatch.setattr("mathpipeprover.supervisor.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("mathpipeprover.supervisor._pid_is_alive", lambda pid: pid == 424242)
+
+    launch = launch_detached_supervisor(
+        run_id="run_detached",
+        config_path=config_path,
+        workspace_root=tmp_path,
+        project_url="https://chatgpt.example/project",
+        cdp_url="http://127.0.0.1:9222",
+        claude_session_id="session-123",
+        claude_add_dirs=[tmp_path / "repo"],
+    )
+
+    assert launch.pid == 424242
+    assert launch.pid_path.exists()
+    assert launch.metadata_path.exists()
+    status = detached_supervisor_status(run_id="run_detached", config=config, workspace_root=tmp_path)
+    assert status.alive is True
+    assert status.pid == 424242
+    assert "supervise-external-agent" in " ".join(status.command)

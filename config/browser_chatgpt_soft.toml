@@ -2,14 +2,17 @@
 mode = "semi_strict"
 enable_literature = true
 max_branches = 2
-max_prover_cycles = 6
+max_prover_cycles = 40
 max_total_tokens = 2000000
 max_tokens_per_branch = 1000000
 max_total_calls = 20000
 max_calls_per_branch = 5000
+policy_max_scope_changes_per_branch = 999
+policy_max_new_assumptions_per_branch = 999
 run_root = "runs"
 prompts_root = "prompts_soft"
 router_enabled = false
+orchestrator_controls_stop = true
 provider_timeout_seconds = 60
 
 [providers]
