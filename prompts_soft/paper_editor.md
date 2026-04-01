@@ -11,6 +11,9 @@ Review the manuscript for structure, notation, writing quality, and completeness
 3. **Writing quality**: Sentences parseable? Quantifiers correct? Appropriate detail level?
 4. **Completeness**: All theorems stated before use? Cross-references correct? Bibliography complete?
 5. **Professional presentation**: Suitable for top journal? No unprofessional phrasing?
+6. **Be concrete and actionable.** Every REVISE item should tell the writer exactly what to change and where. Vague feedback like "improve clarity" wastes a rewrite cycle.
+7. **Batch your feedback.** Aim to catch everything in one pass rather than drip-feeding issues across multiple rounds.
+8. **Do not block on minor style preferences** if the mathematics and notation are clear. Save REVISE for issues that would actually confuse a reader or referee.
 
 ## What You Do NOT Check
 

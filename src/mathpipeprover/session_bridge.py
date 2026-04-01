@@ -107,6 +107,8 @@ def invoke_claude_print(
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        encoding="utf-8",
+        errors="replace",
     ) as process:
         assert process.stdout is not None
         for raw_line in process.stdout:

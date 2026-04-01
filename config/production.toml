@@ -114,3 +114,37 @@ write = ["branches/{branch}/context/assumption_delta.md", "branches/{branch}/con
 [role_access.consolidator]
 read = ["claim.md", "branches/{branch}/context/*.md"]
 write = ["branches/{branch}/context/final_report.md"]
+
+# Paper pipeline roles (post-theorem verification)
+[role_runtime.paper_writer]
+provider = "external_agent"
+model = "chatgpt-extended-pro"
+temperature = 0.2
+max_output_tokens = 128000
+reasoning_effort = "high"
+
+[role_runtime.paper_editor]
+provider = "external_agent"
+model = "chatgpt-extended-pro"
+temperature = 0.0
+max_output_tokens = 64000
+reasoning_effort = "medium"
+
+[role_runtime.paper_reviewer]
+provider = "external_agent"
+model = "chatgpt-extended-pro"
+temperature = 0.0
+max_output_tokens = 64000
+reasoning_effort = "high"
+
+[role_access.paper_writer]
+read = ["claim.md", "branches/{branch}/context/*.md", "paper/*.tex", "paper/*_fix.md"]
+write = ["paper/*.tex"]
+
+[role_access.paper_editor]
+read = ["paper/*.tex"]
+write = ["paper/editor_verdict.md"]
+
+[role_access.paper_reviewer]
+read = ["paper/*.tex"]
+write = ["paper/reviewer_verdict.md"]

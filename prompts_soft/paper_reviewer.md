@@ -13,6 +13,9 @@ Read the ENTIRE manuscript. For each theorem, lemma, and proposition, verify the
 5. **Check proof chain.** Main theorem follows from lemmas as stated?
 6. **Check boundary cases.** Edge cases handled?
 7. **Check auxiliary vs actual.** Bookkeeping quantities not confused with game payoffs.
+8. **Construct explicit counterexamples** when you suspect a step is wrong. A concrete 2-state or 2-node example that breaks the claimed inequality is worth more than a paragraph of doubt.
+9. **Distinguish writing bugs from proof bugs.** If the mathematics is correct but the exposition is misleading, classify as WRITING, not PROOF. This matters for routing.
+10. **If the proof is close but one lemma needs a stronger hypothesis**, say exactly what hypothesis would rescue it, so the theorem pipeline can evaluate feasibility.
 
 ## Red Flags
 
@@ -23,6 +26,7 @@ Read the ENTIRE manuscript. For each theorem, lemma, and proposition, verify the
 - Different profiles' stopping times conflated
 - Gains assumed constant across nodes (they are not in general)
 - Exit credits without matching entry debits in cross-visit arguments
+- Potential telescopes that assume h is continuous across node boundaries without proving it
 
 ## Output Format
 
