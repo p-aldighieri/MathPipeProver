@@ -1,28 +1,23 @@
 #!/usr/bin/env node
 /**
- * cdp_set_model_pro.mjs — Verify and set the ChatGPT model to "Pro" via CDP.
+ * cdp_set_model_pro.mjs — Verify and set ChatGPT to "Extended Pro" via CDP.
  *
- * IMPORTANT: "Pro" (Research-grade intelligence) is a DIFFERENT MODEL from
- * "Thinking" (which has effort sub-levels: Light/Standard/Extended/Heavy).
- * The model is selected via the ChatGPT header dropdown, NOT the effort pill.
+ * "Extended Pro" requires TWO settings:
+ *   1. Model = "Pro" (via the ChatGPT header dropdown — NOT the same as "Thinking")
+ *   2. Effort = "Extended" (via the Pro pill dropdown in the composer)
+ *
+ * The composer pill must show "Extended Pro" when correctly configured.
  *
  * Usage:
- *   node cdp_set_model_pro.mjs [--port <PORT>]
+ *   node cdp_set_model_pro.mjs [--port <PORT>] [--check-only]
  *
  * Options:
  *   --port <PORT>   CDP remote-debugging port (default: 9222)
- *   --check-only    Only check current model, don't switch
- *
- * What it does:
- *   1. Connects to Chrome via CDP
- *   2. Navigates to chatgpt.com
- *   3. Checks current model by looking at composer pill
- *   4. If not Pro, opens model dropdown and clicks "Pro"
- *   5. Verifies the switch
+ *   --check-only    Only check, don't switch. Exit 0 if Extended Pro, 1 otherwise.
  *
  * Exit codes:
- *   0 — Pro model confirmed active
- *   1 — Error or could not switch to Pro
+ *   0 — Extended Pro confirmed active
+ *   1 — Error or not Extended Pro
  */
 
 import { chromium } from 'playwright';
@@ -36,6 +31,23 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === '--check-only') { checkOnly = true; continue; }
 }
 
+// Helper: get the composer pill text (the button near the textarea showing model/effort)
+async function getComposerPill(page) {
+  return page.evaluate(() => {
+    const btns = document.querySelectorAll('button');
+    for (const btn of btns) {
+      const rect = btn.getBoundingClientRect();
+      const text = btn.textContent.trim();
+      if (rect.y > 250 && rect.y < 800 &&
+          (text === 'Extended Pro' || text === 'Pro' ||
+           text.includes('thinking') || text === 'Standard Pro')) {
+        return text;
+      }
+    }
+    return 'unknown';
+  });
+}
+
 try {
   const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
   const ctx = browser.contexts()[0];
@@ -43,45 +55,29 @@ try {
   if (!page) page = ctx.pages()[0];
   if (!page) page = await ctx.newPage();
 
-  // Navigate to chatgpt.com if not already there
   if (!page.url().includes('chatgpt.com')) {
     await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await new Promise(r => setTimeout(r, 5000));
   }
 
-  // Check if Pro is already active by looking at the composer pill
-  const currentPill = await page.evaluate(() => {
-    const btns = document.querySelectorAll('button');
-    for (const btn of btns) {
-      const rect = btn.getBoundingClientRect();
-      // Composer area buttons (y > 300)
-      if (rect.y > 300) {
-        const text = btn.textContent.trim();
-        if (text.includes('Pro') || text.includes('thinking') || text.includes('Extended')) {
-          return text;
-        }
-      }
-    }
-    return 'unknown';
-  });
+  // Step 0: Check current state
+  const currentPill = await getComposerPill(page);
+  console.log('Current pill:', currentPill);
 
-  console.log('Current composer pill:', currentPill);
-
-  if (currentPill.includes('Pro')) {
-    console.log('MODEL: Pro (already active)');
+  if (currentPill === 'Extended Pro') {
+    console.log('MODEL: Extended Pro (already active)');
     await browser.close();
     process.exit(0);
   }
 
   if (checkOnly) {
-    console.log('MODEL: NOT Pro (current:', currentPill, ')');
+    console.log('MODEL: NOT Extended Pro (current: ' + currentPill + ')');
     await browser.close();
     process.exit(1);
   }
 
-  console.log('Switching to Pro...');
-
-  // Find and click the ChatGPT header dropdown
+  // Step 1: Select Pro model via header dropdown
+  console.log('Step 1: Selecting Pro model...');
   const allBtns = page.locator('button');
   const btnCount = await allBtns.count();
   let opened = false;
@@ -92,20 +88,17 @@ try {
     if (box && box.y < 50 && text && text.includes('ChatGPT')) {
       await btn.click();
       opened = true;
-      console.log('Opened model dropdown');
       break;
     }
   }
-
   if (!opened) {
     console.error('ERROR: Could not find model dropdown');
     await browser.close();
     process.exit(1);
   }
-
   await new Promise(r => setTimeout(r, 1500));
 
-  // Find the "Pro" option by locating the SPAN with text "Pro" in the dropdown area
+  // Click "Pro" in the dropdown
   const proElements = await page.evaluate(() => {
     const allEls = document.querySelectorAll('*');
     const results = [];
@@ -120,40 +113,63 @@ try {
   });
 
   if (proElements.length === 0) {
-    console.error('ERROR: Could not find Pro option in dropdown');
+    console.error('ERROR: Pro option not found in dropdown');
     await browser.close();
     process.exit(1);
   }
 
-  // Click the Pro element
   const target = proElements.find(e => e.h > 15 && e.h < 80) || proElements[0];
   await page.mouse.click(target.x + target.w / 2, target.y + target.h / 2);
-  console.log('Clicked Pro');
+  console.log('Selected Pro model');
   await new Promise(r => setTimeout(r, 3000));
 
-  // Verify
-  const newPill = await page.evaluate(() => {
+  // Step 2: Set effort to Extended via the Pro pill in the composer
+  console.log('Step 2: Setting Extended effort...');
+
+  // Find the Pro pill in the composer
+  const proPill = await page.evaluate(() => {
     const btns = document.querySelectorAll('button');
     for (const btn of btns) {
       const rect = btn.getBoundingClientRect();
-      if (rect.y > 300) {
-        const text = btn.textContent.trim();
-        if (text.includes('Pro') || text.includes('thinking') || text.includes('Extended')) {
-          return text;
-        }
+      const text = btn.textContent.trim();
+      if ((text === 'Pro' || text === 'Standard Pro' || text === 'Extended Pro') &&
+          rect.y > 250) {
+        return { text, x: rect.x, y: rect.y, w: rect.width, h: rect.height };
       }
     }
-    return 'unknown';
+    return null;
   });
 
-  if (newPill.includes('Pro')) {
-    console.log('MODEL: Pro (confirmed active)');
-    await page.screenshot({ path: 'C:/tmp/cdp_model_pro_confirmed.png' });
+  if (proPill) {
+    await page.mouse.click(proPill.x + proPill.w / 2, proPill.y + proPill.h / 2);
+    console.log('Opened Pro effort dropdown');
+    await new Promise(r => setTimeout(r, 1500));
+
+    // Click "Extended"
+    const extOption = page.getByText('Extended', { exact: true }).first();
+    if (await extOption.count() > 0) {
+      await extOption.click();
+      console.log('Selected Extended');
+      await new Promise(r => setTimeout(r, 2000));
+    } else {
+      console.error('ERROR: Extended option not found in Pro dropdown');
+    }
+  } else {
+    console.error('ERROR: Pro pill not found in composer');
+  }
+
+  // Verify final state
+  const finalPill = await getComposerPill(page);
+  console.log('Final pill:', finalPill);
+
+  if (finalPill === 'Extended Pro') {
+    console.log('MODEL: Extended Pro (confirmed)');
+    await page.screenshot({ path: 'C:/tmp/cdp_extended_pro_confirmed.png' });
     await browser.close();
     process.exit(0);
   } else {
-    console.error('ERROR: Switch failed. Pill shows:', newPill);
-    await page.screenshot({ path: 'C:/tmp/cdp_model_pro_failed.png' });
+    console.error('ERROR: Expected "Extended Pro", got:', finalPill);
+    await page.screenshot({ path: 'C:/tmp/cdp_extended_pro_failed.png' });
     await browser.close();
     process.exit(1);
   }
