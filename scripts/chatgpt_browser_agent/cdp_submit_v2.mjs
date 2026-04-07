@@ -70,18 +70,27 @@ try {
   await new Promise(r => setTimeout(r, 5000));
   console.log('At:', page.url());
 
-  // Check effort pill
+  // Check model — CRITICAL: Pro is a separate model from Thinking+Heavy
   if (checkEffort) {
-    const effortText = await page.evaluate(() => {
+    const composerPill = await page.evaluate(() => {
       const btns = document.querySelectorAll('button');
       for (const btn of btns) {
-        if (btn.textContent.includes('thinking')) return btn.textContent.trim();
+        const rect = btn.getBoundingClientRect();
+        if (rect.y > 300) {
+          const text = btn.textContent.trim();
+          if (text.includes('Pro') || text.includes('thinking') || text.includes('Extended')) {
+            return text;
+          }
+        }
       }
-      return 'not found';
+      return 'unknown';
     });
-    console.log('Effort:', effortText);
-    if (!effortText.includes('Heavy')) {
-      console.error('WARNING: Effort is not Heavy thinking!');
+    console.log('Model pill:', composerPill);
+    if (composerPill.includes('Pro')) {
+      console.log('Model: Pro (correct)');
+    } else {
+      console.error('WARNING: Model is NOT Pro! Pill shows: ' + composerPill);
+      console.error('Run cdp_set_model_pro.mjs first to switch to Pro model.');
     }
   }
 
