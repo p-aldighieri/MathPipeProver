@@ -1,10 +1,20 @@
 # MathPipeProver
 
-Automated proof orchestration pipeline with browser-backed soft scaffolding.
+Automated proof orchestration pipeline. Supports three operating modes:
 
-The soft-scaffolding orchestrator is expected to act intelligently, not mechanically.
-It should synthesize proof-state, reviewer verdicts, route obstructions, and current branch value before choosing the next role.
-Do not merely relay model outputs or follow stale pipeline momentum when the mathematical frontier has already shifted.
+### Mode A — Full API (hands-off)
+
+Fully automated, no browser, no human in the loop. All roles (formalizer, searcher, prover, reviewer, consolidator) run via API providers (OpenAI, Anthropic, Gemini). The workflow router decides the next phase. Use configs like `config/production.toml` or `config/default.toml` with `router_enabled = true`. Prompts come from `prompts/` (structured for API consumption). Run with `mpp run` / `mpp resume`.
+
+### Mode B — Supervisor soft-scaffolding
+
+Browser-backed with a **supervisor daemon** that owns the automation loop. Roles are submitted to ChatGPT Extended Pro via browser agent scripts, and a background supervisor polls heartbeats and wakes short-lived Claude CLI sessions to make orchestrator decisions. Each Claude wake-up reads state, decides, and exits immediately — the supervisor loops. Use `config/browser_chatgpt_soft.toml` with `router_enabled = false`, `orchestrator_controls_stop = true`. Prompts come from `prompts_soft/` (browser-optimized).
+
+### Mode C — Smart orchestration with loops (interactive)
+
+A long-running Claude session acts as both orchestrator and submitter. Instead of a background supervisor, a **heartbeat loop** (`/heartbeat`) fires periodically to check browser state and advance the pipeline. The orchestrator has full autonomy: it reads proof state, synthesizes reviewer verdicts, makes judgment calls on strategy, and submits to ChatGPT Extended Pro directly via CDP scripts. This is the most flexible mode — the orchestrator adapts the pipeline to the problem rather than following rigid role sequences.
+
+**In all modes**, the orchestrator is expected to act intelligently, not mechanically. It should synthesize proof-state, reviewer verdicts, route obstructions, and current branch value before choosing the next role. Do not merely relay model outputs or follow stale pipeline momentum when the mathematical frontier has already shifted.
 
 ## Slash Commands
 
@@ -31,6 +41,35 @@ Located in `scripts/chatgpt_browser_agent/`:
 
 All scripts require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
 
+## Chrome CDP Port Management
+
+Each proof project must run in its **own Chrome instance** on a **unique port** to avoid interfering with other sessions. Never attach to or reuse a Chrome window belonging to another project.
+
+**Launching a new session:**
+```bash
+"/c/Program Files/Google/Chrome/Application/chrome.exe" \
+  --remote-debugging-port=PORT \
+  --user-data-dir="$HOME/.mathpipeprover/chrome-PROJECT-profile" \
+  --no-first-run --no-default-browser-check \
+  "https://chatgpt.com/" &
+```
+
+**Rules:**
+- **Check existing ports first** — `netstat -ano | grep LISTEN | grep 922` to see what's in use.
+- **One port per project** — never share ports across proof projects.
+- **Separate profile directories** — each project gets its own `--user-data-dir` under `~/.mathpipeprover/`.
+- **Inherit authentication** — to avoid re-login, copy cookies from an existing authenticated profile:
+  ```bash
+  # Copy auth files from an existing profile
+  cp -r SOURCE_PROFILE/Default/Network/Cookies TARGET_PROFILE/Default/Network/
+  cp -r SOURCE_PROFILE/Default/"Local Storage" TARGET_PROFILE/Default/
+  cp -r SOURCE_PROFILE/Default/IndexedDB TARGET_PROFILE/Default/
+  cp -r SOURCE_PROFILE/Default/"Session Storage" TARGET_PROFILE/Default/
+  ```
+  Then launch Chrome with the new profile. The ChatGPT session will be pre-authenticated.
+- **Never kill other projects' Chrome processes** — always identify by port/PID before stopping.
+- **Record port assignments** in the run's session info and in the memory system.
+
 ## Model Configuration — CRITICAL
 
 **Extended Pro** requires TWO settings (they are independent):
@@ -44,10 +83,12 @@ The composer pill must show **"Extended Pro"**. "Thinking + Heavy" is a DIFFEREN
 - `docs/soft_scaffolding.md` — browser-orchestrated proof workflow guide
 - `docs/browser_chatgpt.md` — ChatGPT browser agent operations
 
-## Session-Bridge Architecture (Supervisor Flow)
+## Session-Bridge Architecture (Mode B only — Supervisor Flow)
 
-The production soft-scaffolding flow uses a **supervisor daemon** that owns the full
+The supervisor soft-scaffolding flow uses a **supervisor daemon** that owns the full
 automation loop. Claude sessions are short-lived workers, not long-running orchestrators.
+
+**This section applies only to Mode B.** In Mode C (smart orchestration with loops), the Claude session is long-running and handles submission/monitoring directly — there is no separate supervisor.
 
 ### How it works
 
@@ -74,7 +115,7 @@ When you are woken up by the supervisor:
 The orchestrator is responsible for keeping the ChatGPT project's **Sources** tab clean and current. This is not optional — stale or bloated project sources degrade every subsequent role's output.
 
 **What belongs in durable sources** (4–6 files max):
-- The paper PDF or conjecture statement
+- The paper PDF/md or conjecture statement
 - A current proof-state file (updated after accepted results)
 - The active route memo (only one — remove stale route memos before adding a new one)
 - The objective/claim file
