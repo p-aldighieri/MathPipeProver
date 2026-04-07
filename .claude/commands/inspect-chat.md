@@ -1,20 +1,24 @@
-Inspect a live ChatGPT chat to check its current state.
+Inspect a live ChatGPT chat to check its current generation state.
 
 Arguments: $ARGUMENTS
-- Format: `URL` (the chat URL to inspect)
+- Format: `--chat-url URL --port PORT`
 
-Use the Playwright MCP tools to:
+## Steps
 
-1. Navigate to the provided chat URL.
-2. Wait for the page to render.
-3. Check if the model is still generating (look for stop/pause buttons).
-4. Read the latest assistant turn text.
-5. Report:
-   - Chat URL
-   - Whether it's still generating or done
+Use inline Playwright CDP to:
+
+1. Connect to Chrome via `chromium.connectOverCDP('http://localhost:PORT')`
+2. Navigate to the provided chat URL
+3. Wait for the page to load (5-8 seconds)
+4. Check if still generating: `page.locator('[data-testid="stop-button"]').count() > 0`
+5. Extract response text: query all `[data-message-author-role="assistant"]` elements
+6. Report:
+   - Status: generating / complete / waiting
    - Response length in characters
-   - First ~200 characters as a preview
+   - First ~300 characters as preview
+   - Chat URL
    - Current timestamp
 
-This is a read-only inspection. Do not modify anything.
-Used for monitoring long-running ChatGPT Pro extended responses.
+This is **read-only**. Do not modify anything. Do not submit or interact with the chat.
+
+Used for monitoring long-running Extended Pro responses between heartbeat ticks.

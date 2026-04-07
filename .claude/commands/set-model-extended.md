@@ -1,16 +1,29 @@
-Set the ChatGPT browser session to use **ChatGPT 5.4 Pro** with **Extended Pro** effort.
+Set the ChatGPT browser session to **Extended Pro** (Pro model + Extended effort).
 
-Use the Playwright MCP tools to:
+This requires TWO separate settings:
+1. **Model**: "Pro" (selected via the ChatGPT header dropdown — NOT "Thinking")
+2. **Effort**: "Extended" (selected via the Pro pill dropdown in the composer)
 
-1. Navigate to chatgpt.com if not already there.
-2. Click the model selector button (ref for "Model selector").
-3. In the dropdown menu, select the "Pro 5.4" menu item (the one with "Research-grade intelligence").
-4. Wait for the model selector to update and show "ChatGPT 5.4 Pro" or "5.4 Pro".
-5. Check if the "Extended Pro" effort pill is already visible near the composer. If not:
-   a. Click the "Pro" button near the composer input (the effort pill, not the model selector).
-   b. Select "Extended" from the radio menu that appears.
-   c. Confirm "Extended Pro" button is now visible.
-6. Report the final state: which model is selected and which effort mode is active.
+The composer pill must show **"Extended Pro"** when correctly configured.
 
-This is the required configuration for all MathPipeProver proof orchestration sessions.
-The model must be ChatGPT 5.4 Pro and the effort must be Extended Pro before any proof work begins.
+## Steps
+
+1. Run the automated script:
+   ```bash
+   cd C:/repos/MathPipeProver/scripts/chatgpt_browser_agent
+   node cdp_set_model_pro.mjs --port PORT
+   ```
+   Replace PORT with the CDP port for the current session (check memory/session info).
+
+2. If the script succeeds (exit 0), Extended Pro is confirmed.
+
+3. If the script fails, manually fix via Playwright CDP:
+   a. Navigate to chatgpt.com
+   b. Click the "ChatGPT ˅" header dropdown → select "Pro"
+   c. Click the "Pro >" pill in the composer (next to the "+" button)
+   d. Select "Extended" from the sub-menu
+   e. Verify pill shows "Extended Pro"
+
+4. Report the final state.
+
+**CRITICAL**: "Thinking + Heavy" is NOT the same as "Extended Pro". They are different models. Always verify the pill shows exactly "Extended Pro".

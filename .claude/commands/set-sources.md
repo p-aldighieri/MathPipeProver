@@ -1,35 +1,31 @@
-Refresh durable project sources in the active ChatGPT project.
+Manage durable project sources in a ChatGPT project's Sources tab.
 
 Arguments: $ARGUMENTS
-- Format: `--project-url URL [--add path1 path2 ...] [--remove name1 name2 ...]`
-- If no arguments given, just open the Sources tab and list what's currently there.
+- Format: `--project-url URL --port PORT [--add file1 file2 ...] [--remove name1 name2 ...]`
+- If no --add/--remove, just list current sources.
 
-Prefer the repo browser helper first:
+## Adding Sources
 
 ```bash
-scripts/chatgpt_browser_agent.sh prepare --project-url URL [--cdp-url URL] [--add-source PATH ...] [--remove-source NAME ...]
+cd C:/repos/MathPipeProver/scripts/chatgpt_browser_agent
+node cdp_add_source.mjs --project-url URL --port PORT file1.pdf file2.md ...
 ```
 
-If the first pass does not confirm the requested durable sources, do not stop immediately. Re-open the project, re-check `ChatGPT 5.4 Pro` and `Extended Pro`, and retry missing files one at a time before escalating.
+The script navigates to the project Sources tab, clicks Add → Upload, and uploads the specified files.
 
-Use Playwright MCP tools only when you need to inspect or repair browser state directly. In that case:
+## Removing Sources
 
-1. Navigate to the ChatGPT project URL provided (or the current page if already on a project page).
-2. Find and click the "Sources" tab on the project page.
-3. If `--remove` names are given:
-   a. For each source name, find it in the sources list.
-   b. Click its "Source actions" button (three-dot menu or similar).
-   c. Click "Remove" from the context menu.
-   d. Confirm the source is gone.
-4. If `--add` paths are given:
-   a. For each file path, use the file upload input on the Sources tab.
-   b. Upload the file and confirm it appears in the sources list.
-5. Report what sources are now in the project.
-6. If the browser shows an account chooser and there is one clear account entry, select it and continue. Only stop for human help if the login choice is ambiguous or blocked.
+Removing must be done manually via Playwright CDP:
+1. Connect to Chrome on the CDP port
+2. Navigate to the project URL
+3. Click the Sources tab
+4. For each source to remove: hover over it, click the three-dot menu, click Remove
 
-Important rules from the soft scaffolding guide:
-- Do not duplicate durable files as temporary attachments.
-- Remove stale branch-specific sources BEFORE adding new ones.
-- Durable sources should include: objective statement, paper PDF, proof-state file, current route memo.
-- Temporary per-chat attachments (packets, drafts) should NOT be added as durable sources.
-- Before reporting success, explicitly confirm the post-sync source list. Do not assume an upload worked just because the file chooser closed.
+## Source Hygiene Rules
+
+- **4-6 files max** in durable sources
+- **Include**: paper PDF, proof-state file, objectives, active route memo
+- **Exclude**: per-step packets, prover drafts, old branch files
+- Remove stale sources BEFORE adding new ones
+- After a consolidator pass: refresh proof-state, remove old versions
+- Never duplicate durable sources as composer attachments

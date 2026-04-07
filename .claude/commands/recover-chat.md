@@ -1,20 +1,30 @@
-Recover a ChatGPT response from an existing chat URL.
+Recover a ChatGPT response from an existing chat URL and save to file.
 
 Arguments: $ARGUMENTS
-- Format: `--chat-url URL --response-file PATH`
+- Format: `--chat-url URL --port PORT --response-file PATH`
 
-Use the Playwright MCP tools to:
+## Steps
 
-1. Navigate to the provided chat URL.
-2. Wait for the page to load and the chat to render.
-3. Find the last assistant turn in the conversation.
-4. Extract the full response text from that turn.
-5. If the text is non-empty and looks like mathematical/proof content (not wrapper text or error), write it to the response file.
-6. If the text looks like wrapper text, UI artifacts, or is empty, report the failure and do NOT overwrite any existing response file.
+Use inline Playwright CDP to:
 
-This is used for recovery when:
-- A browser submission timed out but ChatGPT actually completed.
-- The heartbeat went stale but the response is still in the chat.
-- A prior extraction captured incomplete or wrapper text.
+1. Connect to Chrome via `chromium.connectOverCDP('http://localhost:PORT')`
+2. Navigate to the provided chat URL
+3. Wait for the page to load (8+ seconds)
+4. Check if still generating — if yes, report and exit without writing
+5. Extract ALL assistant turn text from `[data-message-author-role="assistant"]` elements
+6. Validate: response must be >500 chars and contain mathematical content (not UI artifacts)
+7. If valid: write to the response file path
+8. If invalid: report failure, do NOT overwrite any existing response file
 
-Important: Do not overwrite a clean response file with wrapper text. Only write if the recovered content is substantive mathematical output.
+## When to Use
+
+- Browser submission timed out but ChatGPT actually completed
+- Heartbeat went stale but response exists in the chat
+- Prior extraction captured incomplete or garbled text
+- Need to re-harvest a response after a Chrome restart
+
+## Safety
+
+- Never overwrite a clean response file with garbage/wrapper text
+- Always check generation status before extracting
+- If the chat shows an error message from ChatGPT, report it rather than saving it as a response

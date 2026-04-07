@@ -6,6 +6,39 @@ The soft-scaffolding orchestrator is expected to act intelligently, not mechanic
 It should synthesize proof-state, reviewer verdicts, route obstructions, and current branch value before choosing the next role.
 Do not merely relay model outputs or follow stale pipeline momentum when the mathematical frontier has already shifted.
 
+## Slash Commands
+
+Available via `.claude/commands/`:
+
+| Command | Description |
+|---------|-------------|
+| `/set-model-extended` | Set ChatGPT to **Extended Pro** (Pro model + Extended effort). MUST run before any submission. |
+| `/submit-role` | Submit a proof role prompt to a ChatGPT project. Verifies Extended Pro, sends, reports chat URL. |
+| `/set-sources` | Add/remove durable files in a ChatGPT project's Sources tab. |
+| `/inspect-chat` | Read-only check of a live chat's generation status. |
+| `/recover-chat` | Extract a completed response from a chat URL and save to file. |
+| `/heartbeat` | Start a 30-min recurring orchestrator heartbeat loop. |
+
+## CDP Browser Scripts
+
+Located in `scripts/chatgpt_browser_agent/`:
+
+| Script | Usage |
+|--------|-------|
+| `cdp_set_model_pro.mjs` | `node cdp_set_model_pro.mjs --port PORT` — Set Extended Pro (two-step: model + effort) |
+| `cdp_submit.mjs` | `node cdp_submit.mjs --project-url URL --port PORT [--check-effort] prompt.md` |
+| `cdp_add_source.mjs` | `node cdp_add_source.mjs --project-url URL --port PORT file1 file2 ...` |
+
+All scripts require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
+
+## Model Configuration — CRITICAL
+
+**Extended Pro** requires TWO settings (they are independent):
+1. **Model**: Click "ChatGPT ˅" header dropdown → select **"Pro"** (NOT "Thinking")
+2. **Effort**: Click the "Pro >" pill in the composer → select **"Extended"**
+
+The composer pill must show **"Extended Pro"**. "Thinking + Heavy" is a DIFFERENT, weaker model. Always verify before submitting.
+
 ## Key Documentation
 
 - `docs/soft_scaffolding.md` — browser-orchestrated proof workflow guide
