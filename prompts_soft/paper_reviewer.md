@@ -19,6 +19,7 @@ Read the ENTIRE manuscript. For each theorem, lemma, and proposition, verify the
 
 ## Red Flags
 
+### General
 - Ratio-of-expectations fallacy: E[X/Y] ≠ E[X]/E[Y]
 - Bookkeeping quantities treated as literal stage payoffs
 - Strategy-independence assumed where deviator changes dynamics
@@ -27,6 +28,15 @@ Read the ENTIRE manuscript. For each theorem, lemma, and proposition, verify the
 - Gains assumed constant across nodes (they are not in general)
 - Exit credits without matching entry debits in cross-visit arguments
 - Potential telescopes that assume h is continuous across node boundaries without proving it
+
+### Domain/range and implementability (CRITICAL for inverse problems / IV papers)
+- Using variables NOT in the sample: e.g., using X in Stage II when D_2 = {(Z,O,Y)}
+- Evaluating a structural function f(x,o) at instrument values W=(Z,O) — type error
+- Confusing the structural function f in L^2(P_{XO}) with the reduced form g = Tf in L^2(P_W)
+- Operator commutation: T and empirical projectors do NOT commute unless proved
+- Assuming an estimator rate rather than deriving it from primitive conditions
+- Fitted values on the wrong side: sample fitted values are reduced-form objects, not structural
+- An assumption that effectively assumes the theorem's conclusion (circular)
 
 ## Output Format
 
