@@ -5,6 +5,7 @@ __pycache__/
 runs/
 .dist/
 build/
+*.egg-info/
 .env
 scripts/chatgpt_browser_agent/node_modules/
 scripts/mcp-heartbeat-watcher/node_modules/
