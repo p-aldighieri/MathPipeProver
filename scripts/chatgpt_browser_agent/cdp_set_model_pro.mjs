@@ -38,9 +38,9 @@ async function getComposerPill(page) {
     for (const btn of btns) {
       const rect = btn.getBoundingClientRect();
       const text = btn.textContent.trim();
-      if (rect.y > 250 && rect.y < 800 &&
+      if (rect.y > 150 && rect.y < 800 &&
           (text === 'Extended Pro' || text === 'Pro' ||
-           text.includes('thinking') || text === 'Standard Pro')) {
+           text.includes('thinking') || text.includes('Thinking') || text === 'Standard Pro')) {
         return text;
       }
     }
@@ -133,7 +133,7 @@ try {
       const rect = btn.getBoundingClientRect();
       const text = btn.textContent.trim();
       if ((text === 'Pro' || text === 'Standard Pro' || text === 'Extended Pro') &&
-          rect.y > 250) {
+          rect.y > 150) {
         return { text, x: rect.x, y: rect.y, w: rect.width, h: rect.height };
       }
     }
