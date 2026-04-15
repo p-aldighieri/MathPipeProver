@@ -15,7 +15,7 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-sys.path.insert(0, str(_repo_root() / "src"))
+sys.path.insert(0, str(_repo_root()))
 
 from mathpipeprover.config import load_config  # noqa: E402
 from mathpipeprover.session_bridge import invoke_claude_print, resume_run_via_claude_session  # noqa: E402
@@ -48,7 +48,7 @@ def _response_ready(path: Path) -> bool:
 
 def _bootstrap_prompt(*, repo_root: Path, claim_file: Path, config_file: Path) -> str:
     py_cmd = (
-        f'PYTHONPATH="{repo_root / "src"}${{PYTHONPATH:+:$PYTHONPATH}}" '
+        f'PYTHONPATH="{repo_root}${{PYTHONPATH:+:$PYTHONPATH}}" '
         f'python3 -m mathpipeprover.cli run '
         f'--claim-file "{claim_file}" '
         f'--config "{config_file}"'

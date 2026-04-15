@@ -22,7 +22,7 @@ class ClaudeSessionInvocation:
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[1]
 
 
 def _now_stamp() -> str:
@@ -162,14 +162,14 @@ def build_claude_resume_prompt(*, run_id: str, config_path: Path, workspace_root
     python_cmd = "python" if sys.platform == "win32" else "python3"
     py_cmd = (
         f'cd "{workspace_root}" && '
-        f'PYTHONPATH="{repo_root / "src"}${{PYTHONPATH:+:$PYTHONPATH}}" '
+        f'PYTHONPATH="{repo_root}${{PYTHONPATH:+:$PYTHONPATH}}" '
         f'{python_cmd} -m mathpipeprover.cli resume '
         f'--run-id "{run_id}" '
         f'--config "{config_path}"'
     )
     continue_cmd = (
         f'cd "{workspace_root}" && '
-        f'PYTHONPATH="{repo_root / "src"}${{PYTHONPATH:+:$PYTHONPATH}}" '
+        f'PYTHONPATH="{repo_root}${{PYTHONPATH:+:$PYTHONPATH}}" '
         f'{python_cmd} -m mathpipeprover.cli orchestrator-continue '
         f'--run-id "{run_id}" '
         f'--config "{config_path}" '
@@ -178,7 +178,7 @@ def build_claude_resume_prompt(*, run_id: str, config_path: Path, workspace_root
     )
     stop_cmd = (
         f'cd "{workspace_root}" && '
-        f'PYTHONPATH="{repo_root / "src"}${{PYTHONPATH:+:$PYTHONPATH}}" '
+        f'PYTHONPATH="{repo_root}${{PYTHONPATH:+:$PYTHONPATH}}" '
         f'{python_cmd} -m mathpipeprover.cli orchestrator-stop '
         f'--run-id "{run_id}" '
         f'--config "{config_path}" '

@@ -64,7 +64,7 @@ def _now_iso() -> str:
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[1]
 
 
 def _append_supervisor_log(run_dir: Path, event: str, **fields: Any) -> None:
@@ -292,7 +292,7 @@ def launch_detached_supervisor(
             cmd.extend(["--claude-add-dir", str(add_dir.resolve())])
 
     env = os.environ.copy()
-    src_path = str((_repo_root() / "src").resolve())
+    src_path = str(_repo_root().resolve())
     current_pythonpath = env.get("PYTHONPATH", "").strip()
     sep = ";" if sys.platform == "win32" else ":"
     env["PYTHONPATH"] = f"{src_path}{sep}{current_pythonpath}" if current_pythonpath else src_path
