@@ -139,7 +139,20 @@ try {
     ]);
     await fileChooser.setFiles(files);
     console.log(`Uploaded ${files.length} file(s)`);
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Handle "Replace" dialog if file already exists
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const replaceBtn = page.getByRole('button', { name: /Replace/i }).first();
+      if (await replaceBtn.count() > 0 && await replaceBtn.isVisible().catch(() => false)) {
+        await replaceBtn.click();
+        console.log(`Clicked Replace (attempt ${attempt + 1})`);
+        await new Promise(r => setTimeout(r, 2000));
+      } else {
+        break;
+      }
+    }
+    await new Promise(r => setTimeout(r, 2000));
   } else {
     console.error('ERROR: Upload option not found in dialog');
     await browser.close();
