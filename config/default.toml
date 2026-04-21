@@ -10,15 +10,7 @@ max_total_calls = 20000
 max_calls_per_branch = 5000
 run_root = "runs"
 prompts_root = "prompts"
-router_enabled = true
 provider_timeout_seconds = 60
-
-[role_runtime.workflow_router]
-provider = "stub"
-model = "gpt-5-nano"
-temperature = 0.0
-max_output_tokens = 64
-reasoning_effort = "low"
 
 [role_runtime.formalizer]
 provider = "stub"

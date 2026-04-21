@@ -10,7 +10,7 @@ These are policy modes, not the repository's operating-mode taxonomy. The operat
 2. Lightweight tags are optional but recommended for governance.
 3. A cheap pass (small model or parser) can extract tags and update ledgers.
 4. Scope/assumption checks happen during the loop, not only at the end.
-5. A cheap `workflow_router` role can emit mechanical JSON decisions (`{"next":"TAG"}`) to move the workflow.
+5. Soft scaffolding keeps routing with the smart orchestrator; the API lane uses built-in phase transitions plus reviewer control hints.
 
 ## Lightweight tags
 
@@ -51,14 +51,11 @@ At each prover/reviewer cycle:
 4. Write `scope_decision.md`.
 5. Continue or stop branch.
 
-## Workflow glue (router)
+## Workflow glue
 
-The glue between roles is the `workflow_router` role:
-1. It reads workflow state and branch context.
-2. It receives an allowed tag set (for example: `PROVER`, `CONSOLIDATOR`).
-3. It returns exactly one JSON decision (`{"next":"TAG"}`).
-4. Orchestrator validates the tag and applies deterministic fallback if invalid.
-5. Decisions are logged under `branches/<branch>/router/router_log.md`.
+- In soft scaffolding, every completed role hands control back to the smart orchestrator.
+- In the API lane, phase transitions are built into the runner, with reviewer control blocks able to suggest the next phase.
+- In both cases, reviewer guidance is diagnostic input, not a substitute for mathematical judgment.
 
 ## Breakdown amendment flow
 

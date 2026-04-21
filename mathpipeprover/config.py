@@ -30,7 +30,6 @@ class WorkflowConfig:
     max_calls_per_branch: int
     run_root: str
     prompts_root: str
-    router_enabled: bool
     orchestrator_controls_stop: bool
     provider_timeout_seconds: int
     role_runtime: dict[str, RoleRuntimeConfig]
@@ -40,10 +39,6 @@ class WorkflowConfig:
 
 
 DEFAULT_ROLE_ACCESS: dict[str, dict[str, list[str]]] = {
-    "workflow_router": {
-        "read": ["claim.md", "run_state.json", "branches/{branch}/context/*.md", "branches/{branch}/events.md"],
-        "write": ["branches/{branch}/router/router_*.md"],
-    },
     "formalizer": {
         "read": ["claim.md", "branches/{branch}/context/*.md"],
         "write": ["branches/{branch}/context/formalizer.md"],
@@ -80,7 +75,6 @@ DEFAULT_ROLE_ACCESS: dict[str, dict[str, list[str]]] = {
 
 
 DEFAULT_ROLE_RUNTIME: dict[str, RoleRuntimeConfig] = {
-    "workflow_router": RoleRuntimeConfig("stub", "gpt-5-nano", 0.0, 64, reasoning_effort="low"),
     "formalizer": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200, reasoning_effort="high"),
     "literature": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200, reasoning_effort="medium"),
     "searcher": RoleRuntimeConfig("stub", "gpt-5-mini", 0.3, 1200, reasoning_effort="high"),
@@ -166,7 +160,6 @@ def load_config(path: Path) -> WorkflowConfig:
         max_calls_per_branch=int(wf.get("max_calls_per_branch", 5_000)),
         run_root=str(wf.get("run_root", "runs")),
         prompts_root=str(wf.get("prompts_root", "prompts")),
-        router_enabled=bool(wf.get("router_enabled", True)),
         orchestrator_controls_stop=bool(wf.get("orchestrator_controls_stop", False)),
         provider_timeout_seconds=int(wf.get("provider_timeout_seconds", 60)),
         role_runtime=_parse_role_runtime(role_runtime_data),

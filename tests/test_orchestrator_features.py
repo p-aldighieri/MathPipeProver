@@ -107,7 +107,6 @@ enable_literature = false
 max_branches = 1
 max_prover_cycles = 1
 run_root = "runs"
-router_enabled = false
 orchestrator_controls_stop = true
 """,
     )
@@ -161,7 +160,6 @@ enable_literature = false
 max_branches = 1
 max_prover_cycles = 1
 run_root = "runs"
-router_enabled = false
 orchestrator_controls_stop = true
 """,
     )
@@ -237,6 +235,78 @@ orchestrator_controls_stop = true
     assert updated["branches"]["main"]["status"] == "failed"
 
 
+def test_orchestrator_continue_preserves_prelude_phase(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    _write_config(
+        config_path,
+        """
+[workflow]
+mode = "semi_strict"
+enable_literature = true
+max_branches = 1
+max_prover_cycles = 1
+run_root = "runs"
+orchestrator_controls_stop = true
+""",
+    )
+
+    config = load_config(config_path)
+    run_id = "run_prelude_continue"
+    run_dir = tmp_path / "runs" / run_id
+    (run_dir / "branches" / "main" / "context").mkdir(parents=True)
+    waiting_state = {
+        "run_id": run_id,
+        "status": "waiting_orchestrator",
+        "current_phase": "waiting_orchestrator:main:formalizer",
+        "prelude_done": False,
+        "prelude_phase": "formalizer",
+        "branches_spawned": False,
+        "branch_order": ["main"],
+        "pending_orchestrator_decision": {
+            "branch": "main",
+            "stop_phase": "formalizer",
+            "suggested_phase": "literature",
+            "reason": "formalizer completed",
+        },
+        "branches": {
+            "main": {
+                "status": "orchestrator_review",
+                "review_cycles": 0,
+                "current_phase": "formalizer",
+                "selected_route": "",
+                "last_reason": "formalizer completed",
+                "score": 0.0,
+                "pending_orchestrator_decision": {
+                    "branch": "main",
+                    "stop_phase": "formalizer",
+                    "suggested_phase": "literature",
+                    "reason": "formalizer completed",
+                },
+                "metrics": {"calls": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated_calls": 0},
+            }
+        },
+        "metrics": {"calls": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated_calls": 0, "by_role": {}},
+        "mode": config.mode,
+    }
+    (run_dir / "run_state.json").write_text(json.dumps(waiting_state, indent=2), encoding="utf-8")
+
+    continued = orchestrator_continue_run(
+        run_id=run_id,
+        config=config,
+        workspace_root=tmp_path,
+        branch="main",
+        phase="literature",
+    )
+
+    assert continued.status == "running"
+    updated = json.loads((run_dir / "run_state.json").read_text(encoding="utf-8"))
+    assert updated["status"] == "running"
+    assert updated["prelude_done"] is False
+    assert updated["prelude_phase"] == "literature"
+    assert updated["current_phase"] == "prelude_literature"
+    assert updated["branches"]["main"]["current_phase"] == "literature"
+
+
 def test_orchestrator_revive_terminal_run(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     _write_config(
@@ -248,7 +318,6 @@ enable_literature = false
 max_branches = 1
 max_prover_cycles = 1
 run_root = "runs"
-router_enabled = false
 orchestrator_controls_stop = true
 """,
     )
@@ -311,7 +380,6 @@ enable_literature = false
 max_branches = 1
 max_prover_cycles = 1
 run_root = "runs"
-router_enabled = false
 orchestrator_controls_stop = true
 """,
     )

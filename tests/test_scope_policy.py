@@ -58,9 +58,9 @@ def test_flexible_backstop_effectively_unlimited() -> None:
     assert policy.require_scope_gate is False
 
 
-def test_router_returns_empty() -> None:
+def test_unknown_backstop_like_role_returns_empty() -> None:
     policy = load_mode_policy("strict")
-    text = build_scope_policy(policy, "workflow_router")
+    text = build_scope_policy(policy, "backstop_like_role")
     assert text == ""
 
 

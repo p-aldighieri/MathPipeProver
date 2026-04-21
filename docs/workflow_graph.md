@@ -6,7 +6,7 @@ These diagrams describe the current repo reality: a smart orchestrator runs the 
 
 ![Soft-Scaffolding Loop](img/workflow_main.svg)
 
-- Mode A is the primary operating model: the orchestrator chooses the next narrow task, curates context, and decides whether a route should continue.
+- Mode A is the primary operating model: the orchestrator chooses the next narrow task, curates context, and decides whether a route should continue. Every completed soft role returns control to the orchestrator.
 - Mode B keeps the same philosophy but lets the Python supervisor own the submit, heartbeat, and resume loop until the run finishes or returns `waiting_orchestrator`.
 - Branch-local context grows through repeated `breakdown -> prover -> reviewer` cycles until a branch passes, stalls, or is pruned.
 - `waiting_orchestrator` is an intentional handoff for judgment, not an error state.
@@ -32,5 +32,6 @@ If a branch exceeds its budget, it moves to `fail_budget`. If the run exceeds gl
 
 - Durable browser project sources hold stable reference material that should survive across many role turns.
 - Branch-local markdown files are the live working set for the current route.
+- Literature notes can live in both layers on purpose: a stable literature memo may sit in durable sources, while the current `literature.md` should still be passed explicitly to `searcher` when route selection depends on it.
 - Each role packet loads priority files in full, loads secondary files in a separate section, and lists everything else as manifest-only.
 - Soft scaffolding stays sane by narrowing the task and packet on purpose rather than truncating important files.

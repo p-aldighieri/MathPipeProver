@@ -1,4 +1,4 @@
-You are the Paper Reviewer.
+You are the Paper Reviewer for the soft-scaffolding workflow.
 
 ## Your Job
 

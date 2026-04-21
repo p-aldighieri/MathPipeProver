@@ -13,10 +13,10 @@ from .config import RoleRuntimeConfig, WorkflowConfig
 from .ledger import build_knowledge_ledger, count_scope_assumptions, extract_tagged_lines
 from .markdown import to_markdown
 from .policies import build_scope_policy
-from .prompting import build_role_context, bundle_markdown, load_prompt_template, render_template
+from .prompting import build_role_context, load_prompt_template, render_template
 from .providers import LLMRequest, ProviderHub, estimate_tokens
 from .roles import ROLE_SPECS, stub_response
-from .router import ReviewVerdict, RouterDecision, choose_router_decision, parse_review_control, parse_review_verdict
+from .review_parser import ReviewVerdict, parse_review_control, parse_review_verdict
 from .storage import RunPaths, init_run_dir, load_run_paths, make_run_id, read_json, sanitize_name, write_json
 
 
@@ -307,13 +307,6 @@ def _append_event(run_dir: Path, branch: str, text: str) -> None:
         fh.write(f"- {text}\n")
 
 
-def _append_router_log(run_dir: Path, branch: str, block: str) -> None:
-    router_path = run_dir / f"branches/{branch}/router/router_log.md"
-    router_path.parent.mkdir(parents=True, exist_ok=True)
-    with router_path.open("a", encoding="utf-8") as fh:
-        fh.write(block.rstrip() + "\n\n")
-
-
 def _update_ledger(run_dir: Path, branch: str) -> None:
     ctx = run_dir / f"branches/{branch}/context"
     ctx.mkdir(parents=True, exist_ok=True)
@@ -445,6 +438,92 @@ def _recommended_phase_from_review_control(review_control: dict[str, str], allow
     return None
 
 
+def _is_soft_scaffolding_run(config: WorkflowConfig, prompts_root: Path) -> bool:
+    return config.orchestrator_controls_stop and prompts_root.name == "prompts_soft"
+
+
+def _next_phase_after_analysis_role(phase: str, config: WorkflowConfig) -> str:
+    if phase == "formalizer":
+        return "literature" if config.enable_literature else "searcher"
+    if phase == "literature":
+        return "searcher"
+    if phase == "searcher":
+        return "breakdown"
+    raise ValueError(f"Unsupported analysis phase '{phase}'")
+
+
+def _soft_role_handoff(
+    paths: RunPaths,
+    state: dict,
+    branch: str,
+    *,
+    completed_phase: str,
+    suggested_phase: str,
+    reason: str,
+) -> None:
+    _handoff_to_orchestrator(
+        paths,
+        state,
+        branch,
+        stop_phase=completed_phase,
+        suggested_phase=suggested_phase,
+        reason=reason,
+    )
+
+
+def _soft_review_suggestion(
+    review_control: dict[str, str],
+    verdict: ReviewVerdict,
+    cycle: int,
+    config: WorkflowConfig,
+) -> str:
+    if verdict.is_pass:
+        return _recommended_phase_from_review_control(
+            review_control,
+            ["CONSOLIDATOR", "PROVER", "BREAKDOWN", "SEARCHER"],
+        ) or "consolidator"
+    if verdict.needs_small_fix:
+        fallback = "prover" if cycle < config.max_prover_cycles else "breakdown"
+        return _recommended_phase_from_review_control(
+            review_control,
+            ["PROVER", "BREAKDOWN", "SEARCHER"],
+        ) or fallback
+    if verdict.needs_big_fix:
+        return _recommended_phase_from_review_control(
+            review_control,
+            ["BREAKDOWN", "SEARCHER", "PROVER", "STOP_STALL"],
+        ) or "breakdown"
+    return _recommended_phase_from_review_control(
+        review_control,
+        ["SEARCHER", "BREAKDOWN", "PROVER", "STOP_STALL"],
+    ) or "searcher"
+
+
+def _hard_review_phase(
+    review_control: dict[str, str],
+    verdict: ReviewVerdict,
+    cycle: int,
+    config: WorkflowConfig,
+) -> str:
+    if verdict.is_pass:
+        return _recommended_phase_from_review_control(review_control, ["CONSOLIDATOR", "PROVER"]) or "consolidator"
+    if verdict.needs_small_fix:
+        if cycle >= config.max_prover_cycles:
+            return "stop_stall"
+        return _recommended_phase_from_review_control(review_control, ["PROVER"]) or "prover"
+    if verdict.needs_big_fix:
+        if cycle >= config.max_prover_cycles:
+            return "stop_stall"
+        return _recommended_phase_from_review_control(
+            review_control,
+            ["BREAKDOWN", "PROVER", "SEARCHER", "STOP_STALL"],
+        ) or "breakdown"
+    return _recommended_phase_from_review_control(
+        review_control,
+        ["STOP_STALL", "PROVER", "SEARCHER", "BREAKDOWN"],
+    ) or "stop_stall"
+
+
 def _get_role_runtime(config: WorkflowConfig, role: str) -> RoleRuntimeConfig:
     runtime = config.role_runtime.get(role)
     if runtime:
@@ -475,8 +554,7 @@ def _external_agent_role_output(
     role: str,
     run_dir: Path,
     branch: str,
-    role_instructions: str,
-    context_bundle: str,
+    prompt_text: str,
     runtime: RoleRuntimeConfig,
     state: dict,
 ) -> str:
@@ -486,14 +564,7 @@ def _external_agent_role_output(
     request_path = ext_dir / f"{role}_request.md"
     response_path = ext_dir / f"{role}_response.md"
 
-    request_text = (
-        f"# External Agent Request ({role})\n\n"
-        f"Provider: external_agent\n"
-        f"Model hint: {runtime.model}\n"
-        f"Generated: {_now_iso()}\n\n"
-        f"## Instructions\n\n{role_instructions}\n\n"
-        f"## Context\n\n{context_bundle}\n"
-    )
+    request_text = prompt_text.strip() + "\n"
     request_path.write_text(request_text, encoding="utf-8")
 
     if response_path.exists():
@@ -603,8 +674,7 @@ def _call_role_model(
             role=role,
             run_dir=run_dir,
             branch=branch,
-            role_instructions=role_instructions,
-            context_bundle=context_bundle,
+            prompt_text=prompt,
             runtime=runtime,
             state=state,
         )
@@ -663,188 +733,6 @@ def _call_role_model(
             error=f"{type(exc).__name__}: {exc}",
         )
         return fallback_text
-
-
-def _router_prompt_state(
-    phase: str,
-    state: dict,
-    branch: str,
-    allowed_tags: list[str],
-    fallback_tag: str,
-    extra: str,
-) -> str:
-    summary = {
-        "phase": phase,
-        "branch": branch,
-        "mode": state.get("mode"),
-        "review_cycles": state.get("branches", {}).get(branch, {}).get("review_cycles", 0),
-        "allowed_tags": allowed_tags,
-        "fallback_tag": fallback_tag,
-        "extra": extra,
-    }
-    return json.dumps(summary, indent=2, sort_keys=True)
-
-
-def _route_next(
-    phase: str,
-    allowed_tags: list[str],
-    fallback_tag: str,
-    extra: str,
-    run_dir: Path,
-    branch: str,
-    state: dict,
-    config: WorkflowConfig,
-    hub: ProviderHub,
-    prompts_root: Path,
-) -> RouterDecision:
-    if not allowed_tags:
-        raise ValueError("Router requires non-empty allowed tag list")
-
-    _write_role_packet(run_dir, branch, "workflow_router", config)
-
-    if not config.router_enabled:
-        decision = choose_router_decision(raw_output="router disabled", allowed_tags=allowed_tags, fallback_tag=fallback_tag)
-        _record_token_usage(
-            run_dir=run_dir,
-            state=state,
-            branch=branch,
-            role="workflow_router",
-            provider="disabled",
-            model="none",
-            input_tokens=0,
-            output_tokens=0,
-            total_tokens=0,
-            estimated=True,
-        )
-        _append_router_log(
-            run_dir,
-            branch,
-            (
-                "# Router Decision\n\n"
-                f"- Phase: {phase}\n"
-                f"- Allowed: {', '.join(allowed_tags)}\n"
-                f"- Selected: {decision.selected}\n"
-                "- Fallback: yes (router disabled)\n"
-            ),
-        )
-        return decision
-
-    runtime = _get_role_runtime(config, "workflow_router")
-    if runtime.provider.lower() in {"stub", "mock"}:
-        decision = choose_router_decision(raw_output="router stub", allowed_tags=allowed_tags, fallback_tag=fallback_tag)
-        _record_token_usage(
-            run_dir=run_dir,
-            state=state,
-            branch=branch,
-            role="workflow_router",
-            provider=runtime.provider,
-            model=runtime.model,
-            input_tokens=0,
-            output_tokens=0,
-            total_tokens=0,
-            estimated=True,
-        )
-        _append_router_log(
-            run_dir,
-            branch,
-            (
-                "# Router Decision\n\n"
-                f"- Phase: {phase}\n"
-                f"- Allowed: {', '.join(allowed_tags)}\n"
-                f"- Selected: {decision.selected}\n"
-                "- Fallback: yes (stub router)\n"
-            ),
-        )
-        return decision
-
-    template = load_prompt_template(
-        prompts_root,
-        "workflow_router",
-        (
-            "You are the workflow router.\n"
-            "Return exactly one JSON object with key 'next'.\n"
-            "Allowed tags: {allowed_tags}\n"
-            "Fallback tag: {fallback_tag}\n"
-            "State:\n{state_summary}\n"
-        ),
-    )
-
-    state_summary = _router_prompt_state(phase, state, branch, allowed_tags, fallback_tag, extra)
-    user_prompt = render_template(
-        template,
-        {
-            "allowed_tags": ", ".join(allowed_tags),
-            "fallback_tag": fallback_tag,
-            "state_summary": state_summary,
-        },
-    )
-
-    req = LLMRequest(
-        provider=runtime.provider,
-        model=runtime.model,
-        system_prompt=ROLE_SPECS["workflow_router"].instructions,
-        user_prompt=user_prompt,
-        temperature=runtime.temperature,
-        max_output_tokens=runtime.max_output_tokens,
-        reasoning_effort=runtime.reasoning_effort,
-    )
-
-    router_error = ""
-    router_usage = None
-    try:
-        response = hub.complete(req)
-        raw_text = response.text.strip()
-        router_usage = response.usage
-    except Exception as exc:  # noqa: BLE001
-        raw_text = f"router provider error: {type(exc).__name__}: {exc}"
-        router_error = f"{type(exc).__name__}: {exc}"
-
-    decision = choose_router_decision(raw_output=raw_text, allowed_tags=allowed_tags, fallback_tag=fallback_tag)
-    if router_usage is None:
-        input_est = _estimate_tokens(req.system_prompt + "\n" + req.user_prompt)
-        output_est = _estimate_tokens(raw_text)
-        _record_token_usage(
-            run_dir=run_dir,
-            state=state,
-            branch=branch,
-            role="workflow_router",
-            provider=runtime.provider,
-            model=runtime.model,
-            input_tokens=input_est,
-            output_tokens=output_est,
-            total_tokens=input_est + output_est,
-            estimated=True,
-            error=router_error,
-        )
-    else:
-        _record_token_usage(
-            run_dir=run_dir,
-            state=state,
-            branch=branch,
-            role="workflow_router",
-            provider=runtime.provider,
-            model=runtime.model,
-            input_tokens=router_usage.input_tokens,
-            output_tokens=router_usage.output_tokens,
-            total_tokens=router_usage.total_tokens,
-            estimated=router_usage.estimated,
-            error=router_error,
-        )
-
-    _append_router_log(
-        run_dir,
-        branch,
-        (
-            "# Router Decision\n\n"
-            f"- Phase: {phase}\n"
-            f"- Allowed: {', '.join(allowed_tags)}\n"
-            f"- Selected: {decision.selected}\n"
-            f"- Fallback: {'yes' if decision.used_fallback else 'no'}\n\n"
-            "## Raw Router Output\n\n"
-            f"{decision.raw_output}\n"
-        ),
-    )
-    return decision
 
 
 def _tag_to_phase(tag: str) -> str:
@@ -992,6 +880,7 @@ def _spawn_strategy_branches(paths: RunPaths, state: dict, config: WorkflowConfi
 def _run_prelude(paths: RunPaths, state: dict, config: WorkflowConfig, hub: ProviderHub, prompts_root: Path) -> RunResult | None:
     run_dir = paths.run_dir
     branch = "main"
+    soft_mode = _is_soft_scaffolding_run(config, prompts_root)
 
     state.setdefault("prelude_phase", "formalizer")
     phase = str(state.get("prelude_phase", "formalizer"))
@@ -1061,32 +950,20 @@ def _run_prelude(paths: RunPaths, state: dict, config: WorkflowConfig, hub: Prov
             _write_run_state(paths, state)
             return RunResult(run_id=state["run_id"], run_dir=run_dir, status="failed")
 
-        if phase == "formalizer":
-            allowed = ["LITERATURE", "SEARCHER"] if config.enable_literature else ["SEARCHER"]
-            fallback = "LITERATURE" if config.enable_literature else "SEARCHER"
-        elif phase == "literature":
-            allowed = ["SEARCHER"]
-            fallback = "SEARCHER"
-        else:
-            allowed = ["BREAKDOWN"]
-            fallback = "BREAKDOWN"
+        next_phase = _next_phase_after_analysis_role(phase, config)
 
-        decision = _route_next(
-            phase=phase,
-            allowed_tags=allowed,
-            fallback_tag=fallback,
-            extra="prelude transition",
-            run_dir=run_dir,
-            branch=branch,
-            state=state,
-            config=config,
-            hub=hub,
-            prompts_root=prompts_root,
-        )
-
-        next_phase = _tag_to_phase(decision.selected)
-        if not next_phase:
-            next_phase = _tag_to_phase(fallback)
+        if soft_mode:
+            _soft_role_handoff(
+                paths,
+                state,
+                branch,
+                completed_phase=phase,
+                suggested_phase=next_phase,
+                reason=(
+                    f"soft scaffolding {phase} pass completed; the smart orchestrator should inspect the result "
+                    "and choose the next pass"
+                ),
+            )
 
         if next_phase == "breakdown":
             state["prelude_done"] = True
@@ -1111,6 +988,12 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
     run_dir = paths.run_dir
     bstate = state["branches"][branch]
     phase = str(bstate.get("current_phase", "breakdown"))
+    soft_mode = _is_soft_scaffolding_run(config, prompts_root)
+    analysis_role_output = {
+        "formalizer": "formalizer.md",
+        "literature": "literature.md",
+        "searcher": "strategy.md",
+    }
 
     while True:
         ok, reason, global_budget = _check_budget_limits(state, branch, config)
@@ -1133,6 +1016,67 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
                 state["current_phase"] = "stop_budget"
             return
 
+        if phase in {"formalizer", "literature", "searcher"}:
+            if phase == "literature" and not config.enable_literature:
+                phase = "searcher"
+                bstate["current_phase"] = phase
+                _write_run_state(paths, state)
+                continue
+
+            _write_role_packet(run_dir, branch, phase, config)
+            analysis_content = _call_role_model(
+                role=phase,
+                cycle=0,
+                run_dir=run_dir,
+                branch=branch,
+                state=state,
+                config=config,
+                hub=hub,
+                prompts_root=prompts_root,
+            )
+            _write_role_output(run_dir, branch, phase, analysis_role_output[phase], analysis_content, config)
+            _update_ledger(run_dir, branch)
+            _append_event(run_dir, branch, f"phase={phase} completed")
+
+            ok, reason, _ = _check_budget_limits(state, branch, config)
+            if not ok:
+                if config.orchestrator_controls_stop:
+                    _handoff_to_orchestrator(
+                        paths,
+                        state,
+                        branch,
+                        stop_phase="stop_budget",
+                        suggested_phase=phase,
+                        reason=reason,
+                    )
+                bstate["status"] = "fail_budget"
+                bstate["current_phase"] = "stop_budget"
+                bstate["last_reason"] = reason
+                _append_event(run_dir, branch, f"budget stop after {phase}: {reason}")
+                if global_budget:
+                    state["status"] = "failed"
+                    state["current_phase"] = "stop_budget"
+                return
+
+            next_phase = _next_phase_after_analysis_role(phase, config)
+            if soft_mode:
+                _soft_role_handoff(
+                    paths,
+                    state,
+                    branch,
+                    completed_phase=phase,
+                    suggested_phase=next_phase,
+                    reason=(
+                        f"soft scaffolding {phase} pass completed on branch {branch}; the smart orchestrator should "
+                        "inspect the result and choose the next pass"
+                    ),
+                )
+
+            phase = next_phase
+            bstate["current_phase"] = phase
+            _write_run_state(paths, state)
+            continue
+
         if phase == "breakdown":
             _write_role_packet(run_dir, branch, "breakdown", config)
             breakdown_content = _call_role_model(
@@ -1149,19 +1093,20 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             _update_ledger(run_dir, branch)
             _append_event(run_dir, branch, "phase=breakdown completed")
 
-            decision = _route_next(
-                phase="breakdown",
-                allowed_tags=["PROVER", "STOP_STALL"],
-                fallback_tag="PROVER",
-                extra="branch breakdown complete",
-                run_dir=run_dir,
-                branch=branch,
-                state=state,
-                config=config,
-                hub=hub,
-                prompts_root=prompts_root,
-            )
-            phase = _tag_to_phase(decision.selected) or "prover"
+            if soft_mode:
+                _soft_role_handoff(
+                    paths,
+                    state,
+                    branch,
+                    completed_phase="breakdown",
+                    suggested_phase="prover",
+                    reason=(
+                        f"soft scaffolding breakdown pass completed on branch {branch}; the smart orchestrator should "
+                        "decide whether to prove, re-search, or revise the route"
+                    ),
+                )
+
+            phase = "prover"
             bstate["current_phase"] = phase
             _write_run_state(paths, state)
             continue
@@ -1200,19 +1145,20 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             _update_ledger(run_dir, branch)
             _append_event(run_dir, branch, f"prover cycle={cycle} completed")
 
-            decision = _route_next(
-                phase="prover",
-                allowed_tags=["REVIEWER"],
-                fallback_tag="REVIEWER",
-                extra="send proof to reviewer",
-                run_dir=run_dir,
-                branch=branch,
-                state=state,
-                config=config,
-                hub=hub,
-                prompts_root=prompts_root,
-            )
-            phase = _tag_to_phase(decision.selected) or "reviewer"
+            if soft_mode:
+                _soft_role_handoff(
+                    paths,
+                    state,
+                    branch,
+                    completed_phase="prover",
+                    suggested_phase="reviewer",
+                    reason=(
+                        f"soft scaffolding prover pass completed on branch {branch}; the smart orchestrator should "
+                        "inspect the proof attempt before routing the next pass"
+                    ),
+                )
+
+            phase = "reviewer"
             bstate["current_phase"] = phase
             _write_run_state(paths, state)
             continue
@@ -1245,127 +1191,42 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             _write_run_state(paths, state)
 
             if not allowed_scope:
-                decision = _route_next(
-                    phase="reviewer",
-                    allowed_tags=["STOP_FAIL_SCOPE"],
-                    fallback_tag="STOP_FAIL_SCOPE",
-                    extra=f"scope rejected: {scope_reason}",
-                    run_dir=run_dir,
-                    branch=branch,
-                    state=state,
-                    config=config,
-                    hub=hub,
-                    prompts_root=prompts_root,
-                )
-                phase = _tag_to_phase(decision.selected) or "stop_fail_scope"
-            elif verdict.is_pass:
-                recommended_phase = _recommended_phase_from_review_control(
-                    review_control,
-                    ["CONSOLIDATOR", "PROVER"],
-                )
-                if recommended_phase:
-                    phase = recommended_phase
-                else:
-                    decision = _route_next(
-                        phase="reviewer",
-                        allowed_tags=["CONSOLIDATOR", "PROVER"],
-                        fallback_tag="CONSOLIDATOR",
-                        extra="review PASS",
-                        run_dir=run_dir,
-                        branch=branch,
-                        state=state,
-                        config=config,
-                        hub=hub,
-                        prompts_root=prompts_root,
-                    )
-                    phase = _tag_to_phase(decision.selected) or "consolidator"
-            elif verdict.needs_small_fix:
-                # Small patch: loop back to prover if cycles remain
-                if cycle >= config.max_prover_cycles:
-                    if config.orchestrator_controls_stop:
-                        _handoff_to_orchestrator(
-                            paths,
-                            state,
-                            branch,
-                            stop_phase="stop_stall",
-                            suggested_phase="prover",
-                            reason="max prover cycles reached on small fix",
-                        )
-                    phase = "stop_stall"
-                else:
-                    recommended_phase = _recommended_phase_from_review_control(review_control, ["PROVER"])
-                    if recommended_phase:
-                        phase = recommended_phase
-                    else:
-                        decision = _route_next(
-                            phase="reviewer",
-                            allowed_tags=["PROVER"],
-                            fallback_tag="PROVER",
-                            extra="review PATCH_SMALL, minor fix needed",
-                            run_dir=run_dir,
-                            branch=branch,
-                            state=state,
-                            config=config,
-                            hub=hub,
-                            prompts_root=prompts_root,
-                        )
-                        phase = _tag_to_phase(decision.selected) or "prover"
-            elif verdict.needs_big_fix:
-                # Big patch: loop back to breakdown to restructure
-                if cycle >= config.max_prover_cycles:
-                    if config.orchestrator_controls_stop:
-                        _handoff_to_orchestrator(
-                            paths,
-                            state,
-                            branch,
-                            stop_phase="stop_stall",
-                            suggested_phase="breakdown",
-                            reason="max prover cycles reached on big fix",
-                        )
-                    phase = "stop_stall"
-                else:
-                    recommended_phase = _recommended_phase_from_review_control(
+                if soft_mode:
+                    suggested_phase = _recommended_phase_from_review_control(
                         review_control,
-                        ["BREAKDOWN", "PROVER", "STOP_STALL"],
+                        ["BREAKDOWN", "SEARCHER", "PROVER"],
+                    ) or "breakdown"
+                    _soft_role_handoff(
+                        paths,
+                        state,
+                        branch,
+                        completed_phase="reviewer",
+                        suggested_phase=suggested_phase,
+                        reason=f"scope rejected: {scope_reason}",
                     )
-                    if recommended_phase:
-                        phase = recommended_phase
-                    else:
-                        decision = _route_next(
-                            phase="reviewer",
-                            allowed_tags=["BREAKDOWN", "PROVER", "STOP_STALL"],
-                            fallback_tag="BREAKDOWN",
-                            extra="review PATCH_BIG, restructure needed",
-                            run_dir=run_dir,
-                            branch=branch,
-                            state=state,
-                            config=config,
-                            hub=hub,
-                            prompts_root=prompts_root,
-                        )
-                        phase = _tag_to_phase(decision.selected) or "breakdown"
+                phase = "stop_fail_scope"
             else:
-                # REDO: strategy-level failure, kill branch
-                recommended_phase = _recommended_phase_from_review_control(
-                    review_control,
-                    ["STOP_STALL", "PROVER"],
-                )
-                if recommended_phase:
-                    phase = recommended_phase
-                else:
-                    decision = _route_next(
-                        phase="reviewer",
-                        allowed_tags=["STOP_STALL", "PROVER"],
-                        fallback_tag="STOP_STALL",
-                        extra="review REDO, strategy-level failure",
-                        run_dir=run_dir,
-                        branch=branch,
-                        state=state,
-                        config=config,
-                        hub=hub,
-                        prompts_root=prompts_root,
+                if soft_mode:
+                    suggested_phase = _soft_review_suggestion(review_control, verdict, cycle, config)
+                    _soft_role_handoff(
+                        paths,
+                        state,
+                        branch,
+                        completed_phase="reviewer",
+                        suggested_phase=suggested_phase,
+                        reason=f"review verdict={verdict.level}",
                     )
-                    phase = _tag_to_phase(decision.selected) or "stop_stall"
+                phase = _hard_review_phase(review_control, verdict, cycle, config)
+
+            if soft_mode and phase == "stop_stall":
+                _soft_role_handoff(
+                    paths,
+                    state,
+                    branch,
+                    completed_phase="reviewer",
+                    suggested_phase="breakdown",
+                    reason="review indicated the branch is stalled",
+                )
 
             bstate["current_phase"] = phase
             _append_event(run_dir, branch, f"reviewer cycle={cycle} verdict={verdict.level} next={phase}")
@@ -1386,20 +1247,21 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             )
             _write_role_output(run_dir, branch, "consolidator", "final_report.md", final_content, config)
             _update_ledger(run_dir, branch)
+            _append_event(run_dir, branch, "phase=consolidator completed")
 
-            decision = _route_next(
-                phase="consolidator",
-                allowed_tags=["STOP_PASS"],
-                fallback_tag="STOP_PASS",
-                extra="report generated",
-                run_dir=run_dir,
-                branch=branch,
-                state=state,
-                config=config,
-                hub=hub,
-                prompts_root=prompts_root,
-            )
-            phase = _tag_to_phase(decision.selected) or "stop_pass"
+            if soft_mode:
+                _soft_role_handoff(
+                    paths,
+                    state,
+                    branch,
+                    completed_phase="consolidator",
+                    suggested_phase="",
+                    reason=(
+                        f"soft scaffolding consolidator pass completed on branch {branch}; the smart orchestrator should "
+                        "decide whether to stop, revise, or launch another role"
+                    ),
+                )
+            phase = "stop_pass"
             bstate["current_phase"] = phase
             _write_run_state(paths, state)
             continue
@@ -1580,7 +1442,24 @@ def orchestrator_continue_run(
     bstate["last_reason"] = f"continued by orchestrator into {normalized_phase}"
     _clear_orchestrator_decision(state, branch)
     state["status"] = "running"
-    state["current_phase"] = "scheduler"
+    if normalized_phase in {"formalizer", "literature", "searcher"} and not state.get("prelude_done", False):
+        state["prelude_done"] = False
+        state["prelude_phase"] = normalized_phase
+        state["current_phase"] = f"prelude_{normalized_phase}"
+    elif not state.get("prelude_done", False) and normalized_phase == "breakdown":
+        state["prelude_done"] = True
+        state["prelude_phase"] = "done"
+        state["current_phase"] = "scheduler"
+    elif not state.get("prelude_done", False):
+        state["prelude_done"] = True
+        state["prelude_phase"] = "done"
+        if not state.get("branches_spawned", False):
+            state["branches_spawned"] = True
+            state["branch_order"] = [branch]
+            state["pruned_branches"] = []
+        state["current_phase"] = "scheduler"
+    else:
+        state["current_phase"] = "scheduler"
     _append_event(paths.run_dir, branch, f"orchestrator continue: next={normalized_phase}")
     _write_run_state(paths, state)
     return RunResult(run_id=state["run_id"], run_dir=paths.run_dir, status="running")

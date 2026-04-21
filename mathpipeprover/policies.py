@@ -63,8 +63,7 @@ ROLE_CATEGORY: dict[str, str] = {
     "searcher": "planning",
     "literature": "planning",
     "consolidator": "consolidator",
-    "workflow_router": "router",
-    "scope_keeper": "router",
+    "scope_keeper": "backstop",
 }
 
 # mode × category → prose paragraph.  {max_new_assumptions} and
@@ -163,8 +162,8 @@ SCOPE_POLICY_TEXT: dict[tuple[str, str], str] = {
 
 
 def build_scope_policy(policy: ModePolicy, role: str) -> str:
-    category = ROLE_CATEGORY.get(role, "router")
-    if category == "router":
+    category = ROLE_CATEGORY.get(role, "backstop")
+    if category == "backstop":
         return ""
     key = (policy.mode, category)
     template = SCOPE_POLICY_TEXT.get(key, "")

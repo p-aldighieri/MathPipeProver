@@ -99,6 +99,7 @@ scripts/chatgpt_browser_agent.sh submit \
 Use `--attach-file` only for branch-local support files that should travel with the current chat but should not be promoted to project-wide sources.
 
 Do not use `--attach-file` as a substitute for refreshing durable project context. Files such as `proof_state.md` or a branch strategy note must be removed and re-added through the project `Sources` tab so the project-level context stays current across chats.
+If a literature pass produced a stable source memo or claim-status note, treat that the same way: keep the durable version in project sources, then still pass the branch-local `literature.md` explicitly when the next role is `searcher`.
 
 The script writes a JSON session log next to the response file by default:
 
@@ -152,10 +153,12 @@ It resets stale heartbeat files before relaunching a role so a dead prior worker
 
 - Never truncate branch-local proof artifacts. If a prover draft or review is long, attach the full file or split the role into a smaller step.
 - Treat the proof-state note as a durable project source, not as an ephemeral chat attachment.
+- Treat a stable literature memo the same way when it captures reusable source triage or a known-status judgment.
 - When a durable source changes locally, refresh it in the project `Sources` tab before the next chat. Do not assume a composer attachment updates project context.
 - If a branch already has a late-stage prover artifact, restart from that artifact rather than from `formalizer`.
 - If a prior reviewer request was assembled with incomplete context, treat the verdict as tainted and rerun review on the full prover file.
 - Scope prover requests to one lemma block or one reviewer delta at a time instead of passing the full branch by default.
+- When `searcher` follows `literature`, make sure `literature.md` is part of the explicit branch context or attachment set, not just an implicit durable source in the background.
 - Keep route selection, branch pruning, and breakdown approval under manual orchestrator inspection even when submission, polling, and logging are scripted.
 - Do not stop at the first browser anomaly. In soft scaffolding mode, the orchestrator should re-check project URL, model, effort, durable sources, and live chat state before escalating to a human.
 
@@ -166,9 +169,9 @@ It resets stale heartbeat files before relaunching a role so a dead prior worker
 It does two things:
 
 1. Routes the proof roles through `external_agent`.
-2. Disables the router so the run pauses role-by-role instead of requiring a browser call for routing decisions.
+2. Keeps the workflow at the transport layer: the browser fulfills role requests, but the prompt pack still comes from `prompts/`.
 
-`config/browser_chatgpt_soft.toml` is the smart soft-scaffolding profile used when you want browser-backed prompts from `prompts_soft/` and explicit `waiting_orchestrator` handoffs. That is the profile to reach for in Mode A/B when the orchestrator should retain stop authority.
+`config/browser_chatgpt_soft.toml` is the smart soft-scaffolding profile used when you want browser-backed prompts from `prompts_soft/` and explicit `waiting_orchestrator` handoffs after every completed role. That is the profile to reach for in Mode A/B when the orchestrator should retain stop authority and real routing leeway.
 
 ## Lower-level manual transport loop
 

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 
 def load_prompt_template(prompts_root: Path, name: str, fallback: str) -> str:
-    path = prompts_root / f"{name}.md"
-    if path.exists():
-        return path.read_text(encoding="utf-8")
+    path = _find_prompt_template_path(prompts_root, name)
+    if path is not None:
+        return _read_template_with_includes(path)
     return fallback
 
 
@@ -41,8 +42,8 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
         "secondary": [],
     },
     "searcher": {
-        "full": ["claim.md", "*/context/formalizer.md"],
-        "secondary": ["*/context/literature.md"],
+        "full": ["claim.md", "*/context/formalizer.md", "*/context/literature.md"],
+        "secondary": [],
     },
     "breakdown": {
         "full": ["*/context/formalizer.md", "*/context/strategy.md"],
@@ -96,6 +97,39 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
 def _matches_any_pattern(rel_path: str, patterns: list[str]) -> bool:
     from fnmatch import fnmatch
     return any(fnmatch(rel_path, p) for p in patterns)
+
+
+_INCLUDE_PATTERN = re.compile(r"{{include:([^}]+)}}")
+
+
+def _find_prompt_template_path(prompts_root: Path, name: str) -> Path | None:
+    direct = prompts_root / f"{name}.md"
+    if direct.exists():
+        return direct
+
+    numbered = sorted(prompts_root.glob(f"[0-9][0-9]_{name}.md"))
+    if numbered:
+        return numbered[0]
+    return None
+
+
+def _read_template_with_includes(path: Path, seen: set[Path] | None = None) -> str:
+    seen = seen or set()
+    resolved = path.resolve()
+    if resolved in seen:
+        raise ValueError(f"Prompt include cycle detected at {path}")
+    seen.add(resolved)
+
+    text = path.read_text(encoding="utf-8")
+
+    def replace(match: re.Match[str]) -> str:
+        include_target = match.group(1).strip()
+        include_path = (path.parent / include_target).resolve()
+        if not include_path.exists():
+            raise FileNotFoundError(f"Prompt include not found: {include_path}")
+        return _read_template_with_includes(include_path, seen.copy()).rstrip()
+
+    return _INCLUDE_PATTERN.sub(replace, text)
 
 def build_role_context(
     role: str,

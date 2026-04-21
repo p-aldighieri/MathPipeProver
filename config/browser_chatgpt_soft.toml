@@ -1,4 +1,5 @@
 # Primary smart soft-scaffolding profile.
+# Every completed role hands control back to the smart orchestrator.
 [workflow]
 mode = "semi_strict"
 enable_literature = true
@@ -12,16 +13,8 @@ policy_max_scope_changes_per_branch = 999
 policy_max_new_assumptions_per_branch = 999
 run_root = "runs"
 prompts_root = "prompts_soft"
-router_enabled = false
 orchestrator_controls_stop = true
 provider_timeout_seconds = 60
-
-[role_runtime.workflow_router]
-provider = "stub"
-model = "router-disabled"
-temperature = 0.0
-max_output_tokens = 64
-reasoning_effort = "low"
 
 [role_runtime.formalizer]
 provider = "external_agent"

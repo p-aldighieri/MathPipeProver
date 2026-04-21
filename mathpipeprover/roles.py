@@ -10,61 +10,51 @@ class RoleSpec:
 
 
 ROLE_SPECS: dict[str, RoleSpec] = {
-    "workflow_router": RoleSpec(
-        name="workflow_router",
-        instructions=(
-            "Read workflow state and output one routing decision as JSON: "
-            '{"next":"TAG"}. Do not explain. Do not output multiple decisions.'
-        ),
-    ),
     "formalizer": RoleSpec(
         name="formalizer",
         instructions=(
-            "Transform the informal claim into a precise formal statement with explicit quantifiers and domains. "
-            "List all user assumptions tagged [USER]. Tag any new assumptions [ASSUMPTION+] with justification. "
-            "Tag scope ambiguities with [SCOPE]. Identify the mathematical domain and claim type."
+            "Restate the claim precisely with explicit quantifiers, domains, definitions, and ambiguities. "
+            "Do not try to prove the claim. Do not quietly add assumptions; surface ambiguities instead."
         ),
     ),
     "literature": RoleSpec(
         name="literature",
         instructions=(
-            "Survey relevant known theorems, techniques, and proof approaches. Tag evidence with [LIT]. "
-            "Identify applicable proof techniques and assess difficulty. Note known counterexamples to related statements. "
-            "Do not claim proof validity from retrieval alone."
+            "Search reputable online literature sources for closely related results, proof strategies, counterexamples, "
+            "and prior art. Distill what matters, say whether the claim looks already known, false, open, or unclear, "
+            "and do not treat retrieval alone as a proof."
         ),
     ),
     "searcher": RoleSpec(
         name="searcher",
         instructions=(
-            "Propose 2-4 genuinely distinct proof strategies, each with: core technique, key intermediate steps, "
-            "likely failure point, and complexity estimate. Rank by feasibility with most promising first. "
-            "Number each route starting from 1. Tag scope-narrowing routes with [SCOPE]."
+            "Propose 2-4 genuinely distinct proof routes, using literature notes if available. For each route, "
+            "name the core idea, key intermediate statements, likely failure point, and why the route is promising. "
+            "Rank the routes with the most actionable one first."
         ),
     ),
     "breakdown": RoleSpec(
         name="breakdown",
         instructions=(
             "Decompose the proof into numbered lemmas with dependency order. Each lemma needs: precise statement, "
-            "dependencies, technique hint, difficulty estimate. Identify the critical lemma (hardest step). "
-            "Include glue steps connecting lemmas to the final conclusion. The plan should be editable via [BREAKDOWN_AMEND]."
+            "dependencies, technique hint, difficulty estimate. Identify the critical lemma and keep the plan editable "
+            "when the prover or reviewer finds a structural issue."
         ),
     ),
     "prover": RoleSpec(
         name="prover",
         instructions=(
-            "Advance the proof by proving lemmas from the breakdown. Every step must have explicit justification "
-            "(known theorem, previous lemma, or direct computation). Tag conclusions [DERIVED], new assumptions "
-            "[ASSUMPTION+]/[ASSUMPTION-], and breakdown change requests [BREAKDOWN_AMEND]. "
-            "Be explicit about gaps. Reference lemmas by number. Maintain a status summary of what's proved."
+            "Advance the proof by proving the highest-leverage next statement from the breakdown. Every material step "
+            "needs an explicit justification. A successful pass may prove the claim, produce a counterexample, prove "
+            "the mildest viable weakening, or prove an impossibility result."
         ),
     ),
     "reviewer": RoleSpec(
         name="reviewer",
         instructions=(
-            "Check each proof step for logical validity, completeness, and correct citations. Check scope compliance. "
-            "Issue a structured verdict: VERDICT: PASS (correct and complete), VERDICT: PATCH_SMALL (minor fixable issues), "
-            "VERDICT: PATCH_BIG (needs restructuring), or VERDICT: REDO (fundamentally flawed approach). "
-            "Be precise about errors. Tag scope changes with [SCOPE]."
+            "Audit the current proof attempt for logical validity, completeness, and scope fidelity. Always issue a "
+            "clear verdict, an opinion about route viability, and a concrete recommendation for the next pass so the "
+            "orchestrator can decide what to do next."
         ),
     ),
     "scope_keeper": RoleSpec(
@@ -72,15 +62,14 @@ ROLE_SPECS: dict[str, RoleSpec] = {
         instructions=(
             "Mechanical backstop: count [ASSUMPTION+] and [SCOPE] tags against mode limits. "
             "Primary scope enforcement is handled by scope-policy paragraphs injected into "
-            "each role's prompt (especially the reviewer). This role exists only as a safety net."
+            "each role's prompt, especially the reviewer."
         ),
     ),
     "consolidator": RoleSpec(
         name="consolidator",
         instructions=(
-            "Assemble the final proof report: unified narrative with formal statement, strategy used, "
-            "definitions, ordered lemma proofs, main result assembly, proof status (complete/partial/conditional), "
-            "assumptions used, unresolved risks, and evidence trail."
+            "Assemble the current branch into a readable proof report with the formal claim, strategy, proved pieces, "
+            "assumptions used, relationship to the original claim, and unresolved risks."
         ),
     ),
 }
@@ -88,30 +77,30 @@ ROLE_SPECS: dict[str, RoleSpec] = {
 
 def stub_response(role: str, cycle: int = 0) -> str:
     if role == "formalizer":
-        return "## Claim Restatement\n[USER] Formalized claim drafted.\n"
+        return "## Formal Statement\nPrecise statement drafted.\n"
     if role == "literature":
-        return "## Retrieved Ideas\n[LIT] Similar monotonicity argument found in related theorem.\n"
+        return "## Search Summary\nRelated references and techniques collected.\n"
     if role == "searcher":
         return (
             "## Candidate Routes\n"
             "1. Direct inequality route.\n"
             "2. Contradiction route.\n"
-            "[DERIVED] Route 1 appears lower-cost.\n"
+            "Route 1 appears more actionable.\n"
         )
     if role == "breakdown":
-        return "## Lemma Plan\n- Lemma 1\n- Lemma 2\n"
+        return "## Proof Breakdown\n- Lemma 1\n- Lemma 2\n"
     if role == "prover":
         if cycle == 0:
             return (
-                "## Step Attempt\n"
-                "[DERIVED] Proved base step.\n"
-                "[BREAKDOWN_AMEND] Add bridge lemma connecting route to target claim.\n"
+                "## Proof Progress\n"
+                "[DERIVED] Proved the first key step.\n"
+                "[BREAKDOWN_AMEND] Add a bridge lemma between the route and the target claim.\n"
             )
-        return "## Step Attempt\n[DERIVED] Closed remaining gap.\n"
+        return "## Proof Progress\n[DERIVED] Closed the remaining local gap.\n"
     if role == "reviewer":
-        return "## Verdict\nVERDICT: PASS\n"
+        return "```review_control\nverdict: PASS\nrecommended_next_phase: CONSOLIDATOR\n```\n\nVERDICT: PASS\n"
     if role == "scope_keeper":
         return "## Scope Decision\nNo policy violations detected.\n"
     if role == "consolidator":
-        return "## Final Proof\nDraft final proof assembled from branch context.\n"
+        return "## Proof Report\nCurrent branch report assembled.\n"
     return "(no output)"

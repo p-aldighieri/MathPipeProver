@@ -8,14 +8,14 @@ The repository's primary operating model is not the hands-off API lane. It is th
 
 - Mode A - Smart soft scaffolding (default). A long-running Claude Code or Codex session acts as the proof operator: it chooses the next role, narrows scope, curates context, refreshes durable sources, repairs browser state, and decides when a route is alive, blocked, or done.
 - Mode B - Supervisor-assisted soft scaffolding. This keeps the same smart-orchestrator philosophy, but a Python supervisor owns submit/watch/resume until the run either finishes or hands back a `waiting_orchestrator` decision to a human-visible orchestrator session.
-- Mode C - Full API pipeline (hands-off). All roles run through API providers with router-driven transitions. This is still supported, but it is the more specific mechanical variant rather than the repository's headline identity.
+- Mode C - Full API pipeline (hands-off). All roles run through API providers with built-in phase transitions. This is still supported, but it is the more specific mechanical variant rather than the repository's headline identity.
 
 ## What it does now
 
 - Primary soft-scaffolding workflow for ChatGPT project-based proof work
+- Soft prompts are orchestrator-gated: after each completed role, control returns to the smart orchestrator for the next routing decision
 - CLI commands: `run`, `resume`, `inspect`, `report`, `smoke-providers`
 - Governance policy modes: `strict`, `semi_strict`, `flexible`
-- Cheap-model workflow router (`workflow_router`) emits structured decisions (`{"next":"TAG"}`)
 - Multi-branch strategy execution with branch pruning to `max_branches`
 - Branch-specific markdown context pools
 - Scope reconciliation via lightweight tags (`[SCOPE]`, `[ASSUMPTION+]`, `[ASSUMPTION-]`)
@@ -59,7 +59,7 @@ Key profiles:
 Common configuration controls include:
 
 - workflow policy mode
-- router enable/disable and prompt root
+- prompt root and orchestrator stop controls
 - token/call budget limits
 - max prover/reviewer cycles
 - max branch fan-out
@@ -93,6 +93,7 @@ The lower-level transport loop is:
 
 The smart-orchestrator rules stay the same across both soft-scaffolding variants:
 
+- After every completed soft role, control returns to the orchestrator. The orchestrator, not a router prompt, chooses the next pass.
 - Role context is never truncated. If a request is too large, narrow the role scope or attach the full working files in the browser workflow.
 - Maintain a durable proof-state source that records the active route, current skeleton, lemma status, and trustworthy reviewer verdicts.
 - Do not restart from `formalizer` when a late-stage branch already exists. Re-review the latest full prover artifact first if an earlier reviewer packet may have been tainted by missing context.

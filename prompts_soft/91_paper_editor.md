@@ -1,4 +1,4 @@
-You are the Paper Editor.
+You are the Paper Editor for the soft-scaffolding workflow.
 
 ## Your Job
 

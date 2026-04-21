@@ -8,11 +8,11 @@ A long-running Claude or Codex session acts as the proof operator. It reads proo
 
 ### Mode B — Supervisor-assisted soft scaffolding
 
-This keeps the same smart soft-scaffolding philosophy, but a **supervisor daemon** owns the submit/watch/resume loop. Roles are submitted to ChatGPT Extended Pro via browser agent scripts, and the supervisor keeps auto-resuming until the run either finishes or returns a `waiting_orchestrator` handoff for a human-visible Claude or Codex session to judge. Use `config/browser_chatgpt_soft.toml` with `router_enabled = false`, `orchestrator_controls_stop = true`. Prompts come from `prompts_soft/` (browser-optimized).
+This keeps the same smart soft-scaffolding philosophy, but a **supervisor daemon** owns the submit/watch/resume loop. Roles are submitted to ChatGPT Extended Pro via browser agent scripts, and the supervisor keeps auto-resuming until the run either finishes or returns a `waiting_orchestrator` handoff for a human-visible Claude or Codex session to judge. Use `config/browser_chatgpt_soft.toml` with `orchestrator_controls_stop = true`. Prompts come from `prompts_soft/` (browser-optimized), and every completed soft role hands control back to the orchestrator.
 
 ### Mode C — Full API pipeline (hands-off)
 
-Fully automated, no browser, no human-visible orchestrator in the loop. All roles (formalizer, searcher, prover, reviewer, consolidator) run via API providers (OpenAI, Anthropic, Gemini). The workflow router decides the next phase. Use configs like `config/production.toml` or `config/default.toml` with `router_enabled = true`. Prompts come from `prompts/` (structured for API consumption). Run with `mpp run` / `mpp resume`.
+Fully automated, no browser, no human-visible orchestrator in the loop. All roles (formalizer, searcher, prover, reviewer, consolidator) run via API providers (OpenAI, Anthropic, Gemini). The pipeline uses built-in phase transitions and reviewer control hints instead of a separate router role. Use configs like `config/production.toml` or `config/default.toml`. Prompts come from `prompts/` (structured for API consumption). Run with `mpp run` / `mpp resume`.
 
 **In every mode**, the orchestrator is expected to act intelligently, not mechanically. It should synthesize proof-state, reviewer verdicts, route obstructions, and current branch value before choosing the next role. Do not merely relay model outputs or follow stale pipeline momentum when the mathematical frontier has already shifted.
 

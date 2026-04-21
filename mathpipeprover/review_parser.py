@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import re
+from dataclasses import dataclass
 
 
-NEXT_TAG_PATTERN = re.compile(r"\[NEXT:([A-Z_]+)\]")
 _REVIEW_CONTROL_BLOCK = re.compile(r"```review_control\s*(.*?)```", re.IGNORECASE | re.DOTALL)
 
 # Reviewer verdict levels, ordered by severity (ascending).
@@ -18,10 +17,25 @@ _VERDICT_STANDALONE = re.compile(r"^\s*(?:#+\s*)?(PASS|PATCH_SMALL|PATCH_BIG|RED
 
 
 @dataclass
-class RouterDecision:
-    selected: str
+class ReviewVerdict:
+    level: str  # PASS | PATCH_SMALL | PATCH_BIG | REDO
     raw_output: str
-    used_fallback: bool
+
+    @property
+    def is_pass(self) -> bool:
+        return self.level == "PASS"
+
+    @property
+    def needs_small_fix(self) -> bool:
+        return self.level == "PATCH_SMALL"
+
+    @property
+    def needs_big_fix(self) -> bool:
+        return self.level == "PATCH_BIG"
+
+    @property
+    def needs_redo(self) -> bool:
+        return self.level == "REDO"
 
 
 def _strip_fenced_code(text: str) -> str:
@@ -46,64 +60,6 @@ def _extract_json_candidate(text: str) -> str | None:
     if start >= 0 and end > start:
         return cleaned[start : end + 1]
     return None
-
-
-def parse_next_from_json(text: str) -> str | None:
-    candidate = _extract_json_candidate(text)
-    if not candidate:
-        return None
-    try:
-        payload = json.loads(candidate)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(payload, dict):
-        return None
-
-    keys = ("next", "next_tag", "decision")
-    for key in keys:
-        value = payload.get(key)
-        if isinstance(value, str) and value.strip():
-            normalized = value.strip().upper()
-            if normalized.startswith("NEXT:"):
-                normalized = normalized.split("NEXT:", 1)[1].strip()
-            return normalized.strip("[] ")
-    return None
-
-
-def parse_next_tag(text: str) -> str | None:
-    hit = NEXT_TAG_PATTERN.search(text or "")
-    if not hit:
-        return None
-    return hit.group(1)
-
-
-def choose_router_decision(raw_output: str, allowed_tags: list[str], fallback_tag: str) -> RouterDecision:
-    parsed = parse_next_from_json(raw_output) or parse_next_tag(raw_output)
-    if parsed and parsed in allowed_tags:
-        return RouterDecision(selected=parsed, raw_output=raw_output, used_fallback=False)
-    return RouterDecision(selected=fallback_tag, raw_output=raw_output, used_fallback=True)
-
-
-@dataclass
-class ReviewVerdict:
-    level: str  # PASS | PATCH_SMALL | PATCH_BIG | REDO
-    raw_output: str
-
-    @property
-    def is_pass(self) -> bool:
-        return self.level == "PASS"
-
-    @property
-    def needs_small_fix(self) -> bool:
-        return self.level == "PATCH_SMALL"
-
-    @property
-    def needs_big_fix(self) -> bool:
-        return self.level == "PATCH_BIG"
-
-    @property
-    def needs_redo(self) -> bool:
-        return self.level == "REDO"
 
 
 def parse_review_control(text: str) -> dict[str, str]:
@@ -164,7 +120,6 @@ def parse_review_verdict(text: str) -> ReviewVerdict:
     match = _VERDICT_STANDALONE.search(raw_text)
     if match:
         level = match.group(1).strip().upper()
-        # Map legacy FAIL to REDO
         if level == "FAIL":
             level = "REDO"
         if level in VERDICT_LEVELS:

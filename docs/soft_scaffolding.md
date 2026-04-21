@@ -17,6 +17,8 @@ The point of this mode is not to make the orchestrator passive. In soft scaffold
 - refreshing durable sources
 - deciding when a route is alive, blocked, or needs repair
 
+In the repository's soft prompt lane, this is literal control flow, not just philosophy: after every completed role, the run returns to `waiting_orchestrator`, and the smart orchestrator decides what to do next.
+
 The orchestrator must not "play dumb" in browser mode.
 It should not merely relay role outputs or mechanically follow pipeline tags when the mathematical state says otherwise.
 It is expected to synthesize evidence across steps, notice when a branch is effectively dead or conditionally settled, narrow the next move, and choose the next theorem-producing route with judgment.
@@ -69,6 +71,7 @@ In practice, good soft scaffolding looks like a strong human research assistant:
 - prefer one sharp lemma over one more generic "try proving the theorem" pass
 - actively inspect and repair browser state when model/effort/source/chat state drifts
 - keep stop authority at the orchestrator layer, not in automatic Python failure tags
+- treat reviewer `recommended_next_phase` as informed advice, not as an automatic command
 
 In soft mode, non-proof terminal conditions such as `FAIL_SCOPE`, `STALL`, or budget pressure should hand control back to the orchestrator for judgment. The run should not silently end just because the local pipeline hit one of those tags.
 
@@ -82,6 +85,7 @@ Typical durable sources:
 - paper PDF
 - durable proof-state file
 - current stable route memo
+- stable literature memo when a search pass has already identified prior art or likely status
 
 Use composer attachments only for step-specific working files.
 
@@ -91,12 +95,14 @@ Typical temporary attachments:
 - one fresh breakdown result
 - one scoped prover draft
 - one local obstruction note that matters only for the current step
+- the current `literature.md` note when the next role must reason directly from it, especially `searcher`
 
 Rules:
 
 - do not duplicate durable files as temporary attachments unless the browser UI forces a recovery workaround
 - refresh durable project sources explicitly when the local file changes
 - remove stale branch-specific durable sources before adding the new branch memo
+- if `literature.md` exists and the next step is `searcher`, pass it explicitly as part of the branch context; do not leave it as background knowledge only
 
 ## Model And Effort Policy
 
@@ -145,6 +151,7 @@ Typical durable sources:
 - objective statement
 - proof-state file (updated after each accepted result)
 - current stable route memo (if one exists)
+- stable literature memo when the search pass produced reusable source triage or a claim-status assessment
 
 Rules:
 
@@ -152,6 +159,7 @@ Rules:
 - refresh explicitly when the local file changes (remove old version, re-upload new)
 - never add per-step artifacts here (packets, logs, prover drafts)
 - remove stale route memos before adding the new one
+- if a literature pass produced a durable summary, prefer keeping that summary here instead of scattering the same findings across ad hoc attachments
 
 ### Layer 2: Temporary Composer Attachments (per-step context)
 
@@ -170,6 +178,7 @@ Rules:
 - do not duplicate durable sources as attachments
 - prefer attaching 1-3 focused files over pasting long content inline
 - if a prior response is critical input (e.g., formalizer gap register feeds the prover), attach it as a file rather than summarizing it in the prompt
+- if `searcher` is running after a literature pass, make sure `literature.md` is explicitly present in the local packet or attachment set so route ranking can cite it directly
 
 ### What NOT to put in either layer
 

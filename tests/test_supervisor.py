@@ -57,7 +57,6 @@ enable_literature = false
 max_branches = 1
 max_prover_cycles = 1
 run_root = "runs"
-router_enabled = false
 
 [providers]
 browser_agent = "external_agent"
