@@ -279,8 +279,6 @@ def test_launch_detached_supervisor_writes_runtime_metadata(tmp_path: Path, monk
         workspace_root=tmp_path,
         project_url="https://chatgpt.example/project",
         cdp_url="http://127.0.0.1:9222",
-        claude_session_id="session-123",
-        claude_add_dirs=[tmp_path / "repo"],
     )
 
     assert launch.pid == 424242

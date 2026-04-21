@@ -75,7 +75,7 @@ def _append_supervisor_log(run_dir: Path, event: str, **fields: Any) -> None:
 
 
 def _detached_supervisor_dir(run_dir: Path) -> Path:
-    return run_dir / "session_bridge" / "supervisor"
+    return run_dir / "supervisor"
 
 
 def _detached_supervisor_paths(run_dir: Path) -> tuple[Path, Path, Path]:
@@ -242,11 +242,6 @@ def launch_detached_supervisor(
     notify_command: str = "",
     idle_poll_seconds: float = 1.0,
     max_submit_attempts: int = 3,
-    claude_session_id: str = "",
-    claude_bin: str = "claude",
-    claude_permission_mode: str = "bypassPermissions",
-    claude_dangerously_skip_permissions: bool = True,
-    claude_add_dirs: list[Path] | None = None,
 ) -> DetachedSupervisorLaunch:
     run_root = workspace_root / load_config(config_path).run_root
     paths = load_run_paths(run_root, run_id)
@@ -280,16 +275,6 @@ def launch_detached_supervisor(
         cmd.append("--notify")
     if notify_command:
         cmd.extend(["--notify-command", notify_command])
-    if claude_session_id:
-        cmd.extend(["--claude-session-id", claude_session_id])
-        cmd.extend(["--claude-bin", claude_bin])
-        cmd.extend(["--claude-permission-mode", claude_permission_mode])
-        if claude_dangerously_skip_permissions:
-            cmd.append("--claude-dangerously-skip-permissions")
-        else:
-            cmd.append("--no-claude-dangerously-skip-permissions")
-        for add_dir in claude_add_dirs or []:
-            cmd.extend(["--claude-add-dir", str(add_dir.resolve())])
 
     env = os.environ.copy()
     src_path = str(_repo_root().resolve())
@@ -321,7 +306,6 @@ def launch_detached_supervisor(
         "config_path": str(config_path),
         "project_url": project_url,
         "cdp_url": cdp_url,
-        "claude_session_id": claude_session_id,
         "log_path": str(log_path),
         "pid_path": str(pid_path),
         "command": cmd,

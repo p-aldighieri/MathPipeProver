@@ -1,9 +1,13 @@
 # Soft Scaffolding Guide
 
+This is the primary operating mode of MathPipeProver: smart soft scaffolding under a Claude Code or Codex orchestrator.
+
 This document captures the browser-orchestrated proof workflow that sits between:
 
 - the fully automated MathPipeProver pipeline
 - and pure manual proof work in ChatGPT
+
+In this repository, "soft" does not mean passive. The soft part is the scaffolding around external proof roles; the orchestrator itself is expected to stay smart, active, and mathematically engaged.
 
 The point of this mode is not to make the orchestrator passive. In soft scaffolding mode, Codex acts as an active proof operator:
 
@@ -16,6 +20,12 @@ The point of this mode is not to make the orchestrator passive. In soft scaffold
 The orchestrator must not "play dumb" in browser mode.
 It should not merely relay role outputs or mechanically follow pipeline tags when the mathematical state says otherwise.
 It is expected to synthesize evidence across steps, notice when a branch is effectively dead or conditionally settled, narrow the next move, and choose the next theorem-producing route with judgment.
+
+## How The Operating Modes Relate
+
+- Mode A is this guide's default model: a long-running smart orchestrator owns the proof loop directly.
+- Mode B is the supervisor-assisted execution pattern for the same philosophy: the supervisor owns submit/watch/resume, but the orchestrator still owns judgment.
+- Mode C is the more mechanical API-only variant. It stays supported, but it is not the primary identity of the repository.
 
 ## What Belongs In MathPipeProver
 
@@ -40,8 +50,8 @@ Project-specific items should stay in the target proof repo:
 
 ## Role Of The Orchestrator In Soft Scaffolding
 
-In API mode, the orchestrator can be relatively mechanical.
-In browser soft-scaffolding mode, the orchestrator has to do more:
+In the API-only mode, the orchestrator can be relatively mechanical.
+In the primary browser-backed soft-scaffolding mode, the orchestrator has to do more:
 
 1. inspect the current proof status, not just pipeline status
 2. decide whether a result is trustworthy, tainted, partial, or blocked
@@ -199,7 +209,7 @@ Split the submission if:
 
 ## Prompting Differences From The API Pipeline
 
-The browser workflow needs slightly different prompts from the API path.
+The browser workflow needs slightly different prompts from the API path precisely because the smart orchestrator is expected to be more selective and more context-aware.
 
 Useful adjustments:
 
@@ -281,5 +291,5 @@ For browser-driven theorem work, the proof repo should be considered the source 
 
 1. Add a dedicated non-repo `run_root` option for browser workflows by default.
 2. Separate engine run state from proof-project artifacts more cleanly.
-3. Add a first-class `soft_scaffolding` docs section in the main README.
+3. Keep the main README centered on smart soft scaffolding as the primary operating model.
 4. Add a lightweight checklist for project source refresh before each role.

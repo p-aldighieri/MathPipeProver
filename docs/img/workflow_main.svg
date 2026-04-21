@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1260" role="img" aria-labelledby="title desc">
+  <title id="title">Soft-scaffolding-first proof loop</title>
+  <desc id="desc">Large workflow diagram showing the smart orchestrator lane, the browser and supervisor transport lane, and the branch artifact lane used by MathPipeProver.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#faf7f0" />
+      <stop offset="100%" stop-color="#f3efe7" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#36556b" />
+    </marker>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #13232f; }
+      .subtitle { font: 500 18px 'Segoe UI', Arial, sans-serif; fill: #385366; }
+      .lane { stroke-width: 2; rx: 26; }
+      .lane-a { fill: #fff4df; stroke: #d59c34; }
+      .lane-b { fill: #eaf6ff; stroke: #5b95c9; }
+      .lane-c { fill: #eef8ed; stroke: #6f9f68; }
+      .lane-title { font: 700 26px 'Segoe UI', Arial, sans-serif; fill: #173042; }
+      .lane-note { font: 500 16px 'Segoe UI', Arial, sans-serif; fill: #426072; }
+      .card { fill: #ffffff; stroke: #29465a; stroke-width: 2; rx: 20; }
+      .card-soft { fill: #fff9ef; }
+      .card-browser { fill: #f7fbff; }
+      .card-branch { fill: #f9fff7; }
+      .card-focus { fill: #fff0c5; stroke: #b37a0e; }
+      .card-title { font: 700 21px 'Segoe UI', Arial, sans-serif; fill: #142633; }
+      .card-body { font: 500 16px 'Segoe UI', Arial, sans-serif; fill: #304c5f; }
+      .mini { font: 600 15px 'Segoe UI', Arial, sans-serif; fill: #355367; }
+      .label { font: 700 15px 'Segoe UI', Arial, sans-serif; fill: #5e7b8f; letter-spacing: 1.2px; text-transform: uppercase; }
+      .loop-box { fill: #f3fff0; stroke: #699362; stroke-width: 3; rx: 22; }
+      .note { fill: #ffffff; stroke: #9aaebd; stroke-width: 2; rx: 18; }
+      .note-title { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #173042; }
+      .note-body { font: 500 15px 'Segoe UI', Arial, sans-serif; fill: #425f71; }
+      .flow { fill: none; stroke: #36556b; stroke-width: 4; marker-end: url(#arrow); }
+      .flow-soft { fill: none; stroke: #b37a0e; stroke-width: 4; marker-end: url(#arrow); }
+      .flow-branch { fill: none; stroke: #5c8655; stroke-width: 4; marker-end: url(#arrow); }
+      .flow-dashed { fill: none; stroke: #6f8798; stroke-width: 3; stroke-dasharray: 10 10; marker-end: url(#arrow); }
+      .pill { fill: #173042; rx: 14; }
+      .pill-text { font: 700 13px 'Segoe UI', Arial, sans-serif; fill: #ffffff; letter-spacing: 0.7px; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1260" fill="url(#bg)" />
+
+  <text class="title" x="60" y="72">Soft-scaffolding-first proof loop</text>
+  <text class="subtitle" x="60" y="108">Mode A is the center of gravity. Mode B automates the wait and recovery lane. Mode C is the more mechanical API variant.</text>
+
+  <rect class="lane lane-a" x="60" y="150" width="1680" height="250" />
+  <text class="lane-title" x="90" y="194">1. Smart orchestrator lane</text>
+  <text class="lane-note" x="90" y="222">A human-visible Claude Code or Codex session does the judgment-heavy work: route choice, scope discipline, context curation, and stop decisions.</text>
+
+  <rect class="card card-soft card-focus" x="100" y="252" width="280" height="118" />
+  <text class="label" x="126" y="282">Observe</text>
+  <text class="card-title" x="126" y="310">Read proof state</text>
+  <text class="card-body" x="126" y="338">Inspect run state, branch files, reviewer</text>
+  <text class="card-body" x="126" y="360">verdicts, and current route health.</text>
+
+  <rect class="card card-soft" x="410" y="252" width="280" height="118" />
+  <text class="label" x="436" y="282">Decide</text>
+  <text class="card-title" x="436" y="310">Choose next route</text>
+  <text class="card-body" x="436" y="338">Pick the branch, next role, and the</text>
+  <text class="card-body" x="436" y="360">smallest useful ask for this turn.</text>
+
+  <rect class="card card-soft" x="720" y="252" width="280" height="118" />
+  <text class="label" x="746" y="282">Shape</text>
+  <text class="card-title" x="746" y="310">Narrow the role ask</text>
+  <text class="card-body" x="746" y="338">Prefer lemma-sized prover loops and</text>
+  <text class="card-body" x="746" y="360">delta-scoped reviewer checks.</text>
+
+  <rect class="card card-soft" x="1030" y="252" width="280" height="118" />
+  <text class="label" x="1056" y="282">Curate</text>
+  <text class="card-title" x="1056" y="310">Curate context and sources</text>
+  <text class="card-body" x="1056" y="338">Refresh durable browser sources and</text>
+  <text class="card-body" x="1056" y="360">attach the exact working files needed.</text>
+
+  <rect class="card card-soft" x="1340" y="252" width="320" height="118" />
+  <text class="label" x="1366" y="282">Emit</text>
+  <text class="card-title" x="1366" y="310">Send request and stop rule</text>
+  <text class="card-body" x="1366" y="338">Launch the role and define whether the</text>
+  <text class="card-body" x="1366" y="360">next pause is terminal or orchestrator-owned.</text>
+
+  <line class="flow-soft" x1="380" y1="311" x2="410" y2="311" />
+  <line class="flow-soft" x1="690" y1="311" x2="720" y2="311" />
+  <line class="flow-soft" x1="1000" y1="311" x2="1030" y2="311" />
+  <line class="flow-soft" x1="1310" y1="311" x2="1340" y2="311" />
+
+  <rect class="lane lane-b" x="60" y="435" width="1680" height="245" />
+  <text class="lane-title" x="90" y="480">2. Browser and supervisor transport lane</text>
+  <text class="lane-note" x="90" y="508">This lane owns submission, waiting, heartbeat observation, recovery, and response harvesting. Mode B automates it; Mode A can still drive it manually.</text>
+
+  <rect class="card card-browser" x="100" y="540" width="330" height="108" />
+  <text class="label" x="126" y="568">Prepare</text>
+  <text class="card-title" x="126" y="596">Project and durable sources</text>
+  <text class="card-body" x="126" y="622">Keep the proof-state note, refs, and current</text>
+  <text class="card-body" x="126" y="642">attachments aligned with the route.</text>
+
+  <rect class="card card-browser card-focus" x="470" y="540" width="330" height="108" />
+  <text class="label" x="496" y="568">Submit</text>
+  <text class="card-title" x="496" y="596">ChatGPT 5.4 Pro + Extended Pro</text>
+  <text class="card-body" x="496" y="622">Send one focused role request with the</text>
+  <text class="card-body" x="496" y="642">branch-local packet and file attachments.</text>
+
+  <rect class="card card-browser" x="840" y="540" width="330" height="108" />
+  <text class="label" x="866" y="568">Watch</text>
+  <text class="card-title" x="866" y="596">Heartbeat and recovery</text>
+  <text class="card-body" x="866" y="622">Wait, relaunch on stale browser state, and</text>
+  <text class="card-body" x="866" y="642">recover the response without losing context.</text>
+
+  <rect class="card card-browser" x="1210" y="540" width="420" height="108" />
+  <text class="label" x="1236" y="568">Harvest</text>
+  <text class="card-title" x="1236" y="596">Write response and run `mpp resume`</text>
+  <text class="card-body" x="1236" y="622">Persist the response artifact, resume the run,</text>
+  <text class="card-body" x="1236" y="642">and return control to the orchestrator.</text>
+
+  <line class="flow" x1="430" y1="594" x2="470" y2="594" />
+  <line class="flow" x1="800" y1="594" x2="840" y2="594" />
+  <line class="flow" x1="1170" y1="594" x2="1210" y2="594" />
+
+  <path class="flow" d="M1500 370 L1500 430 L265 430 L265 540" />
+  <path class="flow-dashed" d="M1630 594 C1700 594, 1710 230, 1660 230" />
+
+  <rect class="lane lane-c" x="60" y="720" width="1680" height="470" />
+  <text class="lane-title" x="90" y="766">3. Branch artifact lane</text>
+  <text class="lane-note" x="90" y="794">The run writes markdown artifacts per branch. Routes grow by repeated prover and reviewer cycles until one passes, stalls, or gets pruned.</text>
+
+  <rect class="card card-branch" x="100" y="835" width="220" height="100" />
+  <text class="label" x="126" y="864">Prelude</text>
+  <text class="card-title" x="126" y="892">Formalizer</text>
+  <text class="card-body" x="126" y="918">Turn claim text into a precise target.</text>
+
+  <rect class="card card-branch" x="360" y="835" width="220" height="100" />
+  <text class="label" x="386" y="864">Prelude</text>
+  <text class="card-title" x="386" y="892">Literature</text>
+  <text class="card-body" x="386" y="918">Gather known tools, obstacles, and hints.</text>
+
+  <rect class="card card-branch" x="620" y="835" width="220" height="100" />
+  <text class="label" x="646" y="864">Prelude</text>
+  <text class="card-title" x="646" y="892">Searcher</text>
+  <text class="card-body" x="646" y="918">Propose distinct routes and rank them.</text>
+
+  <rect class="card card-branch card-focus" x="880" y="835" width="240" height="100" />
+  <text class="label" x="906" y="864">Fork</text>
+  <text class="card-title" x="906" y="892">Spawn candidate routes</text>
+  <text class="card-body" x="906" y="918">Keep mainline, prune weak branches early.</text>
+
+  <rect class="pill" x="1170" y="846" width="88" height="30" />
+  <text class="pill-text" x="1190" y="867">ROUTE A</text>
+  <rect class="pill" x="1268" y="846" width="88" height="30" />
+  <text class="pill-text" x="1288" y="867">ROUTE B</text>
+  <rect class="pill" x="1366" y="846" width="88" height="30" />
+  <text class="pill-text" x="1386" y="867">ROUTE N</text>
+  <rect class="pill" x="1464" y="846" width="136" height="30" fill="#5f7d90" />
+  <text class="pill-text" x="1490" y="867">PRUNE WEAK</text>
+
+  <line class="flow-branch" x1="320" y1="885" x2="360" y2="885" />
+  <line class="flow-branch" x1="580" y1="885" x2="620" y2="885" />
+  <line class="flow-branch" x1="840" y1="885" x2="880" y2="885" />
+
+  <rect class="loop-box" x="250" y="970" width="920" height="160" />
+  <text class="lane-title" x="280" y="1010" font-size="22">Per-route proof loop</text>
+
+  <rect class="card card-branch" x="300" y="1020" width="180" height="80" />
+  <text class="card-title" x="332" y="1068">Breakdown</text>
+
+  <rect class="card card-branch" x="530" y="1020" width="180" height="80" />
+  <text class="card-title" x="582" y="1068">Prover</text>
+
+  <rect class="card card-branch" x="760" y="1020" width="180" height="80" />
+  <text class="card-title" x="802" y="1068">Reviewer</text>
+
+  <rect class="card card-branch card-focus" x="990" y="1020" width="140" height="80" />
+  <text class="card-title" x="1021" y="1062">Verdict</text>
+  <text class="mini" x="1018" y="1086">PASS / PATCH / REDO</text>
+
+  <line class="flow-branch" x1="480" y1="1060" x2="530" y2="1060" />
+  <line class="flow-branch" x1="710" y1="1060" x2="760" y2="1060" />
+  <line class="flow-branch" x1="940" y1="1060" x2="990" y2="1060" />
+
+  <path class="flow-branch" d="M1060 1100 C1060 1150, 620 1150, 620 1100" />
+  <text class="mini" x="790" y="1174">PATCH_SMALL -> back to prover</text>
+  <path class="flow-branch" d="M1020 1020 C1020 970, 390 970, 390 1020" />
+  <text class="mini" x="548" y="958">PATCH_BIG or REDO -> rebuild plan</text>
+
+  <rect class="card card-branch" x="1230" y="1010" width="200" height="94" />
+  <text class="label" x="1256" y="1038">Pass lane</text>
+  <text class="card-title" x="1256" y="1066">Consolidator</text>
+  <text class="card-body" x="1256" y="1090">Assemble the winning route into</text>
+  <text class="card-body" x="1256" y="1110">`final_report.md` and evidence trail.</text>
+
+  <rect class="card card-branch" x="1470" y="1010" width="220" height="94" />
+  <text class="label" x="1496" y="1038">Run end</text>
+  <text class="card-title" x="1496" y="1066">Winner selected</text>
+  <text class="card-body" x="1496" y="1090">Choose the surviving branch or exit with</text>
+  <text class="card-body" x="1496" y="1110">stalled or failed status if none pass.</text>
+
+  <line class="flow-branch" x1="1130" y1="1060" x2="1230" y2="1060" />
+  <line class="flow-branch" x1="1430" y1="1060" x2="1470" y2="1060" />
+  <path class="flow-branch" d="M1000 935 L1000 970" />
+
+  <rect class="note" x="100" y="1138" width="760" height="34" />
+  <text class="note-body" x="126" y="1160">Observed in recent browser-backed runs: `task_pending -> submit_launch -> heartbeat_terminal -> resume_completed` repeats for hours without changing the high-level loop.</text>
+
+  <rect class="note" x="900" y="1138" width="790" height="34" />
+  <text class="note-body" x="926" y="1160">`waiting_orchestrator` is a deliberate pause for smart judgment about route, scope, or recovery, not a crash signal.</text>
+</svg>

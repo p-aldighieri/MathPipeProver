@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 1420" role="img" aria-labelledby="title desc">
+  <title id="title">Role data flow for soft scaffolding</title>
+  <desc id="desc">Large diagram showing durable browser sources, branch-local context, packet assembly rules, and per-role loaded files for MathPipeProver.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbfaf7" />
+      <stop offset="100%" stop-color="#f1f5f7" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#416176" />
+    </marker>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #142633; }
+      .subtitle { font: 500 18px 'Segoe UI', Arial, sans-serif; fill: #425d70; }
+      .source { fill: #ffffff; stroke: #5d8199; stroke-width: 2; rx: 24; }
+      .source-title { font: 700 23px 'Segoe UI', Arial, sans-serif; fill: #173042; }
+      .source-body { font: 500 18px 'Segoe UI', Arial, sans-serif; fill: #355064; }
+      .packet { fill: #173042; rx: 26; }
+      .packet-title { font: 700 24px 'Segoe UI', Arial, sans-serif; fill: #ffffff; }
+      .packet-body { font: 500 18px 'Segoe UI', Arial, sans-serif; fill: #dce7ee; }
+      .rule { fill: #ffffff; stroke: #97acba; stroke-width: 2; rx: 22; }
+      .rule-title { font: 700 20px 'Segoe UI', Arial, sans-serif; fill: #173042; }
+      .rule-body { font: 500 17px 'Segoe UI', Arial, sans-serif; fill: #3d596c; }
+      .role { fill: #ffffff; stroke: #29465a; stroke-width: 2; rx: 24; }
+      .role-title { font: 700 24px 'Segoe UI', Arial, sans-serif; fill: #142633; }
+      .tag-full { font: 700 15px 'Segoe UI', Arial, sans-serif; fill: #9b5d00; letter-spacing: 1px; text-transform: uppercase; }
+      .tag-secondary { font: 700 15px 'Segoe UI', Arial, sans-serif; fill: #336a9b; letter-spacing: 1px; text-transform: uppercase; }
+      .tag-manifest { font: 700 15px 'Segoe UI', Arial, sans-serif; fill: #6a7f8e; letter-spacing: 1px; text-transform: uppercase; }
+      .role-body { font: 500 17px 'Segoe UI', Arial, sans-serif; fill: #365165; }
+      .flow { fill: none; stroke: #416176; stroke-width: 3; marker-end: url(#arrow); }
+      .footer { font: 600 18px 'Segoe UI', Arial, sans-serif; fill: #28475a; }
+    </style>
+  </defs>
+
+  <rect width="1900" height="1420" fill="url(#bg)" />
+
+  <text class="title" x="60" y="74">Role data flow for soft scaffolding</text>
+  <text class="subtitle" x="60" y="110">The orchestrator narrows the ask first. The packet then loads priority files in full, loads secondary files in a separate section, and lists everything else as manifest-only.</text>
+
+  <rect class="source" x="60" y="160" width="540" height="150" />
+  <text class="source-title" x="92" y="206">Durable browser project sources</text>
+  <text class="source-body" x="92" y="242">Stable proof-state note, evergreen references,</text>
+  <text class="source-body" x="92" y="268">project instructions, and other long-lived context.</text>
+
+  <rect class="source" x="680" y="160" width="540" height="150" />
+  <text class="source-title" x="712" y="206">Branch-local run context</text>
+  <text class="source-body" x="712" y="242">`formalizer.md`, `strategy.md`, `breakdown.md`,</text>
+  <text class="source-body" x="712" y="268">`prover_*.md`, `reviewer_*.md`, ledgers, and deltas.</text>
+
+  <rect class="source" x="1300" y="160" width="540" height="150" />
+  <text class="source-title" x="1332" y="206">Per-step attachments</text>
+  <text class="source-body" x="1332" y="242">Explicit files attached only for the current request.</text>
+  <text class="source-body" x="1332" y="268">Useful when the browser packet needs more than the durable set.</text>
+
+  <rect class="packet" x="420" y="360" width="1060" height="130" />
+  <text class="packet-title" x="454" y="406">Orchestrator assembles the role packet</text>
+  <text class="packet-body" x="454" y="438">Smart scaffolding should narrow the task, not silently truncate important files.</text>
+  <text class="packet-body" x="454" y="464">The packet structure below reflects `mathpipeprover/prompting.py`.</text>
+
+  <line class="flow" x1="330" y1="310" x2="640" y2="360" />
+  <line class="flow" x1="950" y1="310" x2="950" y2="360" />
+  <line class="flow" x1="1570" y1="310" x2="1260" y2="360" />
+
+  <rect class="rule" x="60" y="540" width="560" height="110" />
+  <text class="rule-title" x="92" y="582">1. Full priority files</text>
+  <text class="rule-body" x="92" y="612">The most important markdown files for a role are loaded in full.</text>
+
+  <rect class="rule" x="670" y="540" width="560" height="110" />
+  <text class="rule-title" x="702" y="582">2. Secondary loaded files</text>
+  <text class="rule-body" x="702" y="612">Additional working files are still loaded in full, but in a separate block.</text>
+
+  <rect class="rule" x="1280" y="540" width="560" height="110" />
+  <text class="rule-title" x="1312" y="582">3. Manifest-only remainder</text>
+  <text class="rule-body" x="1312" y="612">Everything else is listed by file name and character count only.</text>
+
+  <line class="flow" x1="950" y1="490" x2="950" y2="540" />
+
+  <rect class="role" x="60" y="720" width="400" height="290" />
+  <text class="role-title" x="92" y="762">formalizer</text>
+  <text class="tag-full" x="92" y="800">Full</text>
+  <text class="role-body" x="92" y="828">- `claim.md`</text>
+  <text class="tag-manifest" x="92" y="882">Manifest-only</text>
+  <text class="role-body" x="92" y="910">- Everything else by name and size</text>
+
+  <rect class="role" x="520" y="720" width="400" height="290" />
+  <text class="role-title" x="552" y="762">literature</text>
+  <text class="tag-full" x="552" y="800">Full</text>
+  <text class="role-body" x="552" y="828">- `claim.md`</text>
+  <text class="role-body" x="552" y="854">- `*/context/formalizer.md`</text>
+  <text class="tag-manifest" x="552" y="908">Manifest-only</text>
+  <text class="role-body" x="552" y="936">- Everything else by name and size</text>
+
+  <rect class="role" x="980" y="720" width="400" height="290" />
+  <text class="role-title" x="1012" y="762">searcher</text>
+  <text class="tag-full" x="1012" y="800">Full</text>
+  <text class="role-body" x="1012" y="828">- `claim.md`</text>
+  <text class="role-body" x="1012" y="854">- `*/context/formalizer.md`</text>
+  <text class="tag-secondary" x="1012" y="898">Secondary</text>
+  <text class="role-body" x="1012" y="926">- `*/context/literature.md`</text>
+  <text class="tag-manifest" x="1012" y="970">Manifest-only</text>
+  <text class="role-body" x="1012" y="998">- Everything else by name and size</text>
+
+  <rect class="role" x="1440" y="720" width="400" height="290" />
+  <text class="role-title" x="1472" y="762">breakdown</text>
+  <text class="tag-full" x="1472" y="800">Full</text>
+  <text class="role-body" x="1472" y="828">- `*/context/formalizer.md`</text>
+  <text class="role-body" x="1472" y="854">- `*/context/strategy.md`</text>
+  <text class="tag-manifest" x="1472" y="908">Manifest-only</text>
+  <text class="role-body" x="1472" y="936">- Everything else by name and size</text>
+
+  <rect class="role" x="60" y="1060" width="400" height="300" />
+  <text class="role-title" x="92" y="1102">prover</text>
+  <text class="tag-full" x="92" y="1140">Full</text>
+  <text class="role-body" x="92" y="1168">- `*/context/formalizer.md`</text>
+  <text class="role-body" x="92" y="1194">- `*/context/breakdown.md`</text>
+  <text class="role-body" x="92" y="1220">- `*/context/breakdown_amendments.md`</text>
+  <text class="tag-secondary" x="92" y="1264">Secondary</text>
+  <text class="role-body" x="92" y="1292">- `*/context/strategy.md`</text>
+  <text class="role-body" x="92" y="1318">- `*/context/reviewer_*.md`</text>
+
+  <rect class="role" x="520" y="1060" width="400" height="300" />
+  <text class="role-title" x="552" y="1102">reviewer</text>
+  <text class="tag-full" x="552" y="1140">Full</text>
+  <text class="role-body" x="552" y="1168">- `*/context/formalizer.md`</text>
+  <text class="role-body" x="552" y="1194">- `*/context/breakdown.md`</text>
+  <text class="role-body" x="552" y="1220">- `*/context/prover_*.md`</text>
+  <text class="tag-secondary" x="552" y="1264">Secondary</text>
+  <text class="role-body" x="552" y="1292">- `*/context/strategy.md`</text>
+  <text class="role-body" x="552" y="1318">- `*/context/assumption_delta.md`</text>
+
+  <rect class="role" x="980" y="1060" width="400" height="300" />
+  <text class="role-title" x="1012" y="1102">scope_keeper</text>
+  <text class="tag-full" x="1012" y="1140">Full</text>
+  <text class="role-body" x="1012" y="1168">- `*/context/assumption_delta.md`</text>
+  <text class="role-body" x="1012" y="1194">- `*/context/scope_decision.md`</text>
+  <text class="tag-secondary" x="1012" y="1238">Secondary</text>
+  <text class="role-body" x="1012" y="1266">- `*/context/formalizer.md`</text>
+  <text class="tag-manifest" x="1012" y="1310">Manifest-only</text>
+  <text class="role-body" x="1012" y="1338">- Everything else by name and size</text>
+
+  <rect class="role" x="1440" y="1060" width="400" height="300" />
+  <text class="role-title" x="1472" y="1102">consolidator</text>
+  <text class="tag-full" x="1472" y="1140">Full</text>
+  <text class="role-body" x="1472" y="1168">- `claim.md`</text>
+  <text class="role-body" x="1472" y="1194">- `*/context/formalizer.md`</text>
+  <text class="role-body" x="1472" y="1220">- `*/context/breakdown.md`</text>
+  <text class="role-body" x="1472" y="1246">- `*/context/prover_*.md`</text>
+  <text class="role-body" x="1472" y="1272">- `*/context/knowledge_ledger.md`</text>
+  <text class="tag-secondary" x="1472" y="1310">Secondary</text>
+  <text class="role-body" x="1472" y="1338">- `*/context/reviewer_*.md`, `*/context/strategy.md`</text>
+
+  <line class="flow" x1="340" y1="650" x2="260" y2="720" />
+  <line class="flow" x1="730" y1="650" x2="720" y2="720" />
+  <line class="flow" x1="1170" y1="650" x2="1180" y2="720" />
+  <line class="flow" x1="1560" y1="650" x2="1640" y2="720" />
+
+  <text class="footer" x="60" y="1400">Soft scaffolding stays readable by deliberately shaping the request and attachments before submission. That is why context curation is part of the orchestrator's job, not an afterthought.</text>
+</svg>

@@ -1,20 +1,20 @@
 # MathPipeProver
 
-Automated proof orchestration pipeline. Supports three operating modes:
+MathPipeProver's primary operating model is smart soft scaffolding: a Claude Code or Codex orchestrator stays mathematically engaged, curates the browser context, and decides what happens next. Other modes are specific variants of that baseline, not the other way around.
 
-### Mode A — Full API (hands-off)
+### Mode A — Smart soft scaffolding (default)
 
-Fully automated, no browser, no human in the loop. All roles (formalizer, searcher, prover, reviewer, consolidator) run via API providers (OpenAI, Anthropic, Gemini). The workflow router decides the next phase. Use configs like `config/production.toml` or `config/default.toml` with `router_enabled = true`. Prompts come from `prompts/` (structured for API consumption). Run with `mpp run` / `mpp resume`.
+A long-running Claude or Codex session acts as the proof operator. It reads proof state, synthesizes reviewer verdicts, narrows scope, refreshes durable sources, repairs browser state, and submits focused roles to ChatGPT Extended Pro through the browser tooling. This is the repository's main mode. Pair it with browser-backed configs, `prompts_soft/`, and orchestrator-reviewed stops (`orchestrator_controls_stop = true`) whenever you want the orchestrator to stay in charge.
 
-### Mode B — Supervisor soft-scaffolding
+### Mode B — Supervisor-assisted soft scaffolding
 
-Browser-backed with a **supervisor daemon** that owns the automation loop. Roles are submitted to ChatGPT Extended Pro via browser agent scripts, and a background supervisor polls heartbeats and wakes short-lived Claude CLI sessions to make orchestrator decisions. Each Claude wake-up reads state, decides, and exits immediately — the supervisor loops. Use `config/browser_chatgpt_soft.toml` with `router_enabled = false`, `orchestrator_controls_stop = true`. Prompts come from `prompts_soft/` (browser-optimized).
+This keeps the same smart soft-scaffolding philosophy, but a **supervisor daemon** owns the submit/watch/resume loop. Roles are submitted to ChatGPT Extended Pro via browser agent scripts, and the supervisor keeps auto-resuming until the run either finishes or returns a `waiting_orchestrator` handoff for a human-visible Claude or Codex session to judge. Use `config/browser_chatgpt_soft.toml` with `router_enabled = false`, `orchestrator_controls_stop = true`. Prompts come from `prompts_soft/` (browser-optimized).
 
-### Mode C — Smart orchestration with loops (interactive)
+### Mode C — Full API pipeline (hands-off)
 
-A long-running Claude session acts as both orchestrator and submitter. Instead of a background supervisor, a **heartbeat loop** (`/heartbeat`) fires periodically to check browser state and advance the pipeline. The orchestrator has full autonomy: it reads proof state, synthesizes reviewer verdicts, makes judgment calls on strategy, and submits to ChatGPT Extended Pro directly via CDP scripts. This is the most flexible mode — the orchestrator adapts the pipeline to the problem rather than following rigid role sequences.
+Fully automated, no browser, no human-visible orchestrator in the loop. All roles (formalizer, searcher, prover, reviewer, consolidator) run via API providers (OpenAI, Anthropic, Gemini). The workflow router decides the next phase. Use configs like `config/production.toml` or `config/default.toml` with `router_enabled = true`. Prompts come from `prompts/` (structured for API consumption). Run with `mpp run` / `mpp resume`.
 
-**In all modes**, the orchestrator is expected to act intelligently, not mechanically. It should synthesize proof-state, reviewer verdicts, route obstructions, and current branch value before choosing the next role. Do not merely relay model outputs or follow stale pipeline momentum when the mathematical frontier has already shifted.
+**In every mode**, the orchestrator is expected to act intelligently, not mechanically. It should synthesize proof-state, reviewer verdicts, route obstructions, and current branch value before choosing the next role. Do not merely relay model outputs or follow stale pipeline momentum when the mathematical frontier has already shifted.
 
 ## Slash Commands
 
@@ -27,7 +27,7 @@ Available via `.claude/commands/`:
 | `/set-sources` | Add/remove durable files in a ChatGPT project's Sources tab. |
 | `/inspect-chat` | Read-only check of a live chat's generation status. |
 | `/recover-chat` | Extract a completed response from a chat URL and save to file. |
-| `/heartbeat` | Start a 30-min recurring orchestrator heartbeat loop. |
+| `/heartbeat` | Start a 30-min recurring Mode A orchestrator heartbeat loop. |
 
 ## CDP Browser Scripts
 
@@ -80,34 +80,37 @@ The composer pill must show **"Extended Pro"**. "Thinking + Heavy" is a DIFFEREN
 
 ## Key Documentation
 
-- `docs/soft_scaffolding.md` — browser-orchestrated proof workflow guide
-- `docs/browser_chatgpt.md` — ChatGPT browser agent operations
+- `docs/soft_scaffolding.md` — primary Mode A operating guide
+- `docs/browser_chatgpt.md` — browser transport and recovery for Mode A/B
 
-## Session-Bridge Architecture (Mode B only — Supervisor Flow)
+## Supervisor Automation (Mode B only — Supervisor-assisted Variant)
 
-The supervisor soft-scaffolding flow uses a **supervisor daemon** that owns the full
-automation loop. Claude sessions are short-lived workers, not long-running orchestrators.
+The supervisor-assisted soft-scaffolding flow uses a **supervisor daemon** that owns the
+browser submit/watch/resume loop. The human-visible Claude or Codex orchestrator is not
+kept alive as a blocked worker; the supervisor runs until the pipeline either finishes or
+hands control back at `waiting_orchestrator`. This is a specialized execution pattern of
+Mode A, not the primary identity of the repo.
 
-**This section applies only to Mode B.** In Mode C (smart orchestration with loops), the Claude session is long-running and handles submission/monitoring directly — there is no separate supervisor.
+**This section applies only to Mode B.** In Mode A, the Claude or Codex session is
+long-running and handles submission and monitoring directly. In Mode C, the workflow is
+API-only and does not use the browser transport at all.
 
 ### How it works
 
 1. The **supervisor** (a background Python process) detects a pending external-agent task.
 2. The supervisor launches the **browser agent** to submit to ChatGPT and poll heartbeats.
 3. The supervisor **waits** for the heartbeat to reach completion (this can take 30–60+ min for Extended Pro).
-4. On completion, the supervisor **wakes a Claude CLI session** with a resume prompt.
-5. The Claude session runs `mpp resume`, inspects the result, makes any orchestrator decision, and **exits immediately**.
-6. The supervisor picks up the next pending task and loops back to step 1.
+4. On completion, the supervisor runs `mpp resume` itself.
+5. If the resumed run returns to `waiting_external_agent`, the supervisor loops back to step 1.
+6. If the resumed run reaches `waiting_orchestrator`, the supervisor stops and hands control back to a human-visible orchestrator session.
 
-### Rules for the resumed Claude session
+### When Control Returns To The Orchestrator
 
-When you are woken up by the supervisor:
+When the supervisor exits at `waiting_orchestrator`:
 
-- **Do NOT watch heartbeats.** The supervisor owns heartbeat polling. Never call `wait_for_completion` or block on heartbeat files.
-- **Do NOT submit to the browser.** The supervisor owns browser submission. Never launch the browser agent or interact with ChatGPT directly.
-- **Do NOT linger.** Run the resume command, make your orchestrator decision, and exit. The supervisor will wake you again when the next response is ready.
-- **Keep context clean.** Each wake-up is a fresh prompt. Read only the files you need for the current decision. Do not accumulate stale proof state across resumes.
+- **Do NOT rebuild stale browser assumptions.** First inspect the latest run state, reviewer files, and source-update needs.
 - **Act as orchestrator, not relay.** When the run reaches `waiting_orchestrator`, read the latest reviewer/scope files and make a real judgment call: continue, pivot, or stop. Do not mechanically continue if the route is dead.
+- **Resume the supervisor only after your decision.** If you continue the run and it returns to `waiting_external_agent`, you can start the supervisor again to own the next submit/watch/resume cycle.
 - **Manage durable source files.** Before exiting, assess whether the ChatGPT project's durable sources need updating for the next role. See the source housekeeping section below.
 
 ### Durable Source Housekeeping

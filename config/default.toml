@@ -1,5 +1,6 @@
+# Default local API-style profile.
 [workflow]
-mode = "semi_strict"  # strict | semi_strict | flexible
+mode = "semi_strict"
 enable_literature = true
 max_branches = 2
 max_prover_cycles = 3
@@ -12,17 +13,6 @@ prompts_root = "prompts"
 router_enabled = true
 provider_timeout_seconds = 60
 
-[providers]
-browser_agent = "external_agent"
-
-# Models used by `mpp smoke-providers`.
-[smoke_models]
-openai = "gpt-5-nano"
-anthropic = "claude-3-5-haiku-latest"
-gemini = "gemini-2.0-flash"
-
-# Runtime config per role.
-# Provider can be: stub | openai | anthropic | gemini | external_agent
 [role_runtime.workflow_router]
 provider = "stub"
 model = "gpt-5-nano"
@@ -71,72 +61,3 @@ provider = "stub"
 model = "gpt-5-mini"
 temperature = 0.2
 max_output_tokens = 32000
-
-# Markdown-first role I/O permissions.
-# Patterns are relative to each run directory.
-[role_access.workflow_router]
-read = ["claim.md", "run_state.json", "branches/{branch}/context/*.md", "branches/{branch}/events.md"]
-write = ["branches/{branch}/router/router_*.md"]
-
-[role_access.formalizer]
-read = ["claim.md", "branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/formalizer.md"]
-
-[role_access.literature]
-read = ["claim.md", "branches/{branch}/context/formalizer.md"]
-write = ["branches/{branch}/context/literature.md"]
-
-[role_access.searcher]
-read = ["claim.md", "branches/{branch}/context/formalizer.md", "branches/{branch}/context/literature.md"]
-write = ["branches/{branch}/context/strategy.md"]
-
-[role_access.breakdown]
-read = ["branches/{branch}/context/formalizer.md", "branches/{branch}/context/strategy.md"]
-write = ["branches/{branch}/context/breakdown.md"]
-
-[role_access.prover]
-read = ["branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/prover_*.md"]
-
-[role_access.reviewer]
-read = ["branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/reviewer_*.md"]
-
-[role_access.scope_keeper]
-read = ["branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/assumption_delta.md", "branches/{branch}/context/scope_decision.md"]
-
-[role_access.consolidator]
-read = ["claim.md", "branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/final_report.md"]
-
-# Paper pipeline roles (post-theorem verification)
-[role_runtime.paper_writer]
-provider = "external_agent"
-model = "chatgpt-extended-pro"
-temperature = 0.2
-max_output_tokens = 128000
-
-[role_runtime.paper_editor]
-provider = "external_agent"
-model = "chatgpt-extended-pro"
-temperature = 0.0
-max_output_tokens = 64000
-
-[role_runtime.paper_reviewer]
-provider = "external_agent"
-model = "chatgpt-extended-pro"
-temperature = 0.0
-max_output_tokens = 64000
-
-[role_access.paper_writer]
-read = ["claim.md", "branches/{branch}/context/*.md", "paper/*.tex", "paper/*_fix.md"]
-write = ["paper/*.tex"]
-
-[role_access.paper_editor]
-read = ["paper/*.tex"]
-write = ["paper/editor_verdict.md"]
-
-[role_access.paper_reviewer]
-read = ["paper/*.tex"]
-write = ["paper/reviewer_verdict.md"]

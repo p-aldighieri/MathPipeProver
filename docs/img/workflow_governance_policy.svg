@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 700" role="img" aria-labelledby="title desc">
+  <title id="title">Governance policy modes</title>
+  <desc id="desc">Diagram comparing strict, semi_strict, and flexible governance policies, and clarifying that governance policy is separate from the repository's operating modes.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7f8fb" />
+      <stop offset="100%" stop-color="#eef2f7" />
+    </linearGradient>
+    <style>
+      .title { font: 700 34px 'Segoe UI', Arial, sans-serif; fill: #142633; }
+      .subtitle { font: 500 18px 'Segoe UI', Arial, sans-serif; fill: #415c70; }
+      .banner { fill: #173042; rx: 24; }
+      .banner-text { font: 700 18px 'Segoe UI', Arial, sans-serif; fill: #ffffff; }
+      .card { stroke-width: 2; rx: 28; }
+      .strict { fill: #fff1ec; stroke: #c86c4a; }
+      .semi { fill: #fff8e5; stroke: #c79725; }
+      .flex { fill: #edf8ef; stroke: #65975f; }
+      .card-title { font: 700 28px 'Segoe UI', Arial, sans-serif; fill: #173042; }
+      .section { font: 700 15px 'Segoe UI', Arial, sans-serif; fill: #6a7f8e; letter-spacing: 1.2px; text-transform: uppercase; }
+      .body { font: 500 20px 'Segoe UI', Arial, sans-serif; fill: #355064; }
+      .footer { font: 600 18px 'Segoe UI', Arial, sans-serif; fill: #29465a; }
+    </style>
+  </defs>
+
+  <rect width="1520" height="700" fill="url(#bg)" />
+
+  <text class="title" x="60" y="74">Governance policy modes</text>
+  <text class="subtitle" x="60" y="110">These settings shape scope and assumption tolerance inside the proof loop. They are not the same thing as Mode A, Mode B, or Mode C.</text>
+
+  <rect class="banner" x="60" y="142" width="1400" height="62" />
+  <text class="banner-text" x="94" y="180">Prompt injection is the primary enforcement layer. Scope and assumption tags are the mechanical backstop.</text>
+
+  <rect class="card strict" x="60" y="240" width="430" height="340" />
+  <text class="card-title" x="92" y="288">strict</text>
+  <text class="section" x="92" y="326">Intent</text>
+  <text class="body" x="92" y="356">Preserve the original claim as literally as possible.</text>
+  <text class="section" x="92" y="402">Prompt stance</text>
+  <text class="body" x="92" y="432">No scope widening. No casual new assumptions.</text>
+  <text class="section" x="92" y="478">Mechanical backstop</text>
+  <text class="body" x="92" y="508">Scope gate required and low tolerance for drift.</text>
+  <text class="section" x="92" y="554">Typical use</text>
+  <text class="body" x="92" y="584">When theorem fidelity matters more than exploratory speed.</text>
+
+  <rect class="card semi" x="545" y="240" width="430" height="340" />
+  <text class="card-title" x="577" y="288">semi_strict</text>
+  <text class="section" x="577" y="326">Intent</text>
+  <text class="body" x="577" y="356">Stay faithful, but allow limited repair and narrowing.</text>
+  <text class="section" x="577" y="402">Prompt stance</text>
+  <text class="body" x="577" y="432">Fidelity-first wording with explicit guardrails.</text>
+  <text class="section" x="577" y="478">Mechanical backstop</text>
+  <text class="body" x="577" y="508">Scope gate active with capped tag counts.</text>
+  <text class="section" x="577" y="554">Typical use</text>
+  <text class="body" x="577" y="584">Default choice when you need progress without silent drift.</text>
+
+  <rect class="card flex" x="1030" y="240" width="430" height="340" />
+  <text class="card-title" x="1062" y="288">flexible</text>
+  <text class="section" x="1062" y="326">Intent</text>
+  <text class="body" x="1062" y="356">Optimize for useful proof progress under rough conditions.</text>
+  <text class="section" x="1062" y="402">Prompt stance</text>
+  <text class="body" x="1062" y="432">Relevance-focused prompts can tolerate larger reframing.</text>
+  <text class="section" x="1062" y="478">Mechanical backstop</text>
+  <text class="body" x="1062" y="508">Gate can be bypassed, but deltas still get written.</text>
+  <text class="section" x="1062" y="554">Typical use</text>
+  <text class="body" x="1062" y="584">Exploration when formal scope policing would block momentum.</text>
+
+  <text class="footer" x="60" y="642">Operating modes answer "who runs the loop?" Governance policy answers "how much scope and assumption movement is acceptable inside that loop?"</text>
+</svg>

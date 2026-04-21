@@ -1,6 +1,8 @@
-# Modes And Governance
+# Governance Policy Modes
 
-This file captures the mode design you requested: strict, semi-strict, and flexible behavior without forcing rigid JSON contracts.
+This file captures the governance-policy design for `strict`, `semi_strict`, and `flexible` behavior without forcing rigid JSON contracts.
+
+These are policy modes, not the repository's operating-mode taxonomy. The operating modes are the smart soft-scaffolding / supervisor-assisted / full-API split documented in `README.md`, `CLAUDE.md`, and `docs/soft_scaffolding.md`.
 
 ## Core design
 
@@ -24,7 +26,7 @@ Use these tags in normal markdown lines:
 
 No strict schema is required. If tags are missing, the workflow still runs.
 
-## Mode behavior
+## Policy behavior
 
 ## `strict`
 - No scope narrowing accepted.
@@ -45,7 +47,7 @@ No strict schema is required. If tags are missing, the workflow still runs.
 At each prover/reviewer cycle:
 1. Aggregate tags from current branch markdown files.
 2. Update `assumption_delta.md`.
-3. Evaluate against mode limits.
+3. Evaluate against policy limits.
 4. Write `scope_decision.md`.
 5. Continue or stop branch.
 
@@ -101,5 +103,5 @@ Extra routes are recorded as pruned routes in run state and report output.
 
 ## Browser-agent note
 
-`browser_agent` is treated as a provider mode (`external_agent`) rather than a fixed script.
+`browser_agent` is treated as a provider path (`external_agent`) rather than a fixed script.
 That keeps the architecture agent-compatible while preserving the same markdown contract for artifacts.

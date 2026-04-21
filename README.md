@@ -1,13 +1,20 @@
 # MathPipeProver
 
-MathPipeProver is a markdown-first proof workflow harness.
+MathPipeProver is a markdown-first proof workflow harness for soft scaffolding under a smart Claude Code or Codex orchestrator.
 
-It is designed for fast experimentation with role-based proving pipelines while preserving branch-level context, scope controls, and resumable runs.
+The repository's primary operating model is not the hands-off API lane. It is the browser-backed loop where the orchestrator curates route, scope, context, durable sources, and recovery while ChatGPT Extended Pro handles focused proof roles.
+
+## Operating modes
+
+- Mode A - Smart soft scaffolding (default). A long-running Claude Code or Codex session acts as the proof operator: it chooses the next role, narrows scope, curates context, refreshes durable sources, repairs browser state, and decides when a route is alive, blocked, or done.
+- Mode B - Supervisor-assisted soft scaffolding. This keeps the same smart-orchestrator philosophy, but a Python supervisor owns submit/watch/resume until the run either finishes or hands back a `waiting_orchestrator` decision to a human-visible orchestrator session.
+- Mode C - Full API pipeline (hands-off). All roles run through API providers with router-driven transitions. This is still supported, but it is the more specific mechanical variant rather than the repository's headline identity.
 
 ## What it does now
 
+- Primary soft-scaffolding workflow for ChatGPT project-based proof work
 - CLI commands: `run`, `resume`, `inspect`, `report`, `smoke-providers`
-- Policy modes: `strict`, `semi_strict`, `flexible`
+- Governance policy modes: `strict`, `semi_strict`, `flexible`
 - Cheap-model workflow router (`workflow_router`) emits structured decisions (`{"next":"TAG"}`)
 - Multi-branch strategy execution with branch pruning to `max_branches`
 - Branch-specific markdown context pools
@@ -19,7 +26,7 @@ It is designed for fast experimentation with role-based proving pipelines while 
 - Optional `external_agent` provider path (request/response files for browser-agent workflows)
 - Browser ChatGPT runner for the `external_agent` path via `scripts/chatgpt_browser_agent.sh`
 - Heartbeat watcher and auto-resume supervisor for long-running browser roles
-- Prompt templates in `prompts/`
+- Prompt roots in `prompts/` and `prompts_soft/`
 - Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)
 - Budget controls (`max_total_tokens`, `max_tokens_per_branch`, `max_total_calls`, `max_calls_per_branch`)
 
@@ -43,8 +50,15 @@ mpp smoke-providers --config config/default.toml --providers openai anthropic ge
 
 ## Configuration highlights
 
-See `config/default.toml`:
-- workflow mode
+Key profiles:
+
+- `config/browser_chatgpt_soft.toml` for smart soft scaffolding with `prompts_soft/` and `orchestrator_controls_stop = true`
+- `config/browser_chatgpt.toml` for the lower-level browser `external_agent` transport loop
+- `config/default.toml` and `config/production.toml` for the API-only pipeline
+
+Common configuration controls include:
+
+- workflow policy mode
 - router enable/disable and prompt root
 - token/call budget limits
 - max prover/reviewer cycles
@@ -57,31 +71,27 @@ See `config/default.toml`:
 CLI behavior:
 - If a local `.env` exists in the project root, it is loaded automatically (overriding current shell values).
 
-## Browser ChatGPT mode
+## Browser-backed tooling
 
-This repo now includes a first browser-backed implementation for the existing `external_agent` seam.
+These scripts serve Mode A and Mode B. They are transport and recovery machinery, not the whole definition of the operating mode.
 
 Key pieces:
 
-- config profile: `config/browser_chatgpt.toml`
+- lower-level browser transport profile: `config/browser_chatgpt.toml`
+- smart soft-scaffolding profile: `config/browser_chatgpt_soft.toml`
 - browser runner: `scripts/chatgpt_browser_agent.sh`
 - heartbeat watcher: `scripts/chatgpt_heartbeat_watch.sh`
 - auto-resume supervisor: `scripts/chatgpt_browser_supervisor.sh`
 - detailed usage: `docs/browser_chatgpt.md`
 
-The intended loop is:
+The lower-level transport loop is:
 
 1. Run `mpp run` or `mpp resume` with `config/browser_chatgpt.toml`.
 2. MathPipeProver pauses with status `waiting_external_agent` when a role response is missing.
 3. Either fulfill the pending request manually with `scripts/chatgpt_browser_agent.sh submit ...` or let `scripts/chatgpt_browser_supervisor.sh` own the submit/watch/resume loop.
 4. If you use the supervisor, it watches the heartbeat JSON, relaunches after stale/error states, and resumes the run as soon as the response file is ready.
 
-This first pass hard-codes the browser model policy to `ChatGPT 5.4 Pro` and the browser effort policy to `Extended Pro`.
-If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
-Browser submits now default to a 90-minute wait budget and maintain a heartbeat JSON beside each response file while waiting.
-They also accept repeated `--attach-file` arguments so branch-local proof artifacts can travel with a request without becoming durable project sources.
-
-Operational rules for proof work:
+The smart-orchestrator rules stay the same across both soft-scaffolding variants:
 
 - Role context is never truncated. If a request is too large, narrow the role scope or attach the full working files in the browser workflow.
 - Maintain a durable proof-state source that records the active route, current skeleton, lemma status, and trustworthy reviewer verdicts.
@@ -89,11 +99,15 @@ Operational rules for proof work:
 - Prefer lemma-scoped prover cycles and delta-scoped reviewer cycles over one-shot full-proof requests.
 - Keep routing decisions and breakdown approval under orchestrator review even if the browser loop is automated.
 
-## Planning docs
+The current browser lane hard-codes `ChatGPT 5.4 Pro` plus `Extended Pro`.
+If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
+Browser submits default to a 90-minute wait budget and maintain a heartbeat JSON beside each response file while waiting.
+They also accept repeated `--attach-file` arguments so branch-local proof artifacts can travel with a request without becoming durable project sources.
 
-- Main roadmap: `PLAN.md`
-- Execution checklist: `TODO.md`
-- Scaffold review: `docs/scaffolding_review.md`
-- Soft scaffolding guide: `docs/soft_scaffolding.md`
-- Mode and governance details: `docs/modes_and_governance.md`
-- Browser ChatGPT workflow: `docs/browser_chatgpt.md`
+## Key docs
+
+- Smart soft scaffolding guide: `docs/soft_scaffolding.md`
+- Browser transport and recovery: `docs/browser_chatgpt.md`
+- Governance policy details: `docs/modes_and_governance.md`
+- Workflow graphs: `docs/workflow_graph.md`
+- Paper workflow status: `docs/paper_pipeline.md`

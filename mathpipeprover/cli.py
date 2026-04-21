@@ -10,7 +10,6 @@ from .dotenv_loader import load_dotenv
 from .heartbeat import format_watch_result, watch_heartbeat
 from .orchestrator import inspect_run, orchestrator_continue_run, orchestrator_revive_run, orchestrator_stop_run, report_run, resume_run, start_run
 from .providers import ProviderHub
-from .session_bridge import resume_run_via_claude_session
 from .supervisor import detached_supervisor_status, launch_detached_supervisor, supervise_external_agents
 
 
@@ -34,15 +33,10 @@ def _add_supervise_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--notify-command", default="")
     parser.add_argument("--idle-poll-seconds", type=float, default=1.0)
     parser.add_argument("--max-submit-attempts", type=int, default=3)
-    parser.add_argument("--claude-session-id", default="")
-    parser.add_argument("--claude-bin", default="claude")
-    parser.add_argument("--claude-permission-mode", default="bypassPermissions")
-    parser.add_argument("--claude-dangerously-skip-permissions", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--claude-add-dir", action="append", default=[])
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mpp", description="MathPipeProver harness")
+    parser = argparse.ArgumentParser(prog="mpp", description="MathPipeProver smart proof-orchestration harness")
     sub = parser.add_subparsers(dest="command", required=True)
 
     run_p = sub.add_parser("run", help="Start a new run")
@@ -54,13 +48,13 @@ def build_parser() -> argparse.ArgumentParser:
     resume_p.add_argument("--run-id", required=True)
     resume_p.add_argument("--config", type=str, default="config/default.toml")
 
-    continue_p = sub.add_parser("orchestrator-continue", help="Continue a soft-scaffolding run after orchestrator review")
+    continue_p = sub.add_parser("orchestrator-continue", help="Continue an orchestrator-reviewed soft-scaffolding run after operator judgment")
     continue_p.add_argument("--run-id", required=True)
     continue_p.add_argument("--config", type=str, default="config/default.toml")
     continue_p.add_argument("--branch", required=True)
     continue_p.add_argument("--phase", required=True)
 
-    revive_p = sub.add_parser("orchestrator-revive", help="One-time revive of a terminal soft-scaffolding run into orchestrator review")
+    revive_p = sub.add_parser("orchestrator-revive", help="One-time revive of a terminal orchestrator-reviewed soft-scaffolding run")
     revive_p.add_argument("--run-id", required=True)
     revive_p.add_argument("--config", type=str, default="config/default.toml")
     revive_p.add_argument("--branch", required=True)
@@ -68,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     revive_p.add_argument("--suggested-phase", default="")
     revive_p.add_argument("--reason", default="")
 
-    stop_p = sub.add_parser("orchestrator-stop", help="Stop a soft-scaffolding run explicitly from the orchestrator")
+    stop_p = sub.add_parser("orchestrator-stop", help="Stop an orchestrator-reviewed soft-scaffolding run explicitly")
     stop_p.add_argument("--run-id", required=True)
     stop_p.add_argument("--config", type=str, default="config/default.toml")
     stop_p.add_argument("--status", choices=["failed", "complete"], default="failed")
@@ -101,12 +95,12 @@ def build_parser() -> argparse.ArgumentParser:
     heartbeat_p.add_argument("--notify", action="store_true", help="Show a macOS notification on terminal status")
     heartbeat_p.add_argument("--notify-command", default="", help="Shell command run on terminal status")
 
-    supervise_p = sub.add_parser("supervise-external-agent", help="Launch browser submits and auto-resume on heartbeat completion")
+    supervise_p = sub.add_parser("supervise-external-agent", help="Launch browser submits and auto-resume until terminal or waiting_orchestrator")
     _add_supervise_args(supervise_p)
 
     launch_supervise_p = sub.add_parser(
         "launch-supervisor-daemon",
-        help="Launch supervise-external-agent as a detached background process with run-local pid/log metadata",
+        help="Launch the supervisor-assisted browser loop as a detached background process with run-local pid/log metadata",
     )
     _add_supervise_args(launch_supervise_p)
 
@@ -261,24 +255,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "supervise-external-agent":
         assert config is not None
-        assert config_path is not None
-        resume_callback = None
-        if args.claude_session_id:
-            extra_dirs = [Path(path).resolve() for path in args.claude_add_dir]
-
-            def resume_callback() -> object:
-                return resume_run_via_claude_session(
-                    run_id=args.run_id,
-                    config=config,
-                    config_path=config_path,
-                    workspace_root=cwd,
-                    session_id=args.claude_session_id,
-                    claude_bin=args.claude_bin,
-                    permission_mode=args.claude_permission_mode,
-                    dangerously_skip_permissions=args.claude_dangerously_skip_permissions,
-                    add_dirs=extra_dirs,
-                )
-
         result = supervise_external_agents(
             run_id=args.run_id,
             config=config,
@@ -292,7 +268,6 @@ def main(argv: list[str] | None = None) -> int:
             notify_command=args.notify_command,
             idle_poll_seconds=args.idle_poll_seconds,
             max_submit_attempts=args.max_submit_attempts,
-            resume_callback=resume_callback,
         )
         print(f"run_id={result.run_id}")
         print(f"status={result.status}")
@@ -317,11 +292,6 @@ def main(argv: list[str] | None = None) -> int:
             notify_command=args.notify_command,
             idle_poll_seconds=args.idle_poll_seconds,
             max_submit_attempts=args.max_submit_attempts,
-            claude_session_id=args.claude_session_id,
-            claude_bin=args.claude_bin,
-            claude_permission_mode=args.claude_permission_mode,
-            claude_dangerously_skip_permissions=args.claude_dangerously_skip_permissions,
-            claude_add_dirs=[Path(path).resolve() for path in args.claude_add_dir],
         )
         print(f"run_id={launch.run_id}")
         print(f"pid={launch.pid}")

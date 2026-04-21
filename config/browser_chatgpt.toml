@@ -1,3 +1,4 @@
+# Lower-level browser transport profile for manual or supervisor-owned external-agent loops.
 [workflow]
 mode = "semi_strict"
 enable_literature = true
@@ -11,14 +12,6 @@ run_root = "runs"
 prompts_root = "prompts"
 router_enabled = false
 provider_timeout_seconds = 60
-
-[providers]
-browser_agent = "external_agent"
-
-[smoke_models]
-openai = "gpt-5-nano"
-anthropic = "claude-3-5-haiku-latest"
-gemini = "gemini-2.0-flash"
 
 [role_runtime.workflow_router]
 provider = "stub"
@@ -75,39 +68,3 @@ model = "chatgpt-5.4-pro-extended"
 temperature = 0.0
 max_output_tokens = 32000
 reasoning_effort = "high"
-
-[role_access.workflow_router]
-read = ["claim.md", "run_state.json", "branches/{branch}/context/*.md", "branches/{branch}/events.md"]
-write = ["branches/{branch}/router/router_*.md"]
-
-[role_access.formalizer]
-read = ["claim.md", "branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/formalizer.md"]
-
-[role_access.literature]
-read = ["claim.md", "branches/{branch}/context/formalizer.md"]
-write = ["branches/{branch}/context/literature.md"]
-
-[role_access.searcher]
-read = ["claim.md", "branches/{branch}/context/formalizer.md", "branches/{branch}/context/literature.md"]
-write = ["branches/{branch}/context/strategy.md"]
-
-[role_access.breakdown]
-read = ["branches/{branch}/context/formalizer.md", "branches/{branch}/context/strategy.md"]
-write = ["branches/{branch}/context/breakdown.md"]
-
-[role_access.prover]
-read = ["branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/prover_*.md"]
-
-[role_access.reviewer]
-read = ["branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/reviewer_*.md"]
-
-[role_access.scope_keeper]
-read = ["branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/assumption_delta.md", "branches/{branch}/context/scope_decision.md"]
-
-[role_access.consolidator]
-read = ["claim.md", "branches/{branch}/context/*.md"]
-write = ["branches/{branch}/context/final_report.md"]

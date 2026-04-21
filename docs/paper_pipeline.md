@@ -1,46 +1,57 @@
 # Paper Pipeline
 
-Once the theorem pipeline produces verified results (Prover PASS + Reviewer PASS), the paper pipeline takes over to produce a publishable manuscript.
+The repository still contains paper-writing prompts, but the paper pipeline is not a first-class executable phase of MathPipeProver as of April 21, 2026. The live runtime stops at theorem artifacts and soft-scaffolding handoff.
 
-## Flow
+## Live Runtime Boundary
 
-```
-THEOREM PIPELINE (Searcher → Breakdown → Prover → Reviewer → PASS)
-        ↓ (results verified)
-PAPER PIPELINE:
-        ↓
-    WRITER (produces/revises LaTeX manuscript)
-        ↓
-    EDITOR (structural/clarity/notation review)
-        ↓ loops until APPROVE
-    PEER REVIEWER (rigorous mathematical review)
-        ↓
-    PASS → done (publish)
-    CONDITIONAL (minor) → WRITER fixes → fresh PEER REVIEWER
-    FAIL (writing gap) → WRITER rewrites → EDITOR → PEER REVIEWER
-    FAIL (proof gap) → back to THEOREM PIPELINE
-```
+The executable theorem roles in `mathpipeprover/roles.py` are:
 
-## Roles
+- `formalizer`
+- `literature`
+- `searcher`
+- `breakdown`
+- `prover`
+- `reviewer`
+- `scope_keeper`
+- `consolidator`
 
-| Role | Prompt | Purpose |
-|------|--------|---------|
-| Paper Writer | `prompts/paper_writer.md` | Produce/revise LaTeX manuscript |
-| Paper Editor | `prompts/paper_editor.md` | Structure, notation, clarity review |
-| Peer Reviewer | `prompts/paper_reviewer.md` | Rigorous mathematical verification |
+Those roles produce the artifacts that matter for a later manuscript pass: `formalizer.md`, `strategy.md`, `breakdown.md`, `breakdown_amendments.md`, `prover_*.md`, `reviewer_*.md`, `knowledge_ledger.md`, `scope_decision.md`, and `final_report.md`.
 
-## Routing Rules
+## What Exists
 
-| Reviewer Verdict | Issue Type | Next Step |
-|-----------------|------------|-----------|
-| PASS | — | Done. Commit, push, submit to journal. |
-| CONDITIONAL | Notation/typos/clarity | Writer fixes → fresh Peer Reviewer |
-| FAIL | Writing-level gap | Writer rewrites → Editor → Peer Reviewer |
-| FAIL | Proof-level gap | Back to Theorem Pipeline (Prover) |
+- Prompt templates for `paper_writer`, `paper_editor`, and `paper_reviewer` under `prompts/`
+- A browser-backed Mode A or Mode B operator can still run those prompts manually after theorem work stabilizes
+- Theorem-run artifacts already provide the source packet a paper workflow needs
 
-## Execution Rules
+## What Does Not Exist
 
-1. **Always use Extended Pro** for every submission
-2. **Fresh session** for every peer reviewer pass (no context contamination)
-3. **One role per session** — never mix writer/editor/reviewer
-4. **Single paper file** — overwrite with latest version, git handles history
+- No paper roles are registered in `mathpipeprover/roles.py`
+- No automatic theorem-to-paper transition exists in the workflow engine
+- No paper-specific `mpp` command family exists
+- No live config profile wires paper roles into `role_runtime`
+
+## Recommended Use
+
+Treat paper work as a follow-on soft-scaffolding workflow, not as a built-in runner phase.
+
+1. Finish the theorem run until the winning branch and `final_report.md` are trustworthy.
+2. Freeze the proof-state packet you want to cite: formal statement, current breakdown, accepted lemmas, reviewer verdicts, and ledger notes.
+3. Run `paper_writer` in a fresh browser-backed session to draft or revise the manuscript.
+4. Run `paper_editor` as a separate pass for structure, exposition, notation, and section ordering.
+5. Run `paper_reviewer` in a fresh pass that can still send the work back to theorem roles if it finds a proof-level gap.
+
+## Routing Guidance
+
+| Verdict | Meaning | Next step |
+| --- | --- | --- |
+| PASS | The paper is mathematically and editorially ready at current scope. | Commit the manuscript changes and archive the packet used to justify them. |
+| CONDITIONAL | The proof is fine, but exposition or notation needs revision. | Return to `paper_writer`, then rerun `paper_reviewer`. |
+| FAIL (writing gap) | The argument is sound, but the manuscript structure is not ready. | Rewrite with `paper_writer`, then pass through `paper_editor` and `paper_reviewer` again. |
+| FAIL (proof gap) | A theorem-level issue remains. | Go back to theorem roles such as `breakdown`, `prover`, and `reviewer` before more paper polishing. |
+
+## Practical Rules
+
+- Keep theorem proving and paper polishing in separate sessions so verdicts stay legible.
+- Use fresh reviewer turns for paper review; do not inherit a writer-heavy context.
+- Prefer citing existing theorem artifacts over re-summarizing from memory.
+- Treat this page as a manual soft-scaffolding playbook, not as a promise of built-in automation.
