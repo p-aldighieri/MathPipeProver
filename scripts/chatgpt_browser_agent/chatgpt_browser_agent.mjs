@@ -7,13 +7,15 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { chromium } from "playwright";
 
-const TARGET_BASE_MODEL_BUTTON_LABEL = "5.4 Pro";
-const TARGET_BASE_MODEL_MENU_LABELS = [
-  "Pro 5.4",
-  "5.4 Pro",
-  "ChatGPT 5.4 Pro",
-  "Pro",
-];
+// New ChatGPT model selector (composer pill, no header dropdown). The pill
+// resolves both model and effort. Stable testids:
+//   - model radio:           data-testid="model-switcher-gpt-5-5-pro"
+//   - effort submenu chevron: data-testid="model-switcher-gpt-5-5-pro-thinking-effort"
+// Pill button: button.__composer-pill[aria-haspopup="menu"]
+const COMPOSER_PILL_SELECTOR = 'button.__composer-pill[aria-haspopup="menu"]';
+const PRO_MODEL_TESTID = "model-switcher-gpt-5-5-pro";
+const PRO_EFFORT_BTN_TESTID = "model-switcher-gpt-5-5-pro-thinking-effort";
+const TARGET_BASE_MODEL_BUTTON_LABEL = "Pro";
 const TARGET_EFFORT_LABEL = "Extended Pro";
 
 function usage() {
@@ -302,52 +304,121 @@ async function openProject(page, projectUrl, waitForLoginSeconds) {
   await ensureChatReady(page, waitForLoginSeconds);
 }
 
-async function ensureBaseModel(page) {
-  const modelButton = page.getByTestId("model-switcher-dropdown-button").first();
-  await modelButton.waitFor({ state: "visible", timeout: 10000 });
+async function getComposerPillText(page) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    return el ? (el.textContent || "").trim() : null;
+  }, COMPOSER_PILL_SELECTOR);
+}
 
-  const currentLabel = await modelButton.getAttribute("aria-label");
-  const currentText = ((await modelButton.innerText().catch(() => "")) || "").trim();
-  const currentCombined = `${currentLabel || ""} ${currentText}`.toLowerCase();
-  if (
-    currentCombined.includes(TARGET_BASE_MODEL_BUTTON_LABEL.toLowerCase()) ||
-    /\bpro\b/.test(currentText.toLowerCase())
-  ) {
+async function isComposerPillOpen(page) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    return el ? el.getAttribute("aria-expanded") === "true" : false;
+  }, COMPOSER_PILL_SELECTOR);
+}
+
+async function closePillMenu(page) {
+  if (await isComposerPillOpen(page)) {
+    await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(250);
+  }
+}
+
+async function openPillMenu(page) {
+  await closePillMenu(page);
+  const pill = page.locator(COMPOSER_PILL_SELECTOR).first();
+  await pill.waitFor({ state: "visible", timeout: 10000 });
+  await pill.click();
+  await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first()
+    .waitFor({ state: "visible", timeout: 5000 });
+}
+
+async function ensureBaseModel(page) {
+  // Fast path: composer pill already shows Pro/Extended Pro.
+  const pillText = await getComposerPillText(page);
+  if (pillText === "Extended Pro" || pillText === "Standard Pro" || pillText === "Pro") {
     return;
   }
 
-  await modelButton.click();
-  let clicked = false;
-  for (const label of TARGET_BASE_MODEL_MENU_LABELS) {
-    const exactItem = page.getByRole("menuitem", { name: label, exact: true });
-    if ((await exactItem.count()) > 0) {
-      await exactItem.first().click();
-      clicked = true;
-      break;
-    }
+  await openPillMenu(page);
+  const proSelected = await page.evaluate((tid) => {
+    const el = document.querySelector(`[data-testid="${tid}"]`);
+    return el ? el.getAttribute("aria-checked") === "true" : false;
+  }, PRO_MODEL_TESTID);
+  if (!proSelected) {
+    await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first().click();
+    await page.waitForTimeout(800);
+  } else {
+    await closePillMenu(page);
   }
-  if (!clicked) {
-    const fallbackItem = page.getByRole("menuitem", { name: /(?:chatgpt\s*)?5\.4\s*pro|pro\s*5\.4|\bpro\b/i }).first();
-    await fallbackItem.waitFor({ state: "visible", timeout: 10000 });
-    await fallbackItem.click();
-  }
-  await page.waitForTimeout(500);
 }
 
 async function ensureExtendedPro(page) {
-  const extended = page.getByRole("button", { name: TARGET_EFFORT_LABEL, exact: true });
-  if ((await extended.count()) > 0) {
+  // Fast path: pill already reads "Extended Pro".
+  if ((await getComposerPillText(page)) === TARGET_EFFORT_LABEL) {
     return;
   }
 
-  const proButton = page.getByRole("button", { name: "Pro", exact: true });
-  if ((await proButton.count()) === 0) {
-    throw new Error("Could not find the composer Pro pill next to the plus button.");
+  await openPillMenu(page);
+
+  // Verify Pro row is the active model; if not, set it first then re-open.
+  const proSelected = await page.evaluate((tid) => {
+    const el = document.querySelector(`[data-testid="${tid}"]`);
+    return el ? el.getAttribute("aria-checked") === "true" : false;
+  }, PRO_MODEL_TESTID);
+  if (!proSelected) {
+    await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first().click();
+    await page.waitForTimeout(800);
+    await openPillMenu(page);
   }
 
-  await proButton.first().click();
-  await page.getByRole("menuitemradio", { name: "Extended" }).click();
-  await page.getByRole("button", { name: TARGET_EFFORT_LABEL, exact: true }).first().waitFor({ state: "visible", timeout: 10000 });
+  // Read effort from "Pro• Extended" / "Pro• Standard" row text.
+  const currentEffort = await page.evaluate((tid) => {
+    const row = document.querySelector(`[data-testid="${tid}"]`);
+    if (!row) return null;
+    const m = (row.textContent || "").trim().match(/^Pro[•\s·]+(Standard|Extended)/i);
+    return m ? m[1] : null;
+  }, PRO_MODEL_TESTID);
+
+  if (currentEffort !== "Extended") {
+    // Reveal trailing chevron via row hover, then JS-click it (chevron is
+    // .invisible until row hover, but DOM .click() works regardless).
+    await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first().hover();
+    await page.waitForTimeout(300);
+    const chevronClicked = await page.evaluate((tid) => {
+      const el = document.querySelector(`[data-testid="${tid}"]`);
+      if (!el) return false;
+      el.click();
+      return true;
+    }, PRO_EFFORT_BTN_TESTID);
+    if (!chevronClicked) {
+      throw new Error("Could not find the Pro effort chevron button.");
+    }
+    await page.waitForTimeout(700);
+
+    const extendedClicked = await page.evaluate(() => {
+      for (const radio of document.querySelectorAll('[role="menuitemradio"]')) {
+        if ((radio.textContent || "").trim() === "Extended") {
+          radio.click();
+          return true;
+        }
+      }
+      return false;
+    });
+    if (!extendedClicked) {
+      throw new Error("Could not find the Extended option in the Pro effort submenu.");
+    }
+    await page.waitForTimeout(800);
+  }
+
+  await closePillMenu(page);
+  // Final verification: pill must read "Extended Pro".
+  for (let i = 0; i < 10; i += 1) {
+    if ((await getComposerPillText(page)) === TARGET_EFFORT_LABEL) return;
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`Composer pill did not reach "${TARGET_EFFORT_LABEL}" after model/effort updates.`);
 }
 
 async function openSourcesTab(page) {

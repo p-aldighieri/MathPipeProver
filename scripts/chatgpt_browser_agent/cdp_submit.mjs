@@ -34,16 +34,16 @@ const args = process.argv.slice(2);
 let projectUrl = '';
 let port = 9222;
 let timeout = 30000;
-let checkEffort = false;
 let promptFile = '';
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--project-url' && args[i + 1]) { projectUrl = args[++i]; continue; }
   if (args[i] === '--port' && args[i + 1]) { port = parseInt(args[++i], 10); continue; }
   if (args[i] === '--timeout' && args[i + 1]) { timeout = parseInt(args[++i], 10); continue; }
-  if (args[i] === '--check-effort') { checkEffort = true; continue; }
+  if (args[i] === '--check-effort') { /* flag is now default; kept as no-op for back-compat */ continue; }
   if (args[i] === '--help' || args[i] === '-h') {
-    console.log('Usage: node cdp_submit_v2.mjs --project-url <URL> [--port <PORT>] [--check-effort] <prompt_file>');
+    console.log('Usage: node cdp_submit.mjs --project-url <URL> [--port <PORT>] <prompt_file>');
+    console.log('Note: Extended Pro is always enforced at submission; --check-effort is a no-op (legacy flag).');
     process.exit(0);
   }
   promptFile = resolve(args[i]);
@@ -70,30 +70,79 @@ try {
   await new Promise(r => setTimeout(r, 5000));
   console.log('At:', page.url());
 
-  // Check model — CRITICAL: Must be "Extended Pro" (Pro model + Extended effort)
-  if (checkEffort) {
-    const composerPill = await page.evaluate(() => {
-      const btns = document.querySelectorAll('button');
-      for (const btn of btns) {
-        const rect = btn.getBoundingClientRect();
-        const text = btn.textContent.trim();
-        if (rect.y > 250 && rect.y < 800 &&
-            (text === 'Extended Pro' || text === 'Pro' || text === 'Standard Pro' ||
-             text.includes('thinking'))) {
-          return text;
-        }
+  // Check model — CRITICAL: Must be "Extended Pro". This check is ALWAYS run
+  // because navigation to the project URL can reset the composer pill.
+  // Selectors target the new (post-header-removal) composer-pill menu:
+  //   pill: button.__composer-pill[aria-haspopup="menu"]
+  //   Pro radio: data-testid="model-switcher-gpt-5-5-pro"
+  //   Pro effort chevron: data-testid="model-switcher-gpt-5-5-pro-thinking-effort"
+  const PILL = 'button.__composer-pill[aria-haspopup="menu"]';
+  const PRO_TID = 'model-switcher-gpt-5-5-pro';
+  const PRO_EFFORT_TID = 'model-switcher-gpt-5-5-pro-thinking-effort';
+  const readPill = async () => await page.evaluate((s) => {
+    const el = document.querySelector(s);
+    return el ? (el.textContent || '').trim() : 'unknown';
+  }, PILL);
+  const closeMenu = async () => {
+    const open = await page.evaluate((s) => document.querySelector(s)?.getAttribute('aria-expanded') === 'true', PILL);
+    if (open) { await page.keyboard.press('Escape').catch(() => {}); await new Promise(r => setTimeout(r, 250)); }
+  };
+  const openMenu = async () => {
+    await closeMenu();
+    await page.locator(PILL).first().click();
+    await page.locator(`[data-testid="${PRO_TID}"]`).first()
+      .waitFor({ state: 'visible', timeout: 5000 });
+  };
+
+  let composerPill = await readPill();
+  console.log('Model pill before submit:', composerPill);
+  if (composerPill !== 'Extended Pro') {
+    console.log('Pill not Extended Pro — setting it now.');
+    try {
+      await openMenu();
+      const proSelected = await page.evaluate((tid) =>
+        document.querySelector(`[data-testid="${tid}"]`)?.getAttribute('aria-checked') === 'true', PRO_TID);
+      if (!proSelected) {
+        await page.locator(`[data-testid="${PRO_TID}"]`).first().click();
+        await new Promise(r => setTimeout(r, 800));
+        await openMenu();
       }
-      return 'unknown';
-    });
-    console.log('Model pill:', composerPill);
-    if (composerPill === 'Extended Pro') {
-      console.log('Model: Extended Pro (correct)');
-    } else {
-      console.error('ERROR: Model is NOT Extended Pro! Pill shows: ' + composerPill);
-      console.error('Run: node cdp_set_model_pro.mjs --port ' + port);
+      const effort = await page.evaluate((tid) => {
+        const t = (document.querySelector(`[data-testid="${tid}"]`)?.textContent || '').trim();
+        const m = t.match(/^Pro[•\s·]+(Standard|Extended)/i);
+        return m ? m[1] : null;
+      }, PRO_TID);
+      if (effort !== 'Extended') {
+        await page.locator(`[data-testid="${PRO_TID}"]`).first().hover();
+        await new Promise(r => setTimeout(r, 300));
+        const chev = await page.evaluate((tid) => {
+          const el = document.querySelector(`[data-testid="${tid}"]`); if (!el) return false; el.click(); return true;
+        }, PRO_EFFORT_TID);
+        if (!chev) throw new Error('Pro effort chevron not found');
+        await new Promise(r => setTimeout(r, 700));
+        const ok = await page.evaluate(() => {
+          for (const r of document.querySelectorAll('[role="menuitemradio"]')) {
+            if ((r.textContent || '').trim() === 'Extended') { r.click(); return true; }
+          }
+          return false;
+        });
+        if (!ok) throw new Error('Extended option not found in effort submenu');
+        await new Promise(r => setTimeout(r, 800));
+      }
+      await closeMenu();
+    } catch (e) {
+      console.error('ERROR setting Extended Pro:', e.message);
+      process.exit(1);
+    }
+    composerPill = await readPill();
+    console.log('Model pill after fix:', composerPill);
+    if (composerPill !== 'Extended Pro') {
+      console.error('ERROR: still not Extended Pro after fix. Pill: ' + composerPill);
+      console.error('Run cdp_set_model_pro.mjs first, or manually fix in browser.');
       process.exit(1);
     }
   }
+  console.log('Model: Extended Pro (confirmed at submission time)');
 
   // Fill textarea
   const textarea = page.locator('[id="prompt-textarea"]');
