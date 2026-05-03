@@ -1,7 +1,7 @@
 ## Skills
 Repo-local skills available in this repository:
 
-- `mathpipe-browser-proof-ops`: Use when working on ChatGPT project preparation, durable source refresh, project-source inspection, or browser-backed `external_agent` submissions in MathPipeProver. (file: `/Users/p-aldighieri/Library/CloudStorage/OneDrive-Personal/Codebook/MathPipeProver/.codex/skills/mathpipe-browser-proof-ops/SKILL.md`)
+- `mathpipe-browser-proof-ops`: Use when working on ChatGPT project preparation, durable source refresh, project-source inspection, or browser-backed `external_agent` submissions in MathPipeProver. File: `.codex/skills/mathpipe-browser-proof-ops/SKILL.md` (path relative to repo root; resolves on Windows and Mac alike).
 
 ### How To Use Skills
 - If the task mentions ChatGPT projects, browser-backed proof orchestration, durable sources, `external_agent`, `Extended Pro`, `prepare`, or `submit`, use the matching repo-local skill.

@@ -16,6 +16,15 @@ Fully automated, no browser, no human-visible orchestrator in the loop. All role
 
 **In every mode**, the orchestrator is expected to act intelligently, not mechanically. It should synthesize proof-state, reviewer verdicts, route obstructions, and current branch value before choosing the next role. Do not merely relay model outputs or follow stale pipeline momentum when the mathematical frontier has already shifted.
 
+## Orchestrator Discipline
+
+These apply in every mode. They are the difference between a smart orchestrator and a relay.
+
+- **Inspect base files before acting.** Before executing any user task brief, read the target source file (manuscript, conjecture statement, draft .tex / .pdf) end to end and extract every embedded comment, RED note, TODO, FIXME, "tasks for AI" block, and in-prose question. Treat each as a task item even when it does not appear in the user's brief — these author requests are easy to miss because they live in the source, not the prompt.
+- **Ask for parseable output.** Submit role prompts that ask GPT Extended Pro for results in clearly-delimited blocks (the templates in `prompts_soft/` already do this). Without delimited output, dumps are slow and error-prone to parse. If you find yourself improvising a parse, the prompt template is what needs fixing.
+- **Commit at meaningful checkpoints.** Commit in the proof repo (not MathPipeProver) at the end of each verified unit, scope shift, or major artifact production. The proof repo is the durable record of mathematical progress; MathPipeProver is the toolchain. Do not let unstaged proof work accumulate across multiple verified results.
+- **Parallelize carefully.** You may run two subtasks in parallel when they are genuinely independent and the marginal context cost is justified (e.g., two unrelated reviewer verdicts in flight against different verification units). Keep an explicit log of which run owns which durable project source vs. which prompt-specific attachment, so concurrent runs do not collide on shared sources. When in doubt, sequence.
+
 ## Slash Commands
 
 Available via `.claude/commands/`:
