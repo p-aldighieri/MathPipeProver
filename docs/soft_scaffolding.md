@@ -2,6 +2,8 @@
 
 This is the primary operating mode of MathPipeProver: smart soft scaffolding under a Claude Code or Codex orchestrator.
 
+> **Bootstrapping a session:** copy `INIT.md` from the repo root into a fresh orchestrator session and fill in the slugs. This document is the operating guide the orchestrator should be familiar with after that bootstrap, not the bootstrap itself.
+
 This document captures the browser-orchestrated proof workflow that sits between:
 
 - the fully automated MathPipeProver pipeline

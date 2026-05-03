@@ -4,6 +4,10 @@ MathPipeProver is a markdown-first proof workflow harness for soft scaffolding u
 
 The repository's primary operating model is not the hands-off API lane. It is the browser-backed loop where the orchestrator curates route, scope, context, durable sources, and recovery while ChatGPT Extended Pro handles focused proof roles.
 
+## Starting a new proof project
+
+The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. Copy it into a new Claude Code (or Codex) session, fill in the six mustache slugs (`{{PROOF_REPO}}`, `{{TARGET_FILE}}`, `{{CHATGPT_PROJECT_URL}}`, `{{CDP_PORT}}`, `{{HEARTBEAT_INTERVAL}}`, `{{TASK_BRIEF}}`), and the orchestrator will run an 8-step bootstrap before touching the pipeline. `INIT.md` is the per-session ignition; `CLAUDE.md` is the always-loaded reference.
+
 ## Operating modes
 
 - Mode A - Smart soft scaffolding (default). A long-running Claude Code or Codex session acts as the proof operator: it chooses the next role, narrows scope, curates context, refreshes durable sources, repairs browser state, and decides when a route is alive, blocked, or done.
@@ -107,6 +111,8 @@ They also accept repeated `--attach-file` arguments so branch-local proof artifa
 
 ## Key docs
 
+- Per-session bootstrap (copy-paste at session start): `INIT.md`
+- Always-loaded orchestrator reference: `CLAUDE.md`
 - Smart soft scaffolding guide: `docs/soft_scaffolding.md`
 - Browser transport and recovery: `docs/browser_chatgpt.md`
 - Governance policy details: `docs/modes_and_governance.md`
