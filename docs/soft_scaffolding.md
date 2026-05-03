@@ -27,9 +27,8 @@ It is expected to synthesize evidence across steps, notice when a branch is effe
 
 ## How The Operating Modes Relate
 
-- Mode A is this guide's default model: a long-running smart orchestrator owns the proof loop directly.
-- Mode B is the supervisor-assisted execution pattern for the same philosophy: the supervisor owns submit/watch/resume, but the orchestrator still owns judgment.
-- Mode C is the more mechanical API-only variant. It stays supported, but it is not the primary identity of the repository.
+- **Smart scaffolding** is this guide's subject: a long-running smart orchestrator owns the proof loop directly, choosing roles and managing browser state by hand.
+- **API pipeline** is the more mechanical fully-automated variant. It stays supported and is documented in `README.md` and `CLAUDE.md`, but it is not the primary identity of the repository.
 
 ## What Belongs In MathPipeProver
 

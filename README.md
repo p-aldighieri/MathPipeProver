@@ -10,9 +10,8 @@ The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. 
 
 ## Operating modes
 
-- Mode A - Smart soft scaffolding (default). A long-running Claude Code or Codex session acts as the proof operator: it chooses the next role, narrows scope, curates context, refreshes durable sources, repairs browser state, and decides when a route is alive, blocked, or done.
-- Mode B - Supervisor-assisted soft scaffolding. This keeps the same smart-orchestrator philosophy, but a Python supervisor owns submit/watch/resume until the run either finishes or hands back a `waiting_orchestrator` decision to a human-visible orchestrator session.
-- Mode C - Full API pipeline (hands-off). All roles run through API providers with built-in phase transitions. This is still supported, but it is the more specific mechanical variant rather than the repository's headline identity.
+- **Smart scaffolding (default).** A long-running Claude Code or Codex session acts as the proof operator: it chooses the next role, narrows scope, curates context, refreshes durable sources, repairs browser state, and decides when a route is alive, blocked, or done. This is the headline mode and the one new users should reach for first.
+- **API pipeline (hands-off).** All roles run through API providers with built-in phase transitions. No browser, no in-loop orchestrator. Useful when you want a fully automated batch run and are willing to give up the orchestrator's judgment on routing and scope.
 
 ## What it does now
 
@@ -29,8 +28,8 @@ The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. 
 - Real provider adapters for OpenAI, Anthropic, and Gemini
 - Optional `external_agent` provider path (request/response files for browser-agent workflows)
 - Browser ChatGPT runner for the `external_agent` path via `scripts/chatgpt_browser_agent.sh`
-- Heartbeat watcher and auto-resume supervisor for long-running browser roles
-- Prompt roots in `prompts/soft/` (Mode A and Mode B) and `prompts/api/` (Mode C); shared snippets in `prompts/fragments/`
+- Heartbeat watcher (`mpp watch-heartbeat`) for long-running browser roles
+- Prompt roots in `prompts/soft/` (smart scaffolding) and `prompts/api/` (API pipeline); shared snippets in `prompts/fragments/`
 - Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)
 - Budget controls (`max_total_tokens`, `max_tokens_per_branch`, `max_total_calls`, `max_calls_per_branch`)
 
@@ -77,25 +76,23 @@ CLI behavior:
 
 ## Browser-backed tooling
 
-These scripts serve Mode A and Mode B. They are transport and recovery machinery, not the whole definition of the operating mode.
+These scripts are the transport and recovery machinery used by the smart-scaffolding mode. They are not the operating mode themselves.
 
 Key pieces:
 
 - lower-level browser transport profile: `config/browser_chatgpt.toml`
-- smart soft-scaffolding profile: `config/browser_chatgpt_soft.toml`
+- smart-scaffolding profile: `config/browser_chatgpt_soft.toml`
 - browser runner: `scripts/chatgpt_browser_agent.sh`
-- heartbeat watcher: `scripts/chatgpt_heartbeat_watch.sh`
-- auto-resume supervisor: `scripts/chatgpt_browser_supervisor.sh`
+- heartbeat watcher (manual blocking poll): `scripts/chatgpt_heartbeat_watch.sh`
 - detailed usage: `docs/browser_chatgpt.md`
 
-The lower-level transport loop is:
+The transport loop is:
 
 1. Run `mpp run` or `mpp resume` with `config/browser_chatgpt.toml`.
 2. MathPipeProver pauses with status `waiting_external_agent` when a role response is missing.
-3. Either fulfill the pending request manually with `scripts/chatgpt_browser_agent.sh submit ...` or let `scripts/chatgpt_browser_supervisor.sh` own the submit/watch/resume loop.
-4. If you use the supervisor, it watches the heartbeat JSON, relaunches after stale/error states, and resumes the run as soon as the response file is ready.
+3. Fulfill the pending request via `scripts/chatgpt_browser_agent.sh submit ...` (or via the orchestrator's `/submit-role` slash command), then resume.
 
-The smart-orchestrator rules stay the same across both soft-scaffolding variants:
+The smart-orchestrator rules:
 
 - After every completed soft role, control returns to the orchestrator. The orchestrator, not a router prompt, chooses the next pass.
 - Role context is never truncated. If a request is too large, narrow the role scope or attach the full working files in the browser workflow.

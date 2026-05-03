@@ -1,4 +1,4 @@
-# Lower-level browser transport profile for manual or supervisor-owned external-agent loops.
+# Lower-level browser transport profile for manual external-agent loops.
 [workflow]
 mode = "semi_strict"
 enable_literature = true

@@ -10,7 +10,6 @@ from .dotenv_loader import load_dotenv
 from .heartbeat import format_watch_result, watch_heartbeat
 from .orchestrator import inspect_run, orchestrator_continue_run, orchestrator_revive_run, orchestrator_stop_run, report_run, resume_run, start_run
 from .providers import ProviderHub
-from .supervisor import detached_supervisor_status, launch_detached_supervisor, supervise_external_agents
 
 
 def _read_claim(args: argparse.Namespace) -> str:
@@ -19,20 +18,6 @@ def _read_claim(args: argparse.Namespace) -> str:
     if args.claim_file:
         return Path(args.claim_file).read_text(encoding="utf-8")
     raise ValueError("Provide --claim-text or --claim-file")
-
-
-def _add_supervise_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--run-id", required=True)
-    parser.add_argument("--config", type=str, default="config/default.toml")
-    parser.add_argument("--project-url", required=True)
-    parser.add_argument("--cdp-url", default=os.environ.get("MPP_CHATGPT_CDP_URL", ""))
-    parser.add_argument("--poll-seconds", type=float, default=10.0)
-    parser.add_argument("--stale-after-seconds", type=float, default=120.0)
-    parser.add_argument("--max-wait-seconds", type=float, default=5400.0)
-    parser.add_argument("--notify", action="store_true")
-    parser.add_argument("--notify-command", default="")
-    parser.add_argument("--idle-poll-seconds", type=float, default=1.0)
-    parser.add_argument("--max-submit-attempts", type=int, default=3)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -94,19 +79,6 @@ def build_parser() -> argparse.ArgumentParser:
     heartbeat_p.add_argument("--max-wait-seconds", type=float, default=0.0)
     heartbeat_p.add_argument("--notify", action="store_true", help="Show a macOS notification on terminal status")
     heartbeat_p.add_argument("--notify-command", default="", help="Shell command run on terminal status")
-
-    supervise_p = sub.add_parser("supervise-external-agent", help="Launch browser submits and auto-resume until terminal or waiting_orchestrator")
-    _add_supervise_args(supervise_p)
-
-    launch_supervise_p = sub.add_parser(
-        "launch-supervisor-daemon",
-        help="Launch the supervisor-assisted browser loop as a detached background process with run-local pid/log metadata",
-    )
-    _add_supervise_args(launch_supervise_p)
-
-    supervisor_status_p = sub.add_parser("supervisor-status", help="Show detached supervisor pid/log status for a run")
-    supervisor_status_p.add_argument("--run-id", required=True)
-    supervisor_status_p.add_argument("--config", type=str, default="config/default.toml")
 
     return parser
 
@@ -252,66 +224,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(format_watch_result(result), end="")
         return {"completed": 0, "error": 1, "stale": 2, "timeout": 3}.get(result.status, 4)
-
-    if args.command == "supervise-external-agent":
-        assert config is not None
-        result = supervise_external_agents(
-            run_id=args.run_id,
-            config=config,
-            workspace_root=cwd,
-            project_url=args.project_url,
-            cdp_url=args.cdp_url,
-            poll_seconds=args.poll_seconds,
-            stale_after_seconds=args.stale_after_seconds,
-            max_wait_seconds=args.max_wait_seconds,
-            notify=args.notify,
-            notify_command=args.notify_command,
-            idle_poll_seconds=args.idle_poll_seconds,
-            max_submit_attempts=args.max_submit_attempts,
-        )
-        print(f"run_id={result.run_id}")
-        print(f"status={result.status}")
-        print(f"run_dir={result.run_dir}")
-        print(f"resumed_roles={result.resumed_roles}")
-        print(f"submit_launches={result.submit_launches}")
-        return 0
-
-    if args.command == "launch-supervisor-daemon":
-        assert config is not None
-        assert config_path is not None
-        launch = launch_detached_supervisor(
-            run_id=args.run_id,
-            config_path=config_path,
-            workspace_root=cwd,
-            project_url=args.project_url,
-            cdp_url=args.cdp_url,
-            poll_seconds=args.poll_seconds,
-            stale_after_seconds=args.stale_after_seconds,
-            max_wait_seconds=args.max_wait_seconds,
-            notify=args.notify,
-            notify_command=args.notify_command,
-            idle_poll_seconds=args.idle_poll_seconds,
-            max_submit_attempts=args.max_submit_attempts,
-        )
-        print(f"run_id={launch.run_id}")
-        print(f"pid={launch.pid}")
-        print(f"pid_file={launch.pid_path}")
-        print(f"log_file={launch.log_path}")
-        print(f"metadata_file={launch.metadata_path}")
-        return 0
-
-    if args.command == "supervisor-status":
-        assert config is not None
-        status = detached_supervisor_status(run_id=args.run_id, config=config, workspace_root=cwd)
-        print(f"run_id={status.run_id}")
-        print(f"alive={str(status.alive).lower()}")
-        print(f"pid={status.pid or ''}")
-        print(f"pid_file={status.pid_path}")
-        print(f"log_file={status.log_path}")
-        print(f"metadata_file={status.metadata_path}")
-        if status.command:
-            print(f"command={' '.join(status.command)}")
-        return 0
 
     return 1
 

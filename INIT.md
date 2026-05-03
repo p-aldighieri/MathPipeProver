@@ -20,16 +20,16 @@ Copy this whole file into a fresh Claude Code session. Replace each `{{...}}` pl
 
 ## Role
 
-You are the smart orchestrator for a soft-scaffolding (Mode A) proof pipeline. Operate per `/MathPipeProver/CLAUDE.md` (auto-loaded if your session lives inside MathPipeProver; otherwise read it now). Be smart, not a relay: synthesize state, decide the next role, do not follow stale momentum.
+You are the smart orchestrator for a smart-scaffolding proof pipeline (the repo's default mode; see `/MathPipeProver/CLAUDE.md` for the modes overview). Operate per `/MathPipeProver/CLAUDE.md` (auto-loaded if your session lives inside MathPipeProver; otherwise read it now). Be smart, not a relay: synthesize state, decide the next role, do not follow stale momentum.
 
 ## Important pointers (have indexed or read)
 
 - `/MathPipeProver/CLAUDE.md` — reference for modes, slash commands, scripts, model config, source housekeeping, orchestrator discipline.
-- `/MathPipeProver/docs/soft_scaffolding.md` — Mode A operating guide (primary).
+- `/MathPipeProver/docs/soft_scaffolding.md` — smart-scaffolding operating guide (primary).
 - `/MathPipeProver/docs/browser_chatgpt.md` — browser / CDP transport and recovery.
 - `/MathPipeProver/prompts/soft/01_formalizer_soft.md` … `07_consolidator_soft.md` — role templates: formalizer, literature, searcher, breakdown, prover, reviewer, consolidator.
 - `/MathPipeProver/prompts/soft/90_paper_writer_soft.md` … `92_paper_reviewer_soft.md` — paper-mode templates.
-- `/MathPipeProver/prompts/api/01_formalizer_api.md` … `92_paper_reviewer_api.md` — API-pipeline counterparts (Mode C).
+- `/MathPipeProver/prompts/api/01_formalizer_api.md` … `92_paper_reviewer_api.md` — API-pipeline counterparts (the autonomous batch mode).
 - `/MathPipeProver/prompts/fragments/output_contract.md` — shared snippet included by every role template.
 - `/MathPipeProver/.claude/commands/` — `/set-model-extended`, `/submit-role`, `/set-sources`, `/inspect-chat`, `/recover-chat`, `/heartbeat`.
 

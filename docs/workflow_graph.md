@@ -1,13 +1,12 @@
 # MathPipeProver Workflow Graphs
 
-These diagrams describe the current repo reality: a smart orchestrator runs the proof, while the browser lane and Python supervisor automate submission, waiting, and recovery.
+These diagrams describe the current repo reality: a smart orchestrator runs the proof, with the browser lane handling ChatGPT submission and recovery.
 
-## Soft-Scaffolding Loop
+## Smart-Scaffolding Loop
 
-![Soft-Scaffolding Loop](img/workflow_main.svg)
+![Smart-Scaffolding Loop](img/workflow_main.svg)
 
-- Mode A is the primary operating model: the orchestrator chooses the next narrow task, curates context, and decides whether a route should continue. Every completed soft role returns control to the orchestrator.
-- Mode B keeps the same philosophy but lets the Python supervisor own the submit, heartbeat, and resume loop until the run finishes or returns `waiting_orchestrator`.
+- The orchestrator chooses the next narrow task, curates context, and decides whether a route should continue. Every completed soft role returns control to the orchestrator.
 - Branch-local context grows through repeated `breakdown -> prover -> reviewer` cycles until a branch passes, stalls, or is pruned.
 - `waiting_orchestrator` is an intentional handoff for judgment, not an error state.
 
@@ -15,7 +14,7 @@ These diagrams describe the current repo reality: a smart orchestrator runs the 
 
 ![Governance Policy Modes](img/workflow_governance_policy.svg)
 
-Governance policy (`strict`, `semi_strict`, `flexible`) is separate from the repository's operating taxonomy (Mode A / Mode B / Mode C). Policy modes govern scope and assumption tolerance inside the proof loop.
+Governance policy (`strict`, `semi_strict`, `flexible`) is separate from the repository's operating taxonomy (smart scaffolding / API pipeline). Policy modes govern scope and assumption tolerance inside the proof loop.
 
 ## Budget Gates
 

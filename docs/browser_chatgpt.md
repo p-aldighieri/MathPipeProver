@@ -1,8 +1,8 @@
 # Browser ChatGPT Flow
 
-This document describes the browser transport and recovery machinery behind MathPipeProver's smart soft-scaffolding modes.
+This document describes the browser transport and recovery machinery behind MathPipeProver's smart-scaffolding mode.
 
-It is intentionally lower-level than the main operating-mode docs. Mode A (smart soft scaffolding) is the primary model; this file explains the browser layer that Mode A and Mode B rely on.
+It is intentionally lower-level than the main operating-mode docs. Smart scaffolding is the primary mode; this file explains the browser layer that smart scaffolding relies on.
 
 ## Why this exists
 
@@ -23,9 +23,8 @@ For proof projects, keep a durable proof-state markdown file attached as a proje
 
 Mode framing:
 
-- Mode A uses this browser layer directly from a long-running orchestrator session.
-- Mode B uses the same browser layer, but puts a supervisor daemon in charge of submit/watch/resume.
-- Mode C usually bypasses this layer entirely and stays on API providers.
+- **Smart scaffolding** uses this browser layer directly from a long-running orchestrator session.
+- **API pipeline** usually bypasses this layer entirely and stays on API providers.
 
 ## First-run setup
 
@@ -131,24 +130,6 @@ The watcher exits with:
 - `2` on `stale`
 - `3` on `timeout`
 
-### Supervise the full external-agent loop
-
-Use this when you want one process to launch the browser submitter, watch the heartbeat, and call `mpp resume` automatically as soon as the response is ready.
-
-```bash
-scripts/chatgpt_browser_supervisor.sh \
-  --run-id "<run_id>" \
-  --config config/browser_chatgpt.toml \
-  --project-url "https://chatgpt.com/g/g-p-6992190183fc8191aec8b0c2fad5c017-robust-trust-proof/project" \
-  --cdp-url "http://127.0.0.1:9222"
-```
-
-The supervisor writes an event log to:
-
-- `runs/<run_id>/external_agent_supervisor.jsonl`
-
-It resets stale heartbeat files before relaunching a role so a dead prior worker does not poison the next attempt.
-
 ## Context policy for long proofs
 
 - Never truncate branch-local proof artifacts. If a prover draft or review is long, attach the full file or split the role into a smaller step.
@@ -171,7 +152,7 @@ It does two things:
 1. Routes the proof roles through `external_agent`.
 2. Keeps the workflow at the transport layer: the browser fulfills role requests, but the prompt pack still comes from `prompts/api/`.
 
-`config/browser_chatgpt_soft.toml` is the smart soft-scaffolding profile used when you want browser-backed prompts from `prompts/soft/` and explicit `waiting_orchestrator` handoffs after every completed role. That is the profile to reach for in Mode A/B when the orchestrator should retain stop authority and real routing leeway.
+`config/browser_chatgpt_soft.toml` is the smart-scaffolding profile used when you want browser-backed prompts from `prompts/soft/` and explicit `waiting_orchestrator` handoffs after every completed role. That is the profile to reach for when the orchestrator should retain stop authority and real routing leeway.
 
 ## Lower-level manual transport loop
 
@@ -195,48 +176,24 @@ scripts/chatgpt_browser_agent.sh submit \
 mpp resume --run-id <run_id> --config config/browser_chatgpt.toml
 ```
 
-Repeat steps 2-4 until the run completes, or replace steps 2-4 entirely with the supervisor command above.
+Repeat steps 2-4 until the run completes.
 
 For iterative proof development, update the durable proof-state source after each accepted reviewer pass before launching the next role.
 
 ## Long-running roles
 
-- Default max wait is now 90 minutes (`5400` seconds).
+- Default max wait is 90 minutes (`5400` seconds).
 - Override with `--max-wait-seconds` if a role needs a different budget.
-- Use the heartbeat JSON beside the response file to check whether the worker is still active.
-- Use `scripts/chatgpt_browser_supervisor.sh` if you want the run to auto-resume instead of relying on manual polling.
+- Use the heartbeat JSON beside the response file to check whether the worker is still active. `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) is a blocking shell helper that polls the heartbeat and reports completion.
 
-## Supervisor-assisted orchestrator handoff
+## Orchestrator handoff
 
-For the smart soft-scaffolding flow, set `orchestrator_controls_stop = true` in the workflow config. In that mode, reviewer/scope/budget stop tags do not auto-finalize the run. Instead the run enters `waiting_orchestrator`, and the human-visible Claude or Codex session must explicitly choose one of:
+For the smart-scaffolding flow, set `orchestrator_controls_stop = true` in the workflow config. In that mode, reviewer/scope/budget stop tags do not auto-finalize the run. Instead the run enters `waiting_orchestrator`, and the human-visible Claude or Codex session must explicitly choose one of:
 
 - `mpp orchestrator-continue --run-id ... --branch ... --phase ...`
 - `mpp orchestrator-stop --run-id ... --status failed|complete --branch ... --reason "..."`
 
-`mpp supervise-external-agent` will automatically submit, watch, and run `mpp resume` until the run either:
-
-- returns to `waiting_external_agent` for another browser-owned role
-- reaches a terminal state
-- or hands back a `waiting_orchestrator` judgment
-
-If you want the same loop in a detached background process, use:
-
-```bash
-mpp launch-supervisor-daemon \
-  --run-id "<run_id>" \
-  --config /absolute/path/to/config/browser_chatgpt_soft.toml \
-  --project-url "https://chatgpt.com/g/.../project" \
-  --cdp-url "http://127.0.0.1:9333"
-```
-
-Use `mpp supervisor-status --run-id "<run_id>" --config /absolute/path/to/config/browser_chatgpt_soft.toml` to inspect the detached supervisor metadata.
-
-For supervisor-owned automation, expect active self-repair rather than passive waiting:
-
-- inspect the live chat URL before declaring a response lost
-- retry source sync when the requested durable files are not confirmed
-- handle straightforward account-choice continuation automatically
-- escalate only when authentication or browser transport is genuinely blocked
+After every soft role, control returns to the orchestrator, which judges the next pass before another `mpp resume` is issued.
 
 ## Current hard-coded behavior
 

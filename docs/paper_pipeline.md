@@ -20,7 +20,7 @@ Those roles produce the artifacts that matter for a later manuscript pass: `form
 ## What Exists
 
 - Prompt templates for `paper_writer`, `paper_editor`, and `paper_reviewer` under `prompts/soft/` (numbered 90/91/92, suffixed `_soft.md`) and `prompts/api/` (suffixed `_api.md`)
-- A browser-backed Mode A or Mode B operator can still run those prompts manually after theorem work stabilizes
+- A browser-backed smart-scaffolding operator can run those prompts manually after theorem work stabilizes
 - Theorem-run artifacts already provide the source packet a paper workflow needs
 
 ## What Does Not Exist

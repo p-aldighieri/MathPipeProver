@@ -2,7 +2,7 @@
 
 This file captures the governance-policy design for `strict`, `semi_strict`, and `flexible` behavior without forcing rigid JSON contracts.
 
-These are policy modes, not the repository's operating-mode taxonomy. The operating modes are the smart soft-scaffolding / supervisor-assisted / full-API split documented in `README.md`, `CLAUDE.md`, and `docs/soft_scaffolding.md`.
+These are policy modes, not the repository's operating-mode taxonomy. The operating modes are the smart-scaffolding / API-pipeline split documented in `README.md`, `CLAUDE.md`, and `docs/soft_scaffolding.md`.
 
 ## Core design
 
