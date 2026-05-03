@@ -68,7 +68,7 @@ enable_literature = false
 max_branches = 1
 max_prover_cycles = 2
 run_root = "runs"
-prompts_root = "prompts_soft"
+prompts_root = "prompts/soft"
 orchestrator_controls_stop = true
 
 [providers]
@@ -85,14 +85,14 @@ reasoning_effort = "high"
     )
 
     repo_root = Path(__file__).resolve().parents[1]
-    (tmp_path / "prompts_soft").mkdir()
-    (tmp_path / "prompt_fragments").mkdir()
-    (tmp_path / "prompt_fragments" / "output_contract.md").write_text(
-        (repo_root / "prompt_fragments" / "output_contract.md").read_text(encoding="utf-8"),
+    (tmp_path / "prompts" / "soft").mkdir(parents=True)
+    (tmp_path / "prompts" / "fragments").mkdir(parents=True)
+    (tmp_path / "prompts" / "fragments" / "output_contract.md").write_text(
+        (repo_root / "prompts" / "fragments" / "output_contract.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
-    (tmp_path / "prompts_soft" / "01_formalizer.md").write_text(
-        "Soft formalizer prompt.\n\n{{include:../prompt_fragments/output_contract.md}}\n\n## Context Packet\n\n{context_bundle}\n",
+    (tmp_path / "prompts" / "soft" / "01_formalizer_soft.md").write_text(
+        "Soft formalizer prompt.\n\n{{include:../fragments/output_contract.md}}\n\n## Context Packet\n\n{context_bundle}\n",
         encoding="utf-8",
     )
 

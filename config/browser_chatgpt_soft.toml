@@ -12,7 +12,7 @@ max_calls_per_branch = 5000
 policy_max_scope_changes_per_branch = 999
 policy_max_new_assumptions_per_branch = 999
 run_root = "runs"
-prompts_root = "prompts_soft"
+prompts_root = "prompts/soft"
 orchestrator_controls_stop = true
 provider_timeout_seconds = 60
 

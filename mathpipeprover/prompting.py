@@ -107,6 +107,14 @@ def _find_prompt_template_path(prompts_root: Path, name: str) -> Path | None:
     if direct.exists():
         return direct
 
+    # Suffix-by-folder convention: e.g. prompts/soft/01_formalizer_soft.md
+    # The variant ("soft", "api", ...) is taken from the parent folder name.
+    variant = prompts_root.name
+    suffixed = sorted(prompts_root.glob(f"[0-9][0-9]_{name}_{variant}.md"))
+    if suffixed:
+        return suffixed[0]
+
+    # Legacy: numbered files without a variant suffix.
     numbered = sorted(prompts_root.glob(f"[0-9][0-9]_{name}.md"))
     if numbered:
         return numbered[0]

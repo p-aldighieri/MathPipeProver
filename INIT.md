@@ -27,8 +27,10 @@ You are the smart orchestrator for a soft-scaffolding (Mode A) proof pipeline. O
 - `/MathPipeProver/CLAUDE.md` — reference for modes, slash commands, scripts, model config, source housekeeping, orchestrator discipline.
 - `/MathPipeProver/docs/soft_scaffolding.md` — Mode A operating guide (primary).
 - `/MathPipeProver/docs/browser_chatgpt.md` — browser / CDP transport and recovery.
-- `/MathPipeProver/prompts_soft/01_formalizer.md` … `07_consolidator.md` — role templates: formalizer, literature, searcher, breakdown, prover, reviewer, consolidator.
-- `/MathPipeProver/prompts_soft/90_paper_writer.md` … `92_paper_reviewer.md` — paper-mode templates.
+- `/MathPipeProver/prompts/soft/01_formalizer_soft.md` … `07_consolidator_soft.md` — role templates: formalizer, literature, searcher, breakdown, prover, reviewer, consolidator.
+- `/MathPipeProver/prompts/soft/90_paper_writer_soft.md` … `92_paper_reviewer_soft.md` — paper-mode templates.
+- `/MathPipeProver/prompts/api/01_formalizer_api.md` … `92_paper_reviewer_api.md` — API-pipeline counterparts (Mode C).
+- `/MathPipeProver/prompts/fragments/output_contract.md` — shared snippet included by every role template.
 - `/MathPipeProver/.claude/commands/` — `/set-model-extended`, `/submit-role`, `/set-sources`, `/inspect-chat`, `/recover-chat`, `/heartbeat`.
 
 ## Standard startup sequence (do these in order)
@@ -41,7 +43,7 @@ You are the smart orchestrator for a soft-scaffolding (Mode A) proof pipeline. O
 4. Verify the CDP browser at port `{{CDP_PORT}}` is up and the ChatGPT project at `{{CHATGPT_PROJECT_URL}}` is open in it. Verify the composer pill reads "Extended Pro" — if not, fix via `/set-model-extended` (see CLAUDE.md §Model Configuration — CRITICAL; the wrong pill silently swaps to a weaker model).
 5. List the durable sources of the ChatGPT project (script: `/MathPipeProver/scripts/chatgpt_browser_agent/list_sources.mjs`). Assess whether any need refresh given the current state of `{{TARGET_FILE}}` (CLAUDE.md §Durable Source Housekeeping for what belongs and what does not).
 6. Build a written task checklist combining `{{TASK_BRIEF}}` with the embedded requests from step 3. Keep it somewhere you can re-read it between subagent calls (TaskCreate or a project-local notes file).
-7. Begin orchestrating per the checklist. Use `/MathPipeProver/prompts_soft/` files as role templates; adapt rather than copy verbatim, and follow the output-format conventions in those templates so dumps parse cleanly downstream.
+7. Begin orchestrating per the checklist. Use `/MathPipeProver/prompts/soft/` files as role templates; adapt rather than copy verbatim, and follow the output-format conventions in those templates so dumps parse cleanly downstream.
 8. After the first submission to Extended Pro, run `/heartbeat {{HEARTBEAT_INTERVAL}}`.
 
 ## Tasks for this session

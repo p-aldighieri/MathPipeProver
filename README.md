@@ -30,7 +30,7 @@ The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. 
 - Optional `external_agent` provider path (request/response files for browser-agent workflows)
 - Browser ChatGPT runner for the `external_agent` path via `scripts/chatgpt_browser_agent.sh`
 - Heartbeat watcher and auto-resume supervisor for long-running browser roles
-- Prompt roots in `prompts/` and `prompts_soft/`
+- Prompt roots in `prompts/soft/` (Mode A and Mode B) and `prompts/api/` (Mode C); shared snippets in `prompts/fragments/`
 - Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)
 - Budget controls (`max_total_tokens`, `max_tokens_per_branch`, `max_total_calls`, `max_calls_per_branch`)
 
@@ -56,7 +56,7 @@ mpp smoke-providers --config config/default.toml --providers openai anthropic ge
 
 Key profiles:
 
-- `config/browser_chatgpt_soft.toml` for smart soft scaffolding with `prompts_soft/` and `orchestrator_controls_stop = true`
+- `config/browser_chatgpt_soft.toml` for smart soft scaffolding with `prompts/soft/` and `orchestrator_controls_stop = true`
 - `config/browser_chatgpt.toml` for the lower-level browser `external_agent` transport loop
 - `config/default.toml` and `config/production.toml` for the API-only pipeline
 

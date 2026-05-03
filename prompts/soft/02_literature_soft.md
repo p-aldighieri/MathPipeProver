@@ -10,7 +10,7 @@ Search the online mathematical literature for closely related results, proof str
 - Say clearly whether the target looks already known, already false, plausibly open, or still unclear.
 - Do not claim a proof from literature retrieval alone.
 
-{{include:../prompt_fragments/output_contract.md}}
+{{include:../fragments/output_contract.md}}
 
 ## Output Format
 

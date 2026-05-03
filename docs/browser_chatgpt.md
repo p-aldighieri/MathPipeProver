@@ -169,9 +169,9 @@ It resets stale heartbeat files before relaunching a role so a dead prior worker
 It does two things:
 
 1. Routes the proof roles through `external_agent`.
-2. Keeps the workflow at the transport layer: the browser fulfills role requests, but the prompt pack still comes from `prompts/`.
+2. Keeps the workflow at the transport layer: the browser fulfills role requests, but the prompt pack still comes from `prompts/api/`.
 
-`config/browser_chatgpt_soft.toml` is the smart soft-scaffolding profile used when you want browser-backed prompts from `prompts_soft/` and explicit `waiting_orchestrator` handoffs after every completed role. That is the profile to reach for in Mode A/B when the orchestrator should retain stop authority and real routing leeway.
+`config/browser_chatgpt_soft.toml` is the smart soft-scaffolding profile used when you want browser-backed prompts from `prompts/soft/` and explicit `waiting_orchestrator` handoffs after every completed role. That is the profile to reach for in Mode A/B when the orchestrator should retain stop authority and real routing leeway.
 
 ## Lower-level manual transport loop
 

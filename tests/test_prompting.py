@@ -46,14 +46,14 @@ def test_build_role_context_loads_search_literature_as_primary() -> None:
 
 
 def test_load_prompt_template_supports_numbered_files_and_includes(tmp_path: Path) -> None:
-    prompts_root = tmp_path / "prompts_soft"
-    prompts_root.mkdir()
-    fragments_root = tmp_path / "prompt_fragments"
-    fragments_root.mkdir()
+    prompts_root = tmp_path / "prompts" / "soft"
+    prompts_root.mkdir(parents=True)
+    fragments_root = tmp_path / "prompts" / "fragments"
+    fragments_root.mkdir(parents=True)
 
     (fragments_root / "shared.md").write_text("Shared fragment body.\n", encoding="utf-8")
-    (prompts_root / "01_formalizer.md").write_text(
-        "Prompt header.\n\n{{include:../prompt_fragments/shared.md}}\n\nPrompt footer.\n",
+    (prompts_root / "01_formalizer_soft.md").write_text(
+        "Prompt header.\n\n{{include:../fragments/shared.md}}\n\nPrompt footer.\n",
         encoding="utf-8",
     )
 

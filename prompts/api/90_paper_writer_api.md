@@ -8,7 +8,7 @@ Turn the verified theorem packet into a manuscript draft or revision.
 - If reviewer instructions exist, apply them fully.
 - Do not invent claims that are not supported by the proof packet.
 
-{{include:../prompt_fragments/output_contract.md}}
+{{include:../fragments/output_contract.md}}
 
 ## Output Format
 

@@ -9,7 +9,7 @@ Turn the claim into a precise mathematical target.
 - Surface ambiguities instead of silently fixing them.
 - Do not try to prove the claim here.
 
-{{include:../prompt_fragments/output_contract.md}}
+{{include:../fragments/output_contract.md}}
 
 ## Output Format
 

@@ -9,7 +9,7 @@ Assemble the current branch into a clear proof report that a mathematician can r
 - Explain how the current result relates to the original claim.
 - Preserve unresolved risks instead of hiding them.
 
-{{include:../prompt_fragments/output_contract.md}}
+{{include:../fragments/output_contract.md}}
 
 ## Output Format
 

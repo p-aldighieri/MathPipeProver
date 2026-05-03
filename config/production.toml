@@ -9,7 +9,7 @@ max_tokens_per_branch = 200000
 max_total_calls = 5000
 max_calls_per_branch = 1800
 run_root = "runs"
-prompts_root = "prompts"
+prompts_root = "prompts/api"
 provider_timeout_seconds = 60
 
 [role_runtime.formalizer]

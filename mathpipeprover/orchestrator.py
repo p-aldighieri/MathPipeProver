@@ -439,7 +439,7 @@ def _recommended_phase_from_review_control(review_control: dict[str, str], allow
 
 
 def _is_soft_scaffolding_run(config: WorkflowConfig, prompts_root: Path) -> bool:
-    return config.orchestrator_controls_stop and prompts_root.name == "prompts_soft"
+    return config.orchestrator_controls_stop and prompts_root.name == "soft"
 
 
 def _next_phase_after_analysis_role(phase: str, config: WorkflowConfig) -> str:

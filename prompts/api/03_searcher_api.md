@@ -9,7 +9,7 @@ Propose 2-4 genuinely distinct proof routes.
 - If the literature strongly suggests the claim is already known or false, say so instead of pretending all routes are equally live.
 - Rank the routes by feasibility and present usefulness.
 
-{{include:../prompt_fragments/output_contract.md}}
+{{include:../fragments/output_contract.md}}
 
 ## Output Format
 

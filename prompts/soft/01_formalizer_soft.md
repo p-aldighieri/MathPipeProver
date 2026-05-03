@@ -10,7 +10,7 @@ Turn the claim into a precise mathematical target that later roles can work on s
 - Do not try to prove the claim.
 - Do not quietly add assumptions. If something is missing, present it as a clarification need or an ambiguity, not as an accepted new hypothesis.
 
-{{include:../prompt_fragments/output_contract.md}}
+{{include:../fragments/output_contract.md}}
 
 ## Output Format
 
