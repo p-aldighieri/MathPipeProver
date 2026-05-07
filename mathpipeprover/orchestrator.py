@@ -97,7 +97,7 @@ def _clear_orchestrator_decision(state: dict, branch: str = "") -> None:
 
 
 def _clear_external_agent_artifacts(run_dir: Path, branch: str, from_phase: str) -> None:
-    ordered_roles = ["formalizer", "literature", "searcher", "breakdown", "prover", "reviewer", "consolidator"]
+    ordered_roles = ["formalizer", "literature", "searcher", "breakdown", "prover", "reviewer", "consolidator", "gatekeeper"]
     if from_phase not in ordered_roles:
         return
 
@@ -744,10 +744,15 @@ def _tag_to_phase(tag: str) -> str:
         "PROVER": "prover",
         "REVIEWER": "reviewer",
         "CONSOLIDATOR": "consolidator",
+        "GATEKEEPER": "gatekeeper",
         "STOP_PASS": "stop_pass",
+        "STOP_PUBLISH": "stop_pass",
+        "STOP_RECORD": "stop_pass",
         "STOP_FAIL_SCOPE": "stop_fail_scope",
         "STOP_STALL": "stop_stall",
         "STOP_BUDGET": "stop_budget",
+        "FORMALIZER_REREAD": "formalizer",
+        "PROVER_REVIEWER_CYCLE": "prover",
     }
     return mapping.get(tag, "")
 
@@ -1255,10 +1260,44 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
                     state,
                     branch,
                     completed_phase="consolidator",
+                    suggested_phase="gatekeeper",
+                    reason=(
+                        f"soft scaffolding consolidator pass completed on branch {branch}; the smart orchestrator "
+                        "should run the gatekeeper to compare the result against the original objective"
+                    ),
+                )
+            phase = "gatekeeper"
+            bstate["current_phase"] = phase
+            _write_run_state(paths, state)
+            continue
+
+        if phase == "gatekeeper":
+            _write_role_packet(run_dir, branch, "gatekeeper", config)
+            gatekeeper_content = _call_role_model(
+                role="gatekeeper",
+                cycle=0,
+                run_dir=run_dir,
+                branch=branch,
+                state=state,
+                config=config,
+                hub=hub,
+                prompts_root=prompts_root,
+            )
+            _write_role_output(run_dir, branch, "gatekeeper", "gatekeeper.md", gatekeeper_content, config)
+            _update_ledger(run_dir, branch)
+            _append_event(run_dir, branch, "phase=gatekeeper completed")
+
+            if soft_mode:
+                _soft_role_handoff(
+                    paths,
+                    state,
+                    branch,
+                    completed_phase="gatekeeper",
                     suggested_phase="",
                     reason=(
-                        f"soft scaffolding consolidator pass completed on branch {branch}; the smart orchestrator should "
-                        "decide whether to stop, revise, or launch another role"
+                        f"soft scaffolding gatekeeper pass completed on branch {branch}; the smart orchestrator "
+                        "should read the verdict and decide whether to stop, re-search, re-read the formalization, "
+                        "or run another proof cycle"
                     ),
                 )
             phase = "stop_pass"
@@ -1430,7 +1469,7 @@ def orchestrator_continue_run(
     if branch not in state.get("branches", {}):
         raise RuntimeError(f"Unknown branch '{branch}' for run {run_id}.")
 
-    allowed_phases = {"formalizer", "literature", "searcher", "breakdown", "prover", "reviewer", "consolidator"}
+    allowed_phases = {"formalizer", "literature", "searcher", "breakdown", "prover", "reviewer", "consolidator", "gatekeeper"}
     normalized_phase = phase.strip().lower()
     if normalized_phase not in allowed_phases:
         raise RuntimeError(f"Unsupported orchestrator continue phase '{phase}'.")

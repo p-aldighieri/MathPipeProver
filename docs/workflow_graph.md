@@ -9,6 +9,7 @@ These diagrams describe the current repo reality: a smart orchestrator runs the 
 - The orchestrator chooses the next narrow task, curates context, and decides whether a route should continue. Every completed soft role returns control to the orchestrator.
 - Branch-local context grows through repeated `breakdown -> prover -> reviewer` cycles until a branch passes, stalls, or is pruned.
 - `waiting_orchestrator` is an intentional handoff for judgment, not an error state.
+- After consolidator, the pipeline runs the gatekeeper automatically. The gatekeeper performs a scope check (not a logic audit) and, when scope was meaningfully narrowed, proposes route-level re-attacks. The orchestrator then decides whether to stop, re-search, re-read the formalization, or run another proof cycle. The image above predates the gatekeeper; the textual flow is `consolidator -> gatekeeper -> {stop | searcher | literature | breakdown | prover-reviewer cycle | formalizer reread}` with the orchestrator picking the edge.
 
 ## Governance Policy Modes
 

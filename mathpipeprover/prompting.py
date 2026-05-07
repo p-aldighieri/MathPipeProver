@@ -91,6 +91,18 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
         ],
         "secondary": ["*/context/formalizer.md"],
     },
+    "gatekeeper": {
+        "full": [
+            "claim.md",
+            "*/context/formalizer.md",
+            "*/context/final_report.md",
+            "*/context/assumption_delta.md",
+        ],
+        "secondary": [
+            "*/context/strategy.md",
+            "*/context/breakdown.md",
+        ],
+    },
 }
 
 

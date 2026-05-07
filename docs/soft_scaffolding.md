@@ -76,6 +76,41 @@ In practice, good soft scaffolding looks like a strong human research assistant:
 
 In soft mode, non-proof terminal conditions such as `FAIL_SCOPE`, `STALL`, or budget pressure should hand control back to the orchestrator for judgment. The run should not silently end just because the local pipeline hit one of those tags.
 
+## Gatekeeper
+
+The gatekeeper runs automatically after every consolidator pass. It is a SCOPE check, not a logic audit, and its job is to compare the original objective against the achieved result and — when the result is real but the question got narrower along the way — propose route-level strategies for re-attacking the original objective.
+
+What the gatekeeper does:
+
+- compares the original objective and the consolidator's achieved result side by side, in plain language
+- classifies every added or changed assumption as `trivial regularity`, `meaningful narrowing`, or `scope-changing`
+- if the verdict is `OBJECTIVE_NARROWED` or `OBJECTIVE_MISSED`, proposes strategic re-attacks (one per `meaningful narrowing` is a baseline, no fixed count; at least one strategy should question the formalization itself)
+- emits a sources-hygiene note flagging clutter, stale route memos, or duplicates in durable sources
+- emits a `gatekeeper_control` block whose `recommended_next_phase` is advice, not a command
+
+The gatekeeper exists for two reasons:
+
+1. to catch the case where the pipeline produced a real theorem but answered a strictly weaker question than the one originally asked
+2. to break out of local minima by proposing route-level alternatives that the prover/reviewer/breakdown loop could not see from inside the route it had committed to
+
+Verdicts:
+
+- `OBJECTIVE_MET` — the result answers the original question with no meaningful loss of scope
+- `OBJECTIVE_MET_WITH_TRIVIAL_REGULARITY` — added hypotheses are technical/cosmetic and preserve intent
+- `OBJECTIVE_NARROWED` — the result is real but answers a strictly weaker question; strategic re-attack required
+- `OBJECTIVE_MISSED` — the result does not answer the original question; strategic re-attack required and the formalization itself may need re-reading
+
+After the gatekeeper, the smart orchestrator decides the next move using `gatekeeper_control.recommended_next_phase` as advice. Common routings:
+
+- `STOP_PUBLISH` / `STOP_RECORD` → end the loop
+- `SEARCHER` → re-rank routes from the top
+- `LITERATURE` → check whether prior art covers the gap
+- `BREAKDOWN` → decompose one of the proposed strategies into lemmas
+- `PROVER_REVIEWER_CYCLE` → the residual gap is small and a focused proof attempt could close it
+- `FORMALIZER_REREAD` → the formalization itself misframed the original objective
+
+The gatekeeper does not loop back automatically. The orchestrator stays in charge.
+
 ## Durable Sources vs Temporary Attachments
 
 Use the ChatGPT project `Sources` tab only for durable context that should persist across chats.

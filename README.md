@@ -17,6 +17,7 @@ The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. 
 
 - Primary soft-scaffolding workflow for ChatGPT project-based proof work
 - Soft prompts are orchestrator-gated: after each completed role, control returns to the smart orchestrator for the next routing decision
+- Gatekeeper role runs automatically after each consolidator pass: scope check (not logic audit) comparing original objective against achieved result, with route-level re-attack proposals when the question was narrowed
 - CLI commands: `run`, `resume`, `inspect`, `report`, `smoke-providers`
 - Governance policy modes: `strict`, `semi_strict`, `flexible`
 - Multi-branch strategy execution with branch pruning to `max_branches`

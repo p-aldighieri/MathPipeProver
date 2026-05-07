@@ -71,6 +71,10 @@ DEFAULT_ROLE_ACCESS: dict[str, dict[str, list[str]]] = {
         "read": ["branches/{branch}/context/*.md", "claim.md"],
         "write": ["branches/{branch}/context/final_report.md"],
     },
+    "gatekeeper": {
+        "read": ["branches/{branch}/context/*.md", "claim.md"],
+        "write": ["branches/{branch}/context/gatekeeper.md"],
+    },
 }
 
 
@@ -82,6 +86,7 @@ DEFAULT_ROLE_RUNTIME: dict[str, RoleRuntimeConfig] = {
     "prover": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1200, reasoning_effort="high"),
     "reviewer": RoleRuntimeConfig("stub", "gpt-5-nano", 0.0, 600, reasoning_effort="high"),
     "consolidator": RoleRuntimeConfig("stub", "gpt-5-mini", 0.2, 1600, reasoning_effort="medium"),
+    "gatekeeper": RoleRuntimeConfig("stub", "gpt-5-mini", 0.3, 1400, reasoning_effort="high"),
 }
 
 

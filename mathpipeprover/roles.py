@@ -72,6 +72,17 @@ ROLE_SPECS: dict[str, RoleSpec] = {
             "assumptions used, relationship to the original claim, and unresolved risks."
         ),
     ),
+    "gatekeeper": RoleSpec(
+        name="gatekeeper",
+        instructions=(
+            "Run automatically after the consolidator. Compare the ORIGINAL objective to the FINAL result as a scope "
+            "question, not a logic audit. Classify each added or changed assumption as trivial regularity, "
+            "meaningful narrowing, or scope-changing. If scope was meaningfully narrowed, propose strategies "
+            "(one per narrowing as a baseline, no fixed count) for re-attacking the original objective from a "
+            "fresh vantage point — at least one strategy should question the formalization itself, not just the "
+            "proof technique. Do not re-check proofs step by step and do not propose lemma-level patches."
+        ),
+    ),
 }
 
 
@@ -103,4 +114,13 @@ def stub_response(role: str, cycle: int = 0) -> str:
         return "## Scope Decision\nNo policy violations detected.\n"
     if role == "consolidator":
         return "## Proof Report\nCurrent branch report assembled.\n"
+    if role == "gatekeeper":
+        return (
+            "```gatekeeper_control\n"
+            "verdict: OBJECTIVE_MET\n"
+            "recommended_next_phase: STOP_PUBLISH\n"
+            "```\n\n"
+            "VERDICT: OBJECTIVE_MET\n"
+            "Reason: stub gatekeeper response.\n"
+        )
     return "(no output)"
