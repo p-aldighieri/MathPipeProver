@@ -118,7 +118,6 @@ def stub_response(role: str, cycle: int = 0) -> str:
         return (
             "```gatekeeper_control\n"
             "verdict: OBJECTIVE_MET\n"
-            "recommended_next_phase: STOP_PUBLISH\n"
             "```\n\n"
             "VERDICT: OBJECTIVE_MET\n"
             "Reason: stub gatekeeper response.\n"

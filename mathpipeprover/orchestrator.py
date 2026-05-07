@@ -746,13 +746,9 @@ def _tag_to_phase(tag: str) -> str:
         "CONSOLIDATOR": "consolidator",
         "GATEKEEPER": "gatekeeper",
         "STOP_PASS": "stop_pass",
-        "STOP_PUBLISH": "stop_pass",
-        "STOP_RECORD": "stop_pass",
         "STOP_FAIL_SCOPE": "stop_fail_scope",
         "STOP_STALL": "stop_stall",
         "STOP_BUDGET": "stop_budget",
-        "FORMALIZER_REREAD": "formalizer",
-        "PROVER_REVIEWER_CYCLE": "prover",
     }
     return mapping.get(tag, "")
 

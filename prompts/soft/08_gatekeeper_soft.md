@@ -44,7 +44,6 @@ The first fenced `gatekeeper_control` block is for the orchestrator and must app
 ```gatekeeper_control
 verdict: OBJECTIVE_MET / OBJECTIVE_MET_WITH_TRIVIAL_REGULARITY / OBJECTIVE_NARROWED / OBJECTIVE_MISSED
 sources_status: tidy / cluttered
-recommended_next_phase: STOP_PUBLISH / STOP_RECORD / SEARCHER / LITERATURE / BREAKDOWN / PROVER_REVIEWER_CYCLE / FORMALIZER_REREAD
 ```
 
 ## Verdict
@@ -81,20 +80,13 @@ Reason: ...
 
 ## Honest Assessment
 
-(One paragraph: is there a real path back to the original objective, or is the narrowed result the right place to stop? The smart orchestrator will use this to decide whether to send the next pass to searcher, literature, breakdown, or directly back into a prover-reviewer cycle.)
+(One paragraph: is there a real path back to the original objective, or is the narrowed result the right place to stop? The smart orchestrator will read your verdict, scope delta, and strategies, and decide the next pipeline step itself.)
 ````
 
 ## Notes
 
-- `recommended_next_phase` is advice for the smart orchestrator, not a command. Use:
-  - `STOP_PUBLISH` when the original objective was met and the work is ready to be written up or shared.
-  - `STOP_RECORD` when the result is real and worth recording but the question was meaningfully narrowed and you do not see a fresh attack worth running.
-  - `SEARCHER` when the natural next move is to re-rank routes from the top.
-  - `LITERATURE` when the assumption delta suggests prior art might already cover the gap.
-  - `BREAKDOWN` when one of your strategies is concrete enough to decompose into lemmas immediately.
-  - `PROVER_REVIEWER_CYCLE` when the residual gap is small and a focused proof attempt could close it.
-  - `FORMALIZER_REREAD` when you suspect the formalization itself misframed the original objective.
-- The smart orchestrator decides the actual next step. Your job is to make that decision well-informed.
+- You do not pick the next pipeline step. The smart orchestrator reads your verdict + scope delta + strategies and routes accordingly. Do not emit pipeline-phase tags or `recommended_next_phase` advice; that is not your role.
+- Your job ends at: a clean verdict, a precise scope delta, a sources-hygiene note, and (when scope was narrowed) genuinely distinct strategic re-attack proposals.
 
 ## Scope Policy
 

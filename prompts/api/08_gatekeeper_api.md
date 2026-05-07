@@ -41,7 +41,6 @@ The first fenced `gatekeeper_control` block is for the workflow and must appear 
 ````markdown
 ```gatekeeper_control
 verdict: OBJECTIVE_MET / OBJECTIVE_MET_WITH_TRIVIAL_REGULARITY / OBJECTIVE_NARROWED / OBJECTIVE_MISSED
-recommended_next_phase: STOP_PUBLISH / STOP_RECORD / SEARCHER / LITERATURE / BREAKDOWN / PROVER_REVIEWER_CYCLE / FORMALIZER_REREAD
 ```
 
 ## Verdict

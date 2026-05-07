@@ -86,7 +86,9 @@ What the gatekeeper does:
 - classifies every added or changed assumption as `trivial regularity`, `meaningful narrowing`, or `scope-changing`
 - if the verdict is `OBJECTIVE_NARROWED` or `OBJECTIVE_MISSED`, proposes strategic re-attacks (one per `meaningful narrowing` is a baseline, no fixed count; at least one strategy should question the formalization itself)
 - emits a sources-hygiene note flagging clutter, stale route memos, or duplicates in durable sources
-- emits a `gatekeeper_control` block whose `recommended_next_phase` is advice, not a command
+- emits a `gatekeeper_control` block carrying the verdict and the sources status
+
+The gatekeeper does NOT pick the next pipeline step. It is not aware of pipeline phase tags and should not be asked to choose between them. Its output is the raw material — verdict, scope delta, strategies — and the smart orchestrator reads that and decides the routing itself.
 
 The gatekeeper exists for two reasons:
 
@@ -100,16 +102,7 @@ Verdicts:
 - `OBJECTIVE_NARROWED` — the result is real but answers a strictly weaker question; strategic re-attack required
 - `OBJECTIVE_MISSED` — the result does not answer the original question; strategic re-attack required and the formalization itself may need re-reading
 
-After the gatekeeper, the smart orchestrator decides the next move using `gatekeeper_control.recommended_next_phase` as advice. Common routings:
-
-- `STOP_PUBLISH` / `STOP_RECORD` → end the loop
-- `SEARCHER` → re-rank routes from the top
-- `LITERATURE` → check whether prior art covers the gap
-- `BREAKDOWN` → decompose one of the proposed strategies into lemmas
-- `PROVER_REVIEWER_CYCLE` → the residual gap is small and a focused proof attempt could close it
-- `FORMALIZER_REREAD` → the formalization itself misframed the original objective
-
-The gatekeeper does not loop back automatically. The orchestrator stays in charge.
+After the gatekeeper, the smart orchestrator reads the verdict + scope delta + strategies and decides the next move. Typical follow-ups: stop the loop and record/publish; re-rank routes via the searcher; check prior art via the literature role; decompose a proposed strategy into lemmas via breakdown; run another prover-reviewer cycle if the residual gap is small; or re-read the formalization if the original question itself was misframed. The gatekeeper does not loop back automatically.
 
 ## Durable Sources vs Temporary Attachments
 
