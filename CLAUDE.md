@@ -119,3 +119,20 @@ Heartbeat JSON files are written next to the response file by the browser agent:
 - Response at: `runs/<run>/branches/<branch>/external_agent/{role}_response.md`
 
 Use `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) to poll a heartbeat from a shell when you want a blocking "wait for completion" helper instead of in-orchestrator polling.
+
+## Lean formalization (in development)
+
+A Lean 4 / Mathlib post-processing module is being built on top of the smart-scaffolding pipeline. It runs **after** a branch has been consolidated and produces a checked Lean artifact for the proved result. Status as of the most recent commit:
+
+- **Plumbing landed.** `mathpipeprover/axle.py` is a sync client over the AXLE Lean verification API (`https://axle.axiommath.ai/v1/docs/`). It exposes `check`, `verify_proof`, `sorry2lemma`, `repair_proofs`, `merge`, `disprove`, `extract_decls`, and `list_environments`. The orchestrator-facing shell surface is `mpp axle <subcommand>` (see `mpp axle --help`); skills shell out to it.
+- **Skills + role templates are NOT landed yet.** The plan is `.claude/commands/formalize-*.md` + new soft templates `prompts/soft/80-84_lean_*_soft.md`. A dedicated operating guide will live at `docs/lean_formalization.md` once it ships.
+
+**Setup the orchestrator should verify before invoking Lean tooling:**
+
+- `AXLE_API_KEY` must be in `.env` (auto-loaded by the CLI). Get a key at `https://axle.axiommath.ai/app/console`.
+- Default Lean toolchain is `lean-4.29.0`. Override per-call with `--environment` or globally via `AXLE_DEFAULT_ENV`.
+- Per-paper Lean state lives in `{PROOF_REPO}/lean/` (NOT inside MathPipeProver). Audit trail at `{PROOF_REPO}/lean/axle_log.jsonl` — pass `--log-path` to `mpp axle …` to populate it.
+
+**What AXLE does *not* do.** AXLE does not translate English to Lean and does not search for proofs (`repair_proofs` is single-tactic-shot, default `grind`). All formalization and proof-search intelligence lives in LLM roles (Extended Pro via `external_agent`) — AXLE is the compile/verify backend only. AXLE also cannot import non-Mathlib libraries: support lemmas must be inlined into the submitted source, and load-bearing non-Mathlib results live in `{PROOF_REPO}/lean/support/Econ.lean` and are prepended/merged at submit time.
+
+**Exit codes for `mpp axle check` and `mpp axle verify-proof`:** 0 = compile succeeded; 2 = HTTP succeeded but Lean compile failed (`okay: false`); 1 = transport/auth/network error. Skills can branch on these.
