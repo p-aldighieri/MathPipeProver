@@ -10,13 +10,17 @@ Run a structurer ↔ structurer-reviewer cycle on the source proof until the rev
 - `--project-url URL` — ChatGPT project URL
 - `--port PORT` — Chrome CDP debug port
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. Prompt templates live in the MathPipeProver repo under `prompts/soft/` (path written below as `${MATHPIPEPROVER}/prompts/soft/...` — substitute the actual MathPipeProver location). Trust `lean_state.md` and your judgment over literal paths in the steps when reality differs.
+
 ## Steps
 
-1. **Read state.** `cat {PROOF_REPO}/lean/lean_state.md`. Confirm `Current phase: init` (or `structuring` if resuming after a failed pass). If anything else, stop and ask the user.
+1. **Read state.** Read `{PROOF_REPO}/lean/lean_state.md`. Verify the state is consistent with running the structurer now (typically `Current phase: init`, or `structuring` if resuming after a failed pass). If anything else, stop and ask the user.
 
 2. **Verify Extended Pro.** Run `/set-model-extended --port PORT`. The structurer is an expensive reasoning pass; the wrong model silently degrades output.
 
-3. **Render the structurer prompt.** Read `/MathPipeProver/prompts/soft/80_lean_structurer_soft.md` and substitute:
+3. **Render the structurer prompt.** Read `${MATHPIPEPROVER}/prompts/soft/80_lean_structurer_soft.md` and substitute:
    - `{context_bundle}` → contents of `{PROOF_REPO}/lean/source_proof.md` (the English proof from the consolidator).
    Write the rendered prompt to `{PROOF_REPO}/lean/diagnostics/lean_structurer_request_<n>.md` (use the next available `<n>`).
 
@@ -26,7 +30,7 @@ Run a structurer ↔ structurer-reviewer cycle on the source proof until the rev
 
 6. **Save the structured artifact.** Write the response content to `{PROOF_REPO}/lean/decomposition.md`. Update `lean_state.md`: phase `→ structuring`, append history entry.
 
-7. **Render and submit the reviewer prompt.** Read `/MathPipeProver/prompts/soft/81_lean_structurer_reviewer_soft.md`, substitute `{context_bundle}` with the concatenation of:
+7. **Render and submit the reviewer prompt.** Read `${MATHPIPEPROVER}/prompts/soft/81_lean_structurer_reviewer_soft.md`, substitute `{context_bundle}` with the concatenation of:
    - the original source proof
    - the structurer's response (so the reviewer can compare)
    Submit via `/submit-role`. Save the request and response under `diagnostics/lean_structurer_reviewer_*_<n>.md`.

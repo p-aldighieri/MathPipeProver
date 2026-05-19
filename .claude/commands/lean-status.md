@@ -8,6 +8,10 @@ Print a one-screen summary of where the Lean formalization stands. Read-only; sa
 **Arguments:** `$ARGUMENTS`
 - `--proof-repo PATH` — absolute path to the proof working folder
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. Trust `lean_state.md` over literal paths when reality differs.
+
 ## Steps
 
 1. **Read `lean_state.md`.** Extract: phase, branch, source run, target toolchain, lemma table.

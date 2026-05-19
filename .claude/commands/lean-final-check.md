@@ -9,9 +9,13 @@ The closing audit: prove that `main.lean` (after merge) really discharges the ma
 - `--proof-repo PATH` — absolute path to the proof working folder
 - `--project-url URL`, `--port PORT` — for the final meaning_check pass
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. The meaning_check prompt lives at `${MATHPIPEPROVER}/prompts/soft/86_lean_meaning_check_soft.md` — substitute the actual MathPipeProver location. Trust `lean_state.md` over literal paths when reality differs.
+
 ## Steps
 
-1. **Read state.** Confirm Lemma Status table shows every lemma as `proved=✓, reviewed=✓, merged=✓` *except* those whose row was explicitly marked `permanent_stub=✓` (these are INVENTORY.lean items the user accepted as un-proved).
+1. **Read state.** Verify the Lemma Status table in `lean_state.md` shows every lemma as `proved=✓, reviewed=✓, merged=✓` *except* those whose row was explicitly marked `permanent_stub=✓` (these are INVENTORY.lean items the user accepted as un-proved).
 
 2. **Build the AXLE submission.** Concatenate `INVENTORY.lean` (stubs only) + `main.lean` (merged) → `/tmp/final.lean`. Extract the main theorem's *signature only* into `/tmp/final_signature.lean`.
 
@@ -36,7 +40,7 @@ The closing audit: prove that `main.lean` (after merge) really discharges the ma
    ```
    If ANY lemma is disproved by Plausible, that lemma's *statement* is wrong even though it typechecks — escalate immediately. This is the cheapest catch for vacuous lemmas.
 
-5. **Final meaning_check.** Submit `/MathPipeProver/prompts/soft/86_lean_meaning_check_soft.md` with the full merged file + the original source proof as context. Specifically focus on the main theorem here — does the formalized version really say what the English claim said? At this point everything passes type-check; this is the last-line semantic audit.
+5. **Final meaning_check.** Submit `${MATHPIPEPROVER}/prompts/soft/86_lean_meaning_check_soft.md` with the full merged file + the original source proof as context. Specifically focus on the main theorem here — does the formalized version really say what the English claim said? At this point everything passes type-check; this is the last-line semantic audit.
 
 6. **If all three checks green:**
    - Write a final report to `{PROOF_REPO}/lean/FORMALIZATION_REPORT.md` with:

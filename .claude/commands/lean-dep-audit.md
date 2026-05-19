@@ -10,13 +10,17 @@ Submit the dep-audit role to Extended Pro. Produces a *proposed* candidate table
 - `--project-url URL` — ChatGPT project URL
 - `--port PORT` — Chrome CDP debug port
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. Prompt templates live under `${MATHPIPEPROVER}/prompts/soft/` — substitute the actual MathPipeProver location. Trust `lean_state.md` over literal paths when reality differs.
+
 ## Steps
 
-1. **Read state.** `cat {PROOF_REPO}/lean/lean_state.md`. Confirm `Current phase: deps_proposing`. If still `structuring`, run `/lean-structure` first.
+1. **Read state.** Read `{PROOF_REPO}/lean/lean_state.md`. Verify the state is consistent with running the dep audit now (typically `Current phase: deps_proposing`). If still `structuring`, run `/lean-structure` first.
 
 2. **Verify Extended Pro.** `/set-model-extended --port PORT`.
 
-3. **Render the prompt.** Read `/MathPipeProver/prompts/soft/82_lean_dep_audit_soft.md` and substitute:
+3. **Render the prompt.** Read `${MATHPIPEPROVER}/prompts/soft/82_lean_dep_audit_soft.md` and substitute:
    - `{context_bundle}` → concatenation of `{PROOF_REPO}/lean/decomposition.md` (structurer output) and `{PROOF_REPO}/lean/source_proof.md` (so the model can disambiguate when needed).
    Write to `{PROOF_REPO}/lean/diagnostics/lean_dep_audit_request.md`.
 

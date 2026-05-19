@@ -10,9 +10,13 @@ Run the lean_prover role on one focused lemma, audit with the prover-reviewer, a
 - `--proof-repo PATH`, `--project-url URL`, `--port PORT` as usual
 - `--max-retries N` — default 3; how many prover-loop iterations before escalating
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. Prompt templates live under `${MATHPIPEPROVER}/prompts/soft/` — substitute the actual MathPipeProver location. Trust `lean_state.md` over literal paths when reality differs.
+
 ## Steps
 
-1. **Read state.** Confirm `Current phase: proving_lemmas`. Confirm `<lemma-slug>` exists in the Lemma Status table and is not yet `proved`.
+1. **Read state.** Verify the state is consistent with running the prover now (typically `Current phase: proving_lemmas`). Confirm `<lemma-slug>` exists in the Lemma Status table and is not yet `proved`.
 
 2. **Assemble lemma context:**
    - The lemma's signature (extract from `main.lean`)
@@ -20,7 +24,7 @@ Run the lean_prover role on one focused lemma, audit with the prover-reviewer, a
    - The dependencies it cites (other lemmas + Mathlib imports + INVENTORY stubs)
    - Any prior AXLE error trace if this is a retry (kept in `diagnostics/lean_prover_<slug>_axle_errors_<n>.txt`)
 
-3. **Render the prompt** from `/MathPipeProver/prompts/soft/87_lean_prover_soft.md`, with the lemma context as `{context_bundle}`. Save to `diagnostics/lean_prover_<slug>_request_<n>.md`.
+3. **Render the prompt** from `${MATHPIPEPROVER}/prompts/soft/87_lean_prover_soft.md`, with the lemma context as `{context_bundle}`. Save to `diagnostics/lean_prover_<slug>_request_<n>.md`.
 
 4. **Submit + harvest** via `/submit-role`. Save response to `diagnostics/lean_prover_<slug>_response_<n>.md`.
 
@@ -29,7 +33,7 @@ Run the lean_prover role on one focused lemma, audit with the prover-reviewer, a
    - `status: IMPORT_REQUEST` → the prover wants an import that isn't in the dep-audit table. Surface to the user — they decide whether to expand the dep-audit or have the prover work around it. Stop.
    - `status: PROVED` → continue.
 
-6. **Run prover-reviewer.** Submit `88_lean_prover_reviewer_soft.md` with the proof + lemma context. Check the `review_control` fields:
+6. **Run prover-reviewer.** Submit `${MATHPIPEPROVER}/prompts/soft/88_lean_prover_reviewer_soft.md` with the proof + lemma context. Check the `review_control` fields:
    - `hidden_sorries > 0` → REJECT, loop to step 3.
    - `axiom_declarations_introduced` non-empty → REJECT, loop to step 3 with translation-discipline emphasized.
    - `unsafe_tactics_used` non-empty → if just `native_decide` etc., REJECT and loop. If empty list, continue.

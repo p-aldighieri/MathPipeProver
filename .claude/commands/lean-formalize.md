@@ -10,13 +10,17 @@ Produce the Lean 4 file with signatures + skeleton + `sorry` bodies, audit it th
 - `--project-url URL` — ChatGPT project URL
 - `--port PORT` — Chrome CDP debug port
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. Prompt templates live under `${MATHPIPEPROVER}/prompts/soft/` — substitute the actual MathPipeProver location. Trust `lean_state.md` over literal paths when reality differs.
+
 ## Steps
 
-1. **Read state.** Confirm `Current phase: deps_done`. Read `{PROOF_REPO}/lean/decomposition.md` and `{PROOF_REPO}/lean/dep_audit.md`.
+1. **Read state.** Verify the state is consistent with formalizing now (typically `Current phase: deps_done`). Read `{PROOF_REPO}/lean/decomposition.md` and `{PROOF_REPO}/lean/dep_audit.md`.
 
 2. **Update INVENTORY.lean.** For every `not_in_mathlib` row in `dep_audit.md`, append a stub `theorem <slug> ... := sorry` to `{PROOF_REPO}/lean/support/INVENTORY.lean` (idempotent — skip names already present). The current file content goes into the formalizer's context as a temporary attachment.
 
-3. **Render the formalizer prompt.** Read `/MathPipeProver/prompts/soft/84_lean_formalizer_soft.md`, substitute `{context_bundle}` with: decomposition + dep_audit table + current INVENTORY.lean content. Save to `diagnostics/lean_formalizer_request_<n>.md`.
+3. **Render the formalizer prompt.** Read `${MATHPIPEPROVER}/prompts/soft/84_lean_formalizer_soft.md`, substitute `{context_bundle}` with: decomposition + dep_audit table + current INVENTORY.lean content. Save to `diagnostics/lean_formalizer_request_<n>.md`.
 
 4. **Submit + harvest** via `/submit-role`. Save response to `diagnostics/lean_formalizer_response_<n>.md`.
 
@@ -24,7 +28,7 @@ Produce the Lean 4 file with signatures + skeleton + `sorry` bodies, audit it th
 
 6. **Run formalizer-reviewer pass.** Submit `85_lean_formalizer_reviewer_soft.md` with the formalizer response + decomposition as context. On `PATCH_SMALL`/`PATCH_BIG`, loop back to step 3 with feedback attached (max 3 retries). On `REDO` — especially if `axiom_declarations_introduced` or `unsafe_tactics_used` is non-empty — escalate to the user.
 
-7. **Run meaning_check.** Submit `86_lean_meaning_check_soft.md` with the formalized file + decomposition. Parse the leading `meaning_check` block: if `wrong > 0` or `vacuous_risk > 0`, surface to the user. `weakened`/`strengthened` items get flagged but not auto-rejected.
+7. **Run meaning_check.** Submit `${MATHPIPEPROVER}/prompts/soft/86_lean_meaning_check_soft.md` with the formalized file + decomposition. Parse the leading `meaning_check` block: if `wrong > 0` or `vacuous_risk > 0`, surface to the user. `weakened`/`strengthened` items get flagged but not auto-rejected.
 
 8. **AXLE skeleton verification.** Build the full source for AXLE: `cat INVENTORY.lean main.lean > /tmp/skeleton.lean`. Extract the *signature only* of the main theorem from `main.lean` into `/tmp/main_signature.lean` (replace its body with `:= sorry`). Run:
    ```bash

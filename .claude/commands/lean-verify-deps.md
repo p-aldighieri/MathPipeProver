@@ -10,9 +10,13 @@ Take the dep-audit's *proposed* candidate table and verify each candidate agains
 - `--retries N` — max retries per wrong-name candidate (default 3)
 - `--force-opus` — skip Codex; go straight to the Opus 4.7 Agent fallback
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. The `--thread` slug below uses the source provenance label recorded in `lean_state.md` (e.g., `lean-verify-deps-robust-trust` or `lean-verify-deps-{BRANCH}` for consolidator-produced runs) — keep it stable across re-invocations.
+
 ## Steps
 
-1. **Read state.** `cat {PROOF_REPO}/lean/lean_state.md`. Confirm `Current phase: deps_verifying`. Read `{PROOF_REPO}/lean/dep_audit_proposed.md` to confirm the proposal exists.
+1. **Read state.** Read `{PROOF_REPO}/lean/lean_state.md`. Verify the state is consistent with running dep verification now (typically `Current phase: deps_verifying`). Read `{PROOF_REPO}/lean/dep_audit_proposed.md` to confirm the proposal exists.
 
 2. **Pre-flight AXLE.** `mpp axle environments --log-path {PROOF_REPO}/lean/axle_log.jsonl` to confirm auth + connectivity. If this fails, fix the AXLE_API_KEY in `.env` before continuing — no point spawning a sub-agent that will only hit auth errors.
 
@@ -20,11 +24,11 @@ Take the dep-audit's *proposed* candidate table and verify each candidate agains
    - Default: **Codex CLI 5.5 with a persistent thread**.
      ```bash
      codex --model gpt-5.5 --effort extra-high \
-           --thread "lean-verify-deps-{BRANCH}" \
+           --thread "lean-verify-deps-<provenance-slug>" \
            --tool bash --tool web \
            --working-dir {PROOF_REPO}/lean
      ```
-     The thread id `lean-verify-deps-{BRANCH}` is stable across re-invocations, so resuming a partially-completed verification just rejoins the same thread.
+     The `<provenance-slug>` comes from `lean_state.md` (consolidator-produced runs use the branch name; hand-consolidated repos use a short repo-derived slug). It must be stable across re-invocations so resuming a partially-completed verification rejoins the same thread.
    - Fallback (if `codex` is not on PATH, returns nonzero, or `--force-opus` was passed): **Opus 4.7 sub-agent via the Agent tool**:
      ```
      Agent(subagent_type="general-purpose", model="opus", prompt="<see below>")
@@ -62,6 +66,6 @@ Take the dep-audit's *proposed* candidate table and verify each candidate agains
 ## Notes
 
 - This is the only skill that uses a non-LLM-role sub-agent. The reason: each AXLE check is fast (50–500 ms), so a 60-candidate verification with 1–2 retries on half of them is hundreds of API calls. Round-tripping that through Extended Pro is ~50× slower than letting Codex/Opus iterate locally.
-- **Codex thread persistence matters.** If the sub-agent runs out of context mid-verification, `codex --thread lean-verify-deps-{BRANCH}` resumes from where it left off. The Opus Agent fallback uses the harness's `SendMessage` with the returned `agentId` for the same purpose.
+- **Codex thread persistence matters.** If the sub-agent runs out of context mid-verification, `codex --thread lean-verify-deps-<provenance-slug>` resumes from where it left off. The Opus Agent fallback uses the harness's `SendMessage` with the returned `agentId` for the same purpose.
 - AXLE has no rate-limit on a per-call basis but enforces concurrency caps. If you see `429`-equivalent errors in the audit log, lower the fan-out.
 - `axiom_dependent` is a sub-bucket of `confirmed`: the candidate compiles, but its proof in Mathlib uses `Classical.choice` or similar. Not a blocker; just documentation.

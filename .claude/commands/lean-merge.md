@@ -8,9 +8,13 @@ Combine `INVENTORY.lean`, `main.lean`, and every proved `lemmas/<slug>.lean` int
 **Arguments:** `$ARGUMENTS`
 - `--proof-repo PATH` — absolute path to the proof working folder
 
+## Orchestrator latitude
+
+Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. Trust `lean_state.md` over literal paths when reality differs.
+
 ## Steps
 
-1. **Read state.** Confirm `Current phase: proving_lemmas` (skill may run at any point but expects at least one proved lemma to merge).
+1. **Read state.** Verify the state is consistent with merging now (typically `Current phase: proving_lemmas`, with at least one proved lemma to merge).
 
 2. **List inputs.** Collect, in this order:
    - `{PROOF_REPO}/lean/support/INVENTORY.lean`
