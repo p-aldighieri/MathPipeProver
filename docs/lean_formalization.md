@@ -247,6 +247,30 @@ Add one Lean-specific rule:
 
 - **Never accept a proof without a disprove sanity check.** Plausible is cheap; vacuous lemmas are expensive. Run `mpp axle disprove` on every proved lemma before moving on, not just in `/lean-final-check`.
 
+## Proving-Phase Heuristics (the cheapest-first ladder)
+
+Discovered the hard way during the `robust_trust_extension` wet run: the original `/lean-prove-lemma` flow burned Extended Pro time on lemmas that AXLE could close for free. The right cost-ordered ladder is:
+
+1. **`axle repair-proofs` with a rich terminal-tactic stack — try first, always.**
+   ```bash
+   mpp axle repair-proofs --in main.lean \
+     --terminal-tactics "grind,aesop,simp_all,exact?,decide,omega,polyrith,positivity" \
+     --repairs "apply_terminal_tactics" --timeout 900
+   ```
+   On the v8 wet run, a single batched call closed **8 of 58 lemmas** at zero Pro cost — including the dust subtype lemmas, the payoff-decomposition unfolds, and the support-function pointwise equivalence. Do this **once early in the proving phase** to harvest the free closures, then again after each major in-thread/Pro round.
+
+2. **In-thread proofs for structural unpacks.** Lemmas of the form "∃ X, P X" where X is constructible from existing structure fields are 1-3 line term-mode proofs (`⟨bridge.extendRestricted σ, bridge.extendRestricted_eq σ⟩`). Don't queue these for Pro.
+
+3. **Pro 5.5 prover only for what AXLE + in-thread can't crack.** Genuine proof generation for substantive theorems (Tier 2 posterior identity, measurable-selection arguments, kernel restriction theorems, WTA cone intersection). Run Pro chats **in parallel** when the lemmas are independent (no inter-lemma dependencies in their proofs).
+
+4. **AXLE check before the prover-reviewer**, not after. There's no point asking Pro to audit a proof that doesn't even compile — flip the order from the original skill flow.
+
+5. **Batch the prover-reviewer 2-3 lemmas at a time.** The reviewer is fast (5-15 min) but each round-trip has overhead. Batching related lemmas (same DAG layer, same external dependencies) cuts orchestrator total time roughly by 3×.
+
+6. **Disprove as a final SWEEP, not per-lemma.** `axle disprove` accepts comma-separated names — one batched call over all freshly-proved lemmas is cheaper than per-lemma invocations and produces a cleaner audit log. Per-lemma disprove is still recommended for Lemma-7-style high-vacuous-risk theorems where the support hypothesis could silently be unsatisfiable.
+
+The original lean-prove-lemma flow had `prover → reviewer → AXLE → disprove` as steps 4-8. The new order (per this section and the updated skill) is: **AXLE repair → in-thread → Pro prover (parallel) → AXLE check → batched reviewer → disprove sweep**. Same gates, dramatically lower wall-clock + Pro spend.
+
 ## Pointers
 
 - **Skills:** `.claude/commands/lean-*.md` — full set of orchestrator-invokable skills.
