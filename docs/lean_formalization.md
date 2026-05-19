@@ -200,7 +200,7 @@ The shippable artifacts are `main.lean`, `support/INVENTORY.lean`, `lemmas/*.lea
 
 ### Dep audit's `not_in_mathlib` is wrong (auditor reviewer flags it)
 - Cause: sub-agent searched poorly, or Mathlib has the result under a name nobody thought to try.
-- Recovery: re-run `/lean-verify-deps` with `--retries 5` or `--force-opus` (Opus tends to be better at Mathlib name recall).
+- Recovery: re-run `/lean-verify-deps` with a higher `--retries` (e.g. `--retries 8`) or `--force-opus` (Opus tends to be better at Mathlib name recall). Default is 5.
 
 ### AXLE skeleton verify fails after formalizer
 - Cause: usually a wrong Mathlib import path (dep_audit hallucinated), occasionally a quantifier-scope mismatch.

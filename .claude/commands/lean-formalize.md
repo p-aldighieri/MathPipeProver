@@ -26,7 +26,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 5. **Extract the Lean file.** The response's second fenced `lean` block is the formalized source. Write it to `{PROOF_REPO}/lean/main.lean`. The metadata block (`lean_formalization`) tells you `lemma_count`, `sorry_count`, etc.
 
-6. **Run formalizer-reviewer pass.** Submit `85_lean_formalizer_reviewer_soft.md` with the formalizer response + decomposition as context. On `PATCH_SMALL`/`PATCH_BIG`, loop back to step 3 with feedback attached (max 3 retries). On `REDO` — especially if `axiom_declarations_introduced` or `unsafe_tactics_used` is non-empty — escalate to the user.
+6. **Run formalizer-reviewer pass.** Submit `85_lean_formalizer_reviewer_soft.md` with the formalizer response + decomposition as context. On `PATCH_SMALL`/`PATCH_BIG`, loop back to step 3 with feedback attached (max 5 retries). On `REDO` — especially if `axiom_declarations_introduced` or `unsafe_tactics_used` is non-empty — escalate to the user.
 
 7. **Run meaning_check.** Submit `${MATHPIPEPROVER}/prompts/soft/86_lean_meaning_check_soft.md` with the formalized file + decomposition. Parse the leading `meaning_check` block: if `wrong > 0` or `vacuous_risk > 0`, surface to the user. `weakened`/`strengthened` items get flagged but not auto-rejected.
 

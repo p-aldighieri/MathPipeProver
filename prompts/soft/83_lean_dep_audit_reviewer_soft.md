@@ -77,7 +77,7 @@ Reason: …
 ## Notes
 
 - A `PASS` here is the green light for an expensive formalization phase. Be conservative.
-- `wrong_name_retry_exhausted` after 3 retries usually means either the candidate is missing from Mathlib OR the sub-agent's search was weak. Flag which you think it is.
+- `wrong_name_retry_exhausted` after 5 retries (the default cap) usually means either the candidate is missing from Mathlib OR the sub-agent's search was weak. Flag which you think it is.
 - If even one critical lemma's Mathlib analog is wrong, formalization will eventually fail at AXLE — better to surface that here.
 - `axiom_dependent_candidates` is documentation, not a veto. Mathlib uses `Classical.choice` pervasively; flagging it is about traceability, not blocking.
 

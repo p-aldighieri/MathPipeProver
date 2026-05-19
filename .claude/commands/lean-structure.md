@@ -37,7 +37,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 8. **Parse the reviewer verdict.** Read the leading `review_control` block.
    - `verdict: PASS` → proceed to step 9.
-   - `verdict: PATCH_SMALL | PATCH_BIG` → resubmit step 3 *with the reviewer's feedback attached as an additional context file*. Loop back to step 3. Cap at 3 retries; if still not PASS, surface the latest verdict to the user and stop.
+   - `verdict: PATCH_SMALL | PATCH_BIG` → resubmit step 3 *with the reviewer's feedback attached as an additional context file*. Loop back to step 3. Cap at 5 retries; if still not PASS, surface the latest verdict to the user and stop.
    - `verdict: REDO` → escalate to the user. The decomposition is fundamentally off; the orchestrator should not silently retry.
 
 9. **On PASS:** update `lean_state.md`: phase `→ deps_proposing`, add a "Lemma Status" table populated from the structurer's `lean_structure` block. Report the next recommended skill (`/lean-dep-audit`).

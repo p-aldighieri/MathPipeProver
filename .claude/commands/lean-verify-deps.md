@@ -1,13 +1,13 @@
 ---
 description: Spawn a Codex CLI 5.5 thread (or Opus 4.7 sub-agent fallback) to verify each dep-audit candidate against AXLE
-argument-hint: --proof-repo PATH [--retries 3] [--force-opus]
+argument-hint: --proof-repo PATH [--retries 5] [--force-opus]
 ---
 
 Take the dep-audit's *proposed* candidate table and verify each candidate against the live AXLE API. The verification is iterative — wrong-name candidates get re-proposed and re-checked up to N times — and runs in a **persistent sub-agent session** so the iteration loop doesn't consume the orchestrator's context.
 
 **Arguments:** `$ARGUMENTS`
 - `--proof-repo PATH` — absolute path to the proof working folder
-- `--retries N` — max retries per wrong-name candidate (default 3)
+- `--retries N` — max retries per wrong-name candidate (default 5)
 - `--force-opus` — skip Codex; go straight to the Opus 4.7 Agent fallback
 
 ## Orchestrator latitude
@@ -48,7 +48,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
    > ```
    > Exit code 0 = candidate confirmed. Exit code 2 = compile failed (probably wrong name or path). Exit code 1 = transport error (retry once, then abort).
    >
-   > For wrong-name candidates, search Mathlib docs (`https://leanprover-community.github.io/mathlib4_docs/`) for a correction, then re-probe. Up to **{RETRIES}** retries per candidate.
+   > For wrong-name candidates, search Mathlib docs (`https://leanprover-community.github.io/mathlib4_docs/`) for a correction, then re-probe. Up to **{RETRIES}** retries per candidate (default 5).
    >
    > Final bucketing — write a markdown table to `{PROOF_REPO}/lean/dep_audit.md` with columns: `external_slug | english_statement | final_name | final_import | bucket | confidence | retries_used | notes`. Buckets are: `confirmed`, `wrong_name_retry_exhausted`, `not_in_mathlib`, `axiom_dependent`.
    >

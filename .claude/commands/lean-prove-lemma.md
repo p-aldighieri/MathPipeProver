@@ -8,7 +8,7 @@ Run the lean_prover role on one focused lemma, audit with the prover-reviewer, a
 **Arguments:** `$ARGUMENTS`
 - First positional: `<lemma-slug>` — must match a row in the Lemma Status table of `lean_state.md`
 - `--proof-repo PATH`, `--project-url URL`, `--port PORT` as usual
-- `--max-retries N` — default 3; how many prover-loop iterations before escalating
+- `--max-retries N` — default 5; how many prover-loop iterations before escalating
 
 ## Orchestrator latitude
 
@@ -59,7 +59,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 ## Notes
 
-- Retry budget is per-skill-invocation. A lemma that fails 3 times in this skill should not just keep looping in a wrapper — escalate so the user can decide whether to re-decompose, search Mathlib differently, or accept it as a permanent INVENTORY.lean stub.
+- Retry budget is per-skill-invocation. A lemma that fails 5 times in this skill should not just keep looping in a wrapper — escalate so the user can decide whether to re-decompose, search Mathlib differently, or accept it as a permanent INVENTORY.lean stub.
 - **Never** edit `main.lean` directly in this skill. Lemma proofs live in `lemmas/<slug>.lean`. The fan-in into `main.lean` happens in `/lean-merge` so a failed splice doesn't poison the skeleton.
 - The disprove step is cheap (Plausible runs in seconds). Make it a habit, especially for non-trivial econ lemmas where vacuous antecedents are a real risk.
 - If the prover keeps returning `STUCK` on the same obstruction, the issue is upstream — re-run `/lean-structure` on a tighter decomposition rather than throwing more prover passes at it.
