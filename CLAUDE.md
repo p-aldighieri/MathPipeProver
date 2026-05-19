@@ -120,12 +120,13 @@ Heartbeat JSON files are written next to the response file by the browser agent:
 
 Use `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) to poll a heartbeat from a shell when you want a blocking "wait for completion" helper instead of in-orchestrator polling.
 
-## Lean formalization (in development)
+## Lean formalization
 
-A Lean 4 / Mathlib post-processing module is being built on top of the smart-scaffolding pipeline. It runs **after** a branch has been consolidated and produces a checked Lean artifact for the proved result. Status as of the most recent commit:
+A Lean 4 / Mathlib post-processing module sits on top of the smart-scaffolding pipeline. It runs **after** a branch has been consolidated and produces a checked Lean artifact for the proved result. Operating guide: `docs/lean_formalization.md`.
 
-- **Plumbing landed.** `mathpipeprover/axle.py` is a sync client over the AXLE Lean verification API (`https://axle.axiommath.ai/v1/docs/`). It exposes `check`, `verify_proof`, `sorry2lemma`, `repair_proofs`, `merge`, `disprove`, `extract_decls`, and `list_environments`. The orchestrator-facing shell surface is `mpp axle <subcommand>` (see `mpp axle --help`); skills shell out to it.
-- **Skills + role templates are NOT landed yet.** The plan is `.claude/commands/formalize-*.md` + new soft templates `prompts/soft/80-84_lean_*_soft.md`. A dedicated operating guide will live at `docs/lean_formalization.md` once it ships.
+- **AXLE client.** `mathpipeprover/axle.py` wraps the AXLE Lean verification API (`https://axle.axiommath.ai/v1/docs/`). Shell surface: `mpp axle {environments,smoke,check,verify-proof,sorry2lemma,repair-proofs,merge,disprove,extract-decls}` — see `mpp axle --help`.
+- **Role templates** in `prompts/soft/80-88_lean_*_soft.md` — five generators (`lean_structurer`, `lean_dep_audit`, `lean_formalizer`, `lean_meaning_check`, `lean_prover`) and four reviewers (per-step). All include the shared `prompts/fragments/lean_translation_discipline.md` ("translation, not mathematics" rules: no scope changes, no axioms, no `native_decide`).
+- **Orchestrator skills** in `.claude/commands/lean-*.md`: `/lean-formalize-init`, `/lean-structure`, `/lean-dep-audit`, `/lean-verify-deps`, `/lean-formalize`, `/lean-prove-lemma`, `/lean-merge`, `/lean-final-check`, `/lean-status`. The verification step (`/lean-verify-deps`) spawns a Codex CLI 5.5 thread (or Opus 4.7 sub-agent fallback) to iterate AXLE checks without round-tripping through Extended Pro.
 
 **Setup the orchestrator should verify before invoking Lean tooling:**
 
