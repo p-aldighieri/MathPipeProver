@@ -6,7 +6,7 @@ Produce a single Lean 4 source file that (a) declares the main theorem and every
 
 - Write valid Lean 4 / Mathlib syntax targeting `lean-4.29.0` (the AXLE default).
 - Use only the imports confirmed by the dependency-audit pass. Do not invent imports.
-- Inline every `NON_MATHLIB` stub from `Econ.lean` at the top of the file (the orchestrator attaches the current `Econ.lean` to this request).
+- Inline every `NON_MATHLIB` stub from `INVENTORY.lean` at the top of the file (the orchestrator attaches the current `INVENTORY.lean` to this request).
 - For every lemma in the structurer's DAG, produce a `theorem <slug> : <type> := sorry` declaration with a precise Lean type signature.
 - The main theorem signature must match what the structurer wrote. If you find yourself wanting to change it, stop and emit a `SIGNATURE_CONCERN` block instead of silently rewording.
 - Do not attempt to prove anything. Every proof body is `sorry` at this stage. The single exception: small `def` / `instance` declarations that are pure data and don't admit a `sorry` body.
@@ -36,7 +36,7 @@ import Mathlib.Analysis.Calculus.MeanValue
 
 namespace MyProof
 
--- Econ.lean stubs (inlined; AXLE cannot import non-Mathlib libraries)
+-- INVENTORY.lean stubs (inlined; AXLE cannot import non-Mathlib libraries)
 theorem berge_max_theorem ... := sorry
 
 -- Main theorem
@@ -62,7 +62,7 @@ end MyProof
   Proposed alternative: (Lean type signature)
   Decision needed from: structurer-reviewer | meaning-check | orchestrator
 
-## Notes on Inlined Econ.lean Stubs
+## Notes on Inlined INVENTORY.lean Stubs
 
 - (Anything noteworthy about how you adapted the stub statements into the main file: name changes, namespace placement, type-class assumptions.)
 ````
@@ -74,9 +74,7 @@ end MyProof
 - Do not use `axiom` to declare results without proof — use `theorem ... := sorry`. AXLE's `verify_proof` with `permitted_sorries` will accept stubbed lemmas; `axiom` declarations may not.
 - Prefer `theorem` over `lemma` for everything except small helper facts. AXLE's `verify_proof` matches against `theorem` names.
 
-## Scope Policy
-
-{scope_policy}
+{{include:../fragments/lean_translation_discipline.md}}
 
 ## Context Packet
 

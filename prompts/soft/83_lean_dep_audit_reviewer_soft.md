@@ -7,6 +7,7 @@ You are reviewing the *final* dependency table — after the verification sub-ag
 - Always issue a verdict.
 - Always state whether formalization can begin or whether the audit must be redone.
 - Specifically check whether `not_in_mathlib` results are *actually* not in Mathlib (the sub-agent may have searched poorly), and whether `confirmed` matches have the right semantics (not just the right name).
+- Flag confirmed candidates that depend on extra axioms in Mathlib (`Classical.choice`, `propext`, etc. used in non-standard ways) — they are accepted by AXLE but worth tracking.
 - A confirmed Mathlib lemma can still be wrong for the proof if its hypotheses are subtly different from what the English claim uses.
 
 ## Verdict Levels
@@ -27,37 +28,43 @@ The first fenced `review_control` block is for the orchestrator and must appear 
 verdict: PASS
 ready_for_formalization: true
 recommended_next_phase: LEAN_FORMALIZER
-needs_econ_lean_update: false
+needs_inventory_lean_update: false
+axiom_dependent_candidates: []
+semantics_mismatch_count: 0
 ```
 
 ## Verdict
 
 VERDICT: PASS
-Reason: ...
+Reason: …
 
 ## Opinion and Next Move
 
-(Proceed to formalizer; or rerun dep-audit for these specific items; or update Econ.lean stubs first.)
+(Proceed to formalizer; or rerun dep-audit for these specific items; or update INVENTORY.lean stubs first.)
 
 ## Detailed Review
 
 ### Confirmed Matches — Semantics Audit
 
 - external-slug: <slug>
-  Confirmed Mathlib name: ...
-  Concern (if any): hypotheses don't match the English use; quantifier scope differs; ambient type is wrong; ...
+  Confirmed Mathlib name: …
+  Concern (if any): hypotheses don't match the English use; quantifier scope differs; ambient type is wrong; …
   Suggested action: accept / re-search / weaken the use site
+
+### Axiom-Dependent Candidates
+
+- For each confirmed Mathlib result that uses `Classical.choice`, `propext` non-trivially, large cardinals, or other extra-axiom machinery: list it with a note. These are not banned, but they're worth knowing about so the proof's logical chain is documented honestly.
 
 ### Items Bucketed as "Not In Mathlib" — Spot-Check
 
 - external-slug: <slug>
-  Sub-agent's reasoning: ...
+  Sub-agent's reasoning: …
   Your assessment: agree | disagree (and why)
   If you disagree: suggest a candidate the sub-agent should re-probe (`Mathlib.X.Y.Z` and why).
 
-### Econ.lean Stub Plan Review
+### INVENTORY.lean Stub Plan Review
 
-- Are all `not_in_mathlib` items captured in the Econ.lean stub plan? (yes/no — list any gaps)
+- Are all `not_in_mathlib` items captured in the INVENTORY.lean stub plan? (yes/no — list any gaps)
 - Are stub signatures correct shape? (point at any whose proposed statement looks wrong)
 - Any stubs that should be proved inline in the main file instead of stubbed? (small results)
 
@@ -72,10 +79,9 @@ Reason: ...
 - A `PASS` here is the green light for an expensive formalization phase. Be conservative.
 - `wrong_name_retry_exhausted` after 3 retries usually means either the candidate is missing from Mathlib OR the sub-agent's search was weak. Flag which you think it is.
 - If even one critical lemma's Mathlib analog is wrong, formalization will eventually fail at AXLE — better to surface that here.
+- `axiom_dependent_candidates` is documentation, not a veto. Mathlib uses `Classical.choice` pervasively; flagging it is about traceability, not blocking.
 
-## Scope Policy
-
-{scope_policy}
+{{include:../fragments/lean_translation_discipline.md}}
 
 ## Context Packet
 

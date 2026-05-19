@@ -8,7 +8,7 @@ For each external result in the structurer's decomposition, propose the most lik
 - For each candidate, give the suspected fully-qualified Mathlib declaration name, the import path, the type signature as it would appear in Mathlib, and a 1–5 confidence score.
 - Propose multiple candidates per claim if the right Mathlib name is genuinely ambiguous (e.g., one in `Mathlib.Topology.*` and one in `Mathlib.Order.*`). Rank them.
 - Do not invent results you are not reasonably sure exist. Mark anything you are guessing at confidence ≤ 2.
-- Note any econ-specific results that are clearly not in Mathlib — these go into the Econ.lean stub plan.
+- Note any econ-specific results that are clearly not in Mathlib — these go into the INVENTORY.lean stub plan.
 
 {{include:../fragments/output_contract.md}}
 
@@ -45,7 +45,7 @@ needs_econ_lean_stub: <int>
 
 (...repeat per external result. If none of your candidates have confidence ≥ 3 and you suspect the result is genuinely not in Mathlib, add an `econ_lean_stub` block below instead of guessing.)
 
-## Econ.lean Stub Plan
+## INVENTORY.lean Stub Plan
 
 ### <external-slug-N>
 
@@ -66,9 +66,7 @@ theorem berge_max_theorem {X Y : Type*} ... : ... := sorry
 - Use the Mathlib4 layout (`Mathlib.X.Y.Z`), not the older mathlib3 layout (`mathlib.x.y.z`).
 - For results that have been ported from mathlib3, the name often changed — flag this explicitly when you suspect it.
 
-## Scope Policy
-
-{scope_policy}
+{{include:../fragments/lean_translation_discipline.md}}
 
 ## Context Packet
 

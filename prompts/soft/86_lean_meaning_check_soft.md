@@ -51,7 +51,7 @@ wrong: <int>
 ## Cross-Item Concerns
 
 - (Any lemma whose VACUOUS_RISK or WEAKENED status would propagate to a strictly-stronger upstream lemma if accepted as-is — list pairs.)
-- (Any inlined Econ.lean stub whose signature you suspect is wrong shape — list.)
+- (Any inlined INVENTORY.lean stub whose signature you suspect is wrong shape — list.)
 
 ## Decisions for the Orchestrator
 
@@ -64,11 +64,9 @@ wrong: <int>
 
 - This role is most useful run *after* the formalizer-reviewer has signed off but *before* expensive prover effort. It catches the residual class of mistakes that pass type-level audit but break meaning.
 - A common subtle failure: `∀ x, ∃ y, P x y` formalized as `∃ y, ∀ x, P x y` — quantifier swap inverts the claim. Always check.
-- `VACUOUS_RISK` is rarer than the others but the most dangerous: a Lean theorem proved by `sorry` and stubbed in Econ.lean can still typecheck while saying something useless.
+- `VACUOUS_RISK` is rarer than the others but the most dangerous: a Lean theorem proved by `sorry` and stubbed in INVENTORY.lean can still typecheck while saying something useless.
 
-## Scope Policy
-
-{scope_policy}
+{{include:../fragments/lean_translation_discipline.md}}
 
 ## Context Packet
 
