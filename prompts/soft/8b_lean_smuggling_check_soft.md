@@ -26,7 +26,7 @@ This is an *auditor* role. Produce a list of every suspicious construct in the p
 - `SMUGGLED_AXIOM` — an `axiom` whose conclusion is the goal that should be proved, not a standard external mathematical result. Distinguish from legitimate `Inventory.*` axioms that import named theorems (Clarke–Danskin, Strassen, Farkas, KRN).
 - `OPAQUE_TRAPDOOR` — an `opaque` whose type lets a user inject any desired term, or which is consumed in a way that depends on its internals being non-trivial without proving it.
 - `VACUOUS_FIELD` — a structure field of type `Prop` (no concrete content) used to discharge a goal that should have had a real proof.
-- `CONCLUSION_AS_FIELD` — a structure field whose type IS the conclusion of a theorem (`field : HasRobustRationalizableStrategy ...`), and a theorem then proves the conclusion by projecting (`exact data.field`). This is the certificate-verifier pattern: not necessarily wrong, but the user must be aware that the actual derivation is offloaded to whoever constructs `data`.
+- `CONCLUSION_AS_FIELD` / `CERTIFICATE_VERIFIER` — a structure field whose type IS the conclusion of a theorem (`field : HasRobustRationalizableStrategy ...`), and a theorem then proves the conclusion by projecting (`exact data.field`). **Per user instruction 2026-05-22: this is ASSUMPTION SMUGGLING.** The "proof" verifies the certificate rather than deriving the conclusion. Every certificate_verifier theorem must be upgraded to an actual derivation from raw primitives + Inventory axioms; the data-witness path of "assume the conclusion as data, then return it" is no longer an acceptable mergeable state. Mark each occurrence as `SMUGGLED_CERTIFICATE` in the audit.
 - `CHOICE_ABUSE` — `Classical.choice` or `Classical.arbitrary` used to pull a witness for a non-Mathlib-standard statement in scope.
 - `TACTIC_SUPPRESSION` — `noncomputable section`, `unsafe`, `set_option` disabling a linter, or disabled `decide` that suppresses a check the proof needs.
 
@@ -44,7 +44,8 @@ smuggled_sorrys: <int>
 smuggled_axioms: <int>
 opaque_trapdoors: <int>
 vacuous_fields: <int>
-conclusion_as_field: <int>
+conclusion_as_field: <int>   # also count under smuggled_certificates (2026-05-22)
+smuggled_certificates: <int>  # certificate-verifier theorems flagged as smuggling
 choice_abuses: <int>
 tactic_suppressions: <int>
 ```

@@ -27,7 +27,7 @@ This is an *auditor* role with per-headline categorical assessment.
 - `MIS_HYPOTHESIZED` — The Lean theorem assumes hypotheses the source doesn't have (smuggling assumptions in).
 - `MIS_CONCLUDED` — The Lean theorem concludes something different from the source (different quantifier, different output type, swapped variables).
 - `VACUOUS_RISK` — The Lean hypotheses are satisfiable only by trivial cases, so the theorem holds vacuously.
-- `CERTIFICATE_VERIFIER` — The Lean theorem has the right shape but its hypothesis is a data structure carrying the conclusion as a field (the Lean theorem is `(data) → data.conclusion := data.conclusion` — a projection, not a derivation). Flag separately from MATCHES because while shape-correct, the certificate-verifier pattern offloads the actual mathematical work to whoever constructs the data.
+- `CERTIFICATE_VERIFIER` — The Lean theorem has the right shape but its hypothesis is a data structure carrying the conclusion as a field (the Lean theorem is `(data) → data.conclusion := data.conclusion` — a projection, not a derivation). **Per user instruction 2026-05-22: this is ASSUMPTION SMUGGLING and is treated as a FAILURE category, not as documented-mergeable.** Every CERTIFICATE_VERIFIER assessment must be flagged as needing remediation: the theorem must be upgraded to an actual derivation from raw primitives + Inventory axioms before being mergeable as the v9 headline.
 
 {{include:../fragments/output_contract.md}}
 

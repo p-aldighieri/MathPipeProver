@@ -18,12 +18,31 @@ This is an *auditor* role. You produce a per-axiom audit; the orchestrator decid
 
 ## Assessment Categories (per Inventory axiom)
 
-- `MATCHES` — the axiom statement is the standard form of the declared dependency (Clarke 1990, Strassen 1965, Farkas, etc.) and is consumed by the proof.
+- `MATCHES` — the axiom statement is the standard form of the declared dependency (Clarke 1990, Strassen 1965, Farkas, etc.) AND has a verifiable paper-source citation (see "Paper-source citation requirement" below) AND is consumed by the proof.
 - `OVERSTATED` — the axiom is stronger than the standard form / what the proof needs.
 - `UNDERSTATED` — the axiom is weaker than the standard form; the proof would need a stronger version to actually close.
 - `TRAPDOOR` — the axiom has arbitrary `Prop` fields, an opaque conclusion, or otherwise lets a user inject anything; the "axiom" is not the declared mathematical content.
 - `UNUSED` — the axiom is declared but never invoked in any proof body (cf. certificate-verifier pattern: the proof consumes the axiom only through a data witness field, not through `apply` / `exact`).
 - `MISSING` — the proof claims to use a dependency that is NOT in Inventory (it must be smuggled via sorry, hidden axiom in v8 baseline, or implicit somewhere).
+- `UNCITED` — the axiom statement is plausible but no verifiable paper citation matches the Lean statement verbatim. Fails the paper-source requirement.
+
+## Paper-source citation requirement (2026-05-22)
+
+Per user instruction: **EVERY Inventory axiom must map to a specific paper / textbook source containing the same theorem statement, verbatim modulo notation**. The axiom's docstring should:
+
+1. **Name the source** — author, year, book/paper title, chapter+section+theorem-number. Examples:
+   - `-- Clarke 1990, *Optimization and Nonsmooth Analysis*, Thm 2.7.5`
+   - `-- Strassen 1965, "The existence of probability measures with given marginals", Ann. Math. Stat. 36(2), p. 426, Theorem 7`
+   - `-- Kechris 1995, *Classical Descriptive Set Theory*, Springer GTM 156, Theorem 4.18`
+   - `-- Farkas 1902, alternative form: Boyd–Vandenberghe *Convex Optimization*, 2004, §5.8.3`
+
+2. **Quote the source statement** in the docstring, with notation translated to the v9 mathematical language. The Lean signature must match the quoted statement modulo bookkeeping.
+
+3. **Justify why Mathlib does not have it** in a one-line audit note. The justification must reference a specific Mathlib search the prover/auditor performed (or a known Mathlib gap).
+
+If an axiom statement does not match any verifiable paper source — or the source citation is vague / cannot be verified by the auditor — flag as `UNCITED`. This is a hard failure: the axiom is functionally an opaque assertion masquerading as a named external result.
+
+**Adversarial check.** An axiom can be `MATCHES` only if the auditor can independently produce the paper-source citation when asked. If the prover added the axiom without naming a verifiable source theorem, that's `UNCITED` — the user wants every dependency mapped to a paper containing the exact theorem statement.
 
 {{include:../fragments/output_contract.md}}
 
