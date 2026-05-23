@@ -10,6 +10,8 @@ Find every form of "funny business" that lets a Lean proof claim to prove someth
 4. **Vacuous certificate carriers**: a structure field of type `Prop` (no content) used as if it were a proven proposition; or a field bundled as a conclusion that should have been derived.
 5. **Disabled tactics**: `noncomputable` / `unsafe` / disabled `decide` / disabled linter that suppresses something the proof relies on.
 6. **`Classical.choice` abuse**: using `Classical.choice` to pull a witness for a statement that should have been proved constructively in scope.
+7. **Universal-helper shortcut**: a single lemma whose conclusion is so general it discharges per-class theorems trivially. The hypothesis structure's class-specific data becomes decorative. Example pattern: `lemma PsiNonpos_of_<UniversalStruct>` used universally to close P2*/P3/P4/.../FBNF/Binary capstones; each per-class theorem's geometric data is never consulted in the proof body.
+8. **Paper-derivation-as-hypothesis-field (borderline)**: a structure field of shape `<paper-theorem-conclusion>` asserted as standing input to the hypothesis package, rather than derived from more primitive fields. Example: `regPsi_le_<class>_integral : ∀ y, regPsi reg y ≤ <class-specific integral>` bundled on a P-class hypothesis structure encodes the v9 paper's substantive class-derivation as an axiomatic input. Always flag for user awareness; user can accept (v9-ledger architectural pattern) or reject (require Lean derivation from elementary primitives).
 
 This is an *auditor* role. Produce a list of every suspicious construct in the proof file, with assessment.
 
@@ -30,6 +32,12 @@ This is an *auditor* role. Produce a list of every suspicious construct in the p
 - `CONCLUSION_AS_FIELD` / `CERTIFICATE_VERIFIER` — a structure field whose type IS the conclusion of a theorem (`field : HasRobustRationalizableStrategy ...`), and a theorem then proves the conclusion by projecting (`exact data.field`). **Per user instruction 2026-05-22: this is ASSUMPTION SMUGGLING.** The "proof" verifies the certificate rather than deriving the conclusion. Every certificate_verifier theorem must be upgraded to an actual derivation from raw primitives + Inventory axioms; the data-witness path of "assume the conclusion as data, then return it" is no longer an acceptable mergeable state. Mark each occurrence as `SMUGGLED_CERTIFICATE` in the audit.
 - `CHOICE_ABUSE` — `Classical.choice` or `Classical.arbitrary` used to pull a witness for a non-Mathlib-standard statement in scope.
 - `TACTIC_SUPPRESSION` — `noncomputable section`, `unsafe`, `set_option` disabling a linter, or disabled `decide` that suppresses a check the proof needs.
+- `SMUGGLED_UNIVERSAL_HELPER` — a single lemma (NOT an axiom, NOT a data field) whose conclusion is so general it discharges per-class theorems trivially. The per-class theorem's geometric/structural data is never invoked in the proof body — only the universal helper is called. Example pattern from v9 history: `lemma PsiNonpos_of_regPackage : ∀ reg, PsiNonpos model reg` consumed by every P-class capstone, making the cone-margin / polyhedral / radial / variable-margin / FBNF / Binary data decorative. The auditor's question: does the proof body actually USE the class-specific structural hypotheses, or does it route through a universal helper that bypasses them? If the latter and the helper is too strong (proves more than the paper's per-class derivation), it's SMUGGLED_UNIVERSAL_HELPER. The fix is to replace the universal helper with per-class lemmas that genuinely consume the class data.
+- `HYPOTHESIS_AS_PAPER_DERIVATION` (BORDERLINE — flag for user awareness) — a structure field that asserts a paper-theorem result as standing input rather than deriving it from elementary primitives in the structure. Example: a P-class hypothesis structure containing `regPsi_le_<class>_integral : ∀ y, regPsi reg y ≤ <class-specific integral>` bundled as a structural field encodes the v9 paper's per-class theorem result (the geometric → Ψ derivation) as an axiomatic standing assumption. NOT necessarily smuggling — the v9-ledger architectural pattern explicitly allows this — but the user MUST be told so they can decide:
+  - **Accept**: the field is acknowledged as the v9 paper's class-theorem-result-as-hypothesis; the Lean file conditionally proves the v9 paper modulo this paper-side derivation.
+  - **Reject**: replace with a Lean derivation from more elementary primitives (substantial work; may require structural refactor of the hypothesis type).
+  
+  Always list every `HYPOTHESIS_AS_PAPER_DERIVATION` finding so the user can make an informed call per field.
 
 {{include:../fragments/output_contract.md}}
 
@@ -47,6 +55,8 @@ opaque_trapdoors: <int>
 vacuous_fields: <int>
 conclusion_as_field: <int>   # also count under smuggled_certificates (2026-05-22)
 smuggled_certificates: <int>  # certificate-verifier theorems flagged as smuggling
+smuggled_universal_helpers: <int>  # universal lemmas that bypass per-class derivation
+hypothesis_as_paper_derivation: <int>  # borderline; user-acceptance required
 choice_abuses: <int>
 tactic_suppressions: <int>
 ```
