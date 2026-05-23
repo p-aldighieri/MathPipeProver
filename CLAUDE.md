@@ -123,11 +123,14 @@ Use `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) to poll 
 
 ## Lean formalization
 
-A Lean 4 / Mathlib post-processing module sits on top of the smart-scaffolding pipeline. It runs **after** a branch has been consolidated and produces a checked Lean artifact for the proved result. Operating guide: `docs/lean_formalization.md`.
+A Lean 4 / Mathlib post-processing module sits on top of the smart-scaffolding pipeline. It runs **after** a branch has been consolidated and produces a checked Lean artifact for the proved result.
 
+- **Conceptual pipeline guide**: `docs/lean_pipeline.md` — READ THIS FIRST. Describes phases, per-lemma parallel branches (brainstorm → prove → review → compile → verify), gold-check asymmetry (Lean ⊆ English = FAIL; Lean ⊇ English = PASS-FLAG), orchestrator routing, audit ledger, smuggling taxonomy. Captures the PIOTR v9 (2026-05-23) session lessons.
+- **Operating guide**: `docs/lean_formalization.md` — implementation details for AXLE, INVENTORY.lean conventions, state file format.
 - **AXLE client.** `mathpipeprover/axle.py` wraps the AXLE Lean verification API (`https://axle.axiommath.ai/v1/docs/`). Shell surface: `mpp axle {environments,smoke,check,verify-proof,sorry2lemma,repair-proofs,merge,disprove,extract-decls}` — see `mpp axle --help`.
-- **Role templates** in `prompts/soft/80-88_lean_*_soft.md` — five generators (`lean_structurer`, `lean_dep_audit`, `lean_formalizer`, `lean_meaning_check`, `lean_prover`) and four reviewers (per-step). All include the shared `prompts/fragments/lean_translation_discipline.md` ("translation, not mathematics" rules: no scope changes, no axioms, no `native_decide`).
-- **Orchestrator skills** in `.claude/commands/lean-*.md`: `/lean-formalize-init`, `/lean-structure`, `/lean-dep-audit`, `/lean-verify-deps`, `/lean-formalize`, `/lean-prove-lemma`, `/lean-merge`, `/lean-final-check`, `/lean-status`. The verification step (`/lean-verify-deps`) spawns a Codex CLI 5.5 thread (or Opus 4.7 sub-agent fallback) to iterate AXLE checks without round-tripping through Extended Pro.
+- **Role templates** in `prompts/soft/80-8f_lean_*_soft.md` — generators + reviewers for structurer, dep_audit, formalizer, meaning_check, prover (80–88), plus auditors: inventory_match (89), headline_translation (8a), smuggling_check (8b), design_brainstorm (8c), per-theorem audit (8d), paper feedback (8e), gold check (8f). All translation-discipline prompts include `prompts/fragments/lean_translation_discipline.md`.
+- **Orchestrator skills** in `.claude/commands/lean-*.md`: `/lean-formalize-init`, `/lean-structure`, `/lean-dep-audit`, `/lean-verify-deps`, `/lean-formalize`, `/lean-prove-lemma`, `/lean-merge`, `/lean-final-check`, `/lean-status`, `/lean-inventory-match`, `/lean-headline-translation`, `/lean-smuggling-check`. The verification step (`/lean-verify-deps`) spawns a Codex CLI 5.5 thread (or Opus 4.7 sub-agent fallback) to iterate AXLE checks without round-tripping through Extended Pro.
+- **Browser tooling** in `scripts/chatgpt_browser_agent/`: `cdp_refresh_sources.mjs` (cache-bust + re-upload), `cdp_submit_batch.mjs` (N parallel chats), `wait_chat_done.mjs` (chat-ID-pinned poller, hardened 2026-05-23).
 
 **Setup the orchestrator should verify before invoking Lean tooling:**
 
