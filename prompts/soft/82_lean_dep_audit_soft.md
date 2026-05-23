@@ -10,6 +10,18 @@ For each external result in the structurer's decomposition, propose the most lik
 - Do not invent results you are not reasonably sure exist. Mark anything you are guessing at confidence ≤ 2.
 - Note any econ-specific results that are clearly not in Mathlib — these go into the INVENTORY.lean stub plan.
 
+## Paper-source citation requirement (MANDATORY)
+
+Per user directive (PIOTR v9 session): **every dependency — Mathlib candidate OR Inventory stub — must cite an external paper/textbook source with the theorem statement EXACTLY as in the source**. This applies whether the dependency is ultimately mapped to Mathlib or to an Inventory.V9 axiom.
+
+For each external result, your output MUST include:
+
+1. **Source citation**: author + year + book/paper title + chapter / section / theorem number. Example: "Clarke 1990, *Optimization and Nonsmooth Analysis*, §2.7, Theorem 2.7.5".
+2. **Source statement (verbatim)**: paste the theorem statement from the source, modulo notation. Example: "If F : E → ℝ is the pointwise supremum of {φ_i : i ∈ I} on a compact metric I with active set Active(x) and Fréchet derivatives `Dφ_i(x)`, then ∂F(x) ⊆ closed convex hull { Dφ_i(x) : i ∈ Active(x) }."
+3. **Why Mathlib doesn't have it** (only if proposing as Inventory stub): brief audit note — Mathlib search performed (which paths checked), gap identified.
+
+The smuggling auditor (`8b`) will REJECT any Inventory axiom that lacks a paper-source citation or whose statement is not the verbatim textbook form (per `SMUGGLED_AXIOM_DRESSED_AS_DEPENDENCY` category). Save the cycle: cite up front.
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format
@@ -29,12 +41,17 @@ needs_econ_lean_stub: <int>
 
 **English statement:** ...
 
+**Paper source:** Author Year, *Title*, §section / Theorem number (with statement verbatim)
+
+**Source statement (verbatim modulo notation):** ...
+
 **Candidate 1**
 - name: `Mathlib.Topology.ContinuousFunction.Compact.IsCompact.image`
 - import: `Mathlib.Topology.ContinuousFunction.Compact`
 - signature: `theorem IsCompact.image {f : α → β} (hf : Continuous f) (hα : IsCompact (Set.univ : Set α)) : IsCompact (Set.range f)`
 - confidence: 4
 - match notes: (what matches the English; what might differ — quantifier scope, generality, ambient type)
+- source-match notes: (how the Mathlib statement compares to the paper source's verbatim form — same hypothesis count? same conclusion shape?)
 
 **Candidate 2** (alternative phrasing)
 - name: `...`
@@ -49,8 +66,10 @@ needs_econ_lean_stub: <int>
 
 ### <external-slug-N>
 
-**Reason this needs a stub:** (specialist econ result; not in Mathlib as far as you can determine)
-**Proposed Lean statement (sketch):**
+**Paper source:** author + year + title + §/theorem number (REQUIRED — Inventory stubs are external textbook theorems; no source citation means the stub is suspect)
+**Source statement (verbatim):** paste the source's statement here, modulo notation. The Lean stub signature must match this.
+**Reason this needs a stub:** (specialist result; not in Mathlib as far as you can determine — describe the Mathlib search performed)
+**Proposed Lean statement (sketch — must match Source statement verbatim modulo notation):**
 ```lean
 theorem berge_max_theorem {X Y : Type*} ... : ... := sorry
 ```

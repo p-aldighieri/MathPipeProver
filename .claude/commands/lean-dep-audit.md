@@ -30,7 +30,20 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 6. **Parse the response.** Extract the leading `dep_audit` fenced block (`total_external`, `total_candidates`, `needs_inventory_lean_stub`). Save the full response to `{PROOF_REPO}/lean/dep_audit_proposed.md`.
 
-7. **Update state.** `lean_state.md`: phase `→ deps_verifying`. Append history with candidate counts. Report next skill: `/lean-verify-deps`.
+7. **Citation reviewer loop (`83`).** After the proposed dep-audit, run a reviewer pass via `${MATHPIPEPROVER}/prompts/soft/83_lean_dep_audit_reviewer_soft.md`. The reviewer specifically checks:
+   - Every entry cites a paper/textbook source (author + year + title + §/theorem-number).
+   - Source statement is quoted verbatim (modulo notation).
+   - Mathlib candidates match the source statement shape.
+   - Inventory stubs have documented Mathlib search.
+   - No Inventory stub cites the proof-paper itself as source (would be `SMUGGLED_AXIOM_DRESSED_AS_DEPENDENCY`).
+   
+   Verdicts:
+   - PASS: proceed to `/lean-verify-deps`.
+   - PATCH_SMALL: 1-2 citations need adding/correcting. Loop back to step 3 with feedback. Max 3 retries.
+   - PATCH_BIG: multiple citations missing, or Inventory stubs cite the proof-paper. Loop back with thorough patch instructions.
+   - REDO: dep audit fundamentally lacking paper-source discipline. Escalate to user.
+
+8. **Update state.** `lean_state.md`: phase `→ deps_verifying`. Append history with candidate counts. Report next skill: `/lean-verify-deps`.
 
 ## Notes
 

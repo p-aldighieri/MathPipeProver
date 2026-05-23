@@ -1,8 +1,19 @@
-# Lean Formalization (Post-Processing Module)
+# Lean Formalization (Post-Processing Module) — Operating Guide
 
-This is the operating guide for the Lean post-processing module — the optional phase that runs **after** the smart-scaffolding pipeline produces a verified English-language proof and turns it into a checked Lean 4 / Mathlib artifact.
+This is the **operating guide** for the Lean post-processing module — implementation details for AXLE, INVENTORY.lean conventions, state file format, sub-agent backends, and failure-mode recovery.
+
+> **Read first**: `docs/lean_pipeline.md` — the conceptual pipeline guide. It describes the workflow shape (phases, per-lemma parallel branches, smuggling-deferral rules, asymmetric gold check, orchestrator routing). This file (`lean_formalization.md`) covers the lower-level implementation pieces.
 
 > **Where this fits.** The proof loop (formalizer → … → consolidator) is the headline workflow; see `docs/soft_scaffolding.md` for that. This guide covers the *next* step: taking a finished `final_report.md` and producing a Lean file that compiles against Mathlib, with a per-paper INVENTORY.lean for results outside Mathlib.
+
+The headline pipeline shape has been updated (PIOTR v9 session, 2026-05-23):
+- Per-lemma cycle now includes a brainstorm step (8c) before prove (87/88).
+- Smuggling check (8b) deferred to AFTER prove+review+compile; not interleaved with proving.
+- Per-theorem deep audit (8d) bundles translation + scope + smuggling.
+- Final check expanded: global smuggling + per-theorem batched + gold check (8f) + paper feedback (8e) + final lake build.
+- Dep audit (82) requires verbatim paper-source citations; reviewed by 83.
+
+See `docs/lean_pipeline.md` for the full conceptual flow.
 
 ## When to Use This Module
 
@@ -51,8 +62,11 @@ See `CLAUDE.md §Lean formalization (in development)` for the API-key setup and 
                               ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  /lean-dep-audit             Extended Pro: 82 lean_dep_audit             │
+│                              ↳ 83 lean_dep_audit_reviewer (loop)         │
 │                              produces dep_audit_proposed.md              │
-│                              (Mathlib candidate table, ranked)           │
+│                              (Mathlib candidate table, ranked,           │
+│                              EACH WITH PAPER-SOURCE CITATION + verbatim  │
+│                              source statement)                           │
 └──────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -76,12 +90,18 @@ See `CLAUDE.md §Lean formalization (in development)` for the API-key setup and 
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  /lean-prove-lemma <slug>    Extended Pro: 87 lean_prover (one lemma)    │
+│  /lean-prove-lemma <slug>    Per-lemma cycle (PIOTR v9 architecture):    │
+│                              ↳ 8c lean_design_brainstorm (early)         │
+│                              ↳ 87 lean_prover (one lemma)                │
 │                              ↳ 88 lean_prover_reviewer                   │
 │                              ↳ AXLE check + disprove sanity              │
-│                              loop until proved or escalated;             │
+│                              ↳ 8d per-theorem audit (translation +       │
+│                                  scope + smuggling, bundled)             │
+│                              loop until proved + verified or escalated;  │
 │                              writes lemmas/<slug>.lean                   │
-│                              (repeat per lemma)                          │
+│                              Multiple lemmas can be in flight in         │
+│                              parallel (brainstorm + review + verify      │
+│                              parallel-safe; prove step sequential).      │
 └──────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -93,10 +113,16 @@ See `CLAUDE.md §Lean formalization (in development)` for the API-key setup and 
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  /lean-final-check           AXLE verify_proof (full file) +             │
-│                              per-lemma disprove sweep +                  │
-│                              final meaning_check (English vs Lean)       │
-│                              → FORMALIZATION_REPORT.md                   │
+│  /lean-final-check           Gate. Runs IN ORDER:                        │
+│                              1. AXLE verify_proof (full file)            │
+│                              2. Per-lemma disprove sweep                 │
+│                              3. Global smuggling (8b)                    │
+│                              4. Per-theorem deep audit (8d batched)      │
+│                              5. Gold check (8f) — Lean ↔ English         │
+│                              6. Paper feedback (8e) if flags             │
+│                              7. Final meaning_check (86)                 │
+│                              8. lake build (authoritative compile)       │
+│                              → FORMALIZATION_REPORT.md + PAPER_FEEDBACK  │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

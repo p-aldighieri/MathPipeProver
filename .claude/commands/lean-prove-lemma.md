@@ -14,9 +14,32 @@ Run the lean_prover role on one focused lemma, audit with the prover-reviewer, a
 
 Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formalize-init`. Prompt templates live under `${MATHPIPEPROVER}/prompts/soft/` — substitute the actual MathPipeProver location. Trust `lean_state.md` over literal paths when reality differs.
 
+## Pipeline reference
+
+Read `docs/lean_pipeline.md` before invoking this skill. The per-lemma cycle described there is:
+
+```
+brainstorm (8c) → prove (87 + AXLE) → review (88) → compile → per-theorem verify (8d)
+```
+
+This skill implements that cycle. Multiple lemmas can be in flight in parallel — brainstorm + review + verify are parallel-safe across lemmas (separate browser chats); the prove step is sequential per file (Opus subagents shouldn't clobber each other).
+
+**Smuggling discipline**: do NOT run `8b_lean_smuggling_check` during the prove-review loop. The proof needs room to breathe. Smuggling-check happens AFTER the lemma passes prove+review+compile, bundled with translation+scope in step 11's per-theorem verify (8d).
+
 ## Steps
 
 1. **Read state.** Verify the state is consistent with running the prover now (typically `Current phase: proving_lemmas`). Confirm `<lemma-slug>` exists in the Lemma Status table and is not yet `proved`.
+
+1.5. **Brainstorm (8c) — early, before any prover round-trip.**
+   For each lemma that requires a non-trivial structural design (e.g., per-class hypothesis structures, refactored data bundles, novel proof routes), run the design brainstorm BEFORE step 2.
+   - Render `${MATHPIPEPROVER}/prompts/soft/8c_lean_design_brainstorm_soft.md` with the lemma signature + paper §-reference + any prior structural commitments.
+   - Submit to Extended Pro via `/submit-role`.
+   - Brainstorm output: concrete data fields (not abstract Props), proof skeleton, axiom asks with paper citations, smuggling traps to avoid.
+   - Verdict PROCEED → continue to step 2 with brainstorm context attached.
+   - Verdict PROCEED_WITH_CAUTION → continue with explicit warning.
+   - Verdict REDESIGN → escalate to user; do not proceed.
+   
+   Skip brainstorm for trivial lemmas (e.g., AXLE terminal-tactic closures, definitional unpacks). Use judgment.
 
 2. **CHEAP-FIRST: try AXLE terminal tactics before any Pro round-trip.**
    Before spending a 30-90 min Extended Pro pass, try the auto-prover. AXLE's `repair_proofs` lets you stack multiple terminal tactics, so a single call often closes the easy and medium lemmas at no Pro cost.
@@ -90,7 +113,26 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
     A single batched call is faster and produces a cleaner audit log than per-lemma invocations.
 
-12. **Update state.** `lean_state.md`: mark `<slug>` row `proved=✓, reviewed=✓` in the Lemma Status table. Append history entry with retry count and any notable tactics used (or "AXLE repair-proofs (terminal: ...)" if step 2 closed it). Recommend the next un-proved lemma, in dependency order.
+12. **Per-theorem audit (8d) — bundled translation + scope + smuggling.**
+    Once the lemma compiles + passes reviewer + passes disprove, run the per-theorem audit:
+    - Refresh project sources via `cdp_refresh_sources.mjs` (cache-bust).
+    - Render `${MATHPIPEPROVER}/prompts/soft/8d_lean_per_theorem_audit_soft.md` with the Lean lemma + paper §-statement.
+    - Submit + harvest verdict: OVERALL PASS / PASS-WITH-FLAG / FAIL.
+    - PASS or PASS-WITH-FLAG (paper-feedback): proceed to step 13.
+    - FAIL: route back to step 1.5 (re-brainstorm with audit feedback) or step 5 (re-prove) depending on which axis failed. Max 3 routing loops per lemma before escalation.
+
+13. **Update state.** `lean_state.md`: mark `<slug>` row `proved=✓, reviewed=✓` in the Lemma Status table. Append history entry with retry count and any notable tactics used. Add an entry to the `per_theorem_audits` ledger:
+    ```yaml
+    - name: <slug>
+      last_modified_commit: <git-sha>
+      audits:
+        brainstorm: { chat: <chat-id>, run_at: <ts>, outcome: <PROCEED|PROCEED_WITH_CAUTION> }
+        prove: { agent: <subagent-id>, run_at: <ts>, outcome: AXLE-PASS }
+        review: { chat: <chat-id>, run_at: <ts>, verdict: PASS }
+        verify: { chat: <chat-id>, run_at: <ts>, translation: PASS, scope: <verdict>, smuggling: <verdict>, flagged: [...] }
+      stale: false
+    ```
+    Recommend the next un-proved lemma, in dependency order.
 
 ## Notes
 

@@ -10,6 +10,20 @@ You are reviewing the *final* dependency table — after the verification sub-ag
 - Flag confirmed candidates that depend on extra axioms in Mathlib (`Classical.choice`, `propext`, etc. used in non-standard ways) — they are accepted by AXLE but worth tracking.
 - A confirmed Mathlib lemma can still be wrong for the proof if its hypotheses are subtly different from what the English claim uses.
 
+## MANDATORY: Paper-source citation audit
+
+Per user directive (PIOTR v9 session): the dep-audit MUST cite every dependency to a paper/textbook source with the theorem statement EXACTLY as in the source. This applies whether the dep is mapped to Mathlib or stubbed in Inventory.
+
+For EACH entry in the dep_audit table:
+
+1. **Source citation present?** author + year + title + §/theorem number. If missing → `PATCH_SMALL`.
+2. **Source statement verbatim?** The source's theorem statement must be quoted modulo notation. If missing or paraphrased → `PATCH_SMALL`.
+3. **Statement shape match?** The Lean candidate signature (Mathlib name) or Inventory stub must match the source's verbatim statement modulo notation. If shapes differ substantively → `PATCH_BIG`.
+
+For Inventory stubs specifically:
+4. **Mathlib search documented?** A 1–2 sentence audit note explaining the Mathlib paths searched + why no match was found. If missing → `PATCH_SMALL`.
+5. **External theorem genuinely external?** The source citation must be a textbook / published-paper result, NOT a v9-paper §-reference. A dep citing v9_consolidated.md as its source is a `SMUGGLED_AXIOM_DRESSED_AS_DEPENDENCY` candidate — flag for `PATCH_BIG` and recommend deriving the result in Lean instead.
+
 ## Verdict Levels
 
 - `PASS`: Audit is sound; proceed to formalization.
