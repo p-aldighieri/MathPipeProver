@@ -8,6 +8,12 @@ max_total_tokens = 2000000
 max_tokens_per_branch = 1000000
 max_total_calls = 20000
 max_calls_per_branch = 5000
+# Full pipeline attempts before giving up. 1 = no re-attack (legacy behavior).
+# >1 enables the bounded default re-attack loop: a short attempt is preserved as an
+# attempt dossier and the run loops back to the searcher (or the formalizer on an
+# OBJECTIVE_MISSED verdict) for a fresh attempt at the same objective. Still bounded
+# by the global token/call budget above.
+max_attempt_rounds = 1
 run_root = "runs"
 prompts_root = "prompts/api"
 provider_timeout_seconds = 60

@@ -1281,7 +1281,11 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
             )
             _write_role_output(run_dir, branch, "gatekeeper", "gatekeeper.md", gatekeeper_content, config)
             _update_ledger(run_dir, branch)
-            _append_event(run_dir, branch, "phase=gatekeeper completed")
+            gatekeeper_control = parse_review_control(gatekeeper_content)
+            gatekeeper_verdict = gatekeeper_control.get("verdict", "").strip().upper()
+            if gatekeeper_verdict:
+                bstate["gatekeeper_verdict"] = gatekeeper_verdict
+            _append_event(run_dir, branch, f"phase=gatekeeper completed verdict={gatekeeper_verdict or 'n/a'}")
 
             if soft_mode:
                 _soft_role_handoff(
@@ -1360,6 +1364,255 @@ def _run_branch(paths: RunPaths, state: dict, branch: str, config: WorkflowConfi
         return
 
 
+_OBJECTIVE_MET_VERDICTS = {"OBJECTIVE_MET", "OBJECTIVE_MET_WITH_TRIVIAL_REGULARITY"}
+
+
+def _branch_met_objective(bstate: dict) -> bool:
+    """A pass branch counts as meeting the objective unless the gatekeeper said otherwise.
+
+    Back-compat: a pass with no recorded gatekeeper verdict is treated as met, so a
+    run with re-attack disabled (max_attempt_rounds=1) behaves exactly as before.
+    """
+    if bstate.get("status") != "pass":
+        return False
+    verdict = str(bstate.get("gatekeeper_verdict", "")).strip().upper()
+    return verdict == "" or verdict in _OBJECTIVE_MET_VERDICTS
+
+
+def _reattack_seed_phase(verdicts: list[str]) -> str:
+    """Where the next attempt should restart.
+
+    OBJECTIVE_MISSED means the formalization itself may be off, so re-read from the
+    formalizer. Everything else (narrowing, stalls, budget) re-opens at the searcher.
+    """
+    if any(str(v).strip().upper() == "OBJECTIVE_MISSED" for v in verdicts):
+        return "formalizer"
+    return "searcher"
+
+
+def _extract_md_section(text: str, title: str) -> str:
+    """Return the body of a `## <title>` (or deeper) markdown section, if present."""
+    lines = (text or "").splitlines()
+    out: list[str] = []
+    capturing = False
+    capture_level = 0
+    for line in lines:
+        heading = re.match(r"^(#{1,6})\s+(.*)$", line)
+        if heading:
+            level = len(heading.group(1))
+            name = heading.group(2).strip()
+            if not capturing and title.lower() in name.lower():
+                capturing = True
+                capture_level = level
+                continue
+            if capturing and level <= capture_level:
+                break
+        if capturing:
+            out.append(line)
+    return "\n".join(out).strip()
+
+
+def _trim_excerpt(text: str, max_lines: int = 14, max_chars: int = 1000) -> str:
+    """Trim an excerpt so harvested sections don't bloat the searcher's context."""
+    text = (text or "").strip()
+    if not text:
+        return ""
+    truncated = False
+    lines = text.splitlines()
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        truncated = True
+    out = "\n".join(lines)
+    if len(out) > max_chars:
+        out = out[:max_chars].rstrip()
+        truncated = True
+    return out + ("\n…(truncated)" if truncated else "")
+
+
+def _latest_context_file(ctx_dir: Path, prefix: str) -> Path | None:
+    """Highest-numbered cycle file like reviewer_03.md / prover_02.md, if any."""
+    if not ctx_dir.exists():
+        return None
+    candidates = sorted(ctx_dir.glob(f"{prefix}_*.md"))
+    return candidates[-1] if candidates else None
+
+
+def _branch_dossier_lines(run_dir: Path, branch: str, bstate: dict) -> list[str]:
+    """Per-route lessons for the dossier: outcome, where the attempt stalled, the
+    central obstruction, scope rejection, and the gatekeeper's re-attack notes.
+
+    Signals are pulled from the branch's own context files (reviewer, breakdown,
+    scope_decision, gatekeeper) and trimmed; not every file exists for every outcome
+    (e.g. a stalled branch has no gatekeeper.md), so each block is guarded.
+    """
+    ctx = run_dir / f"branches/{branch}/context"
+    route = bstate.get("selected_route") or branch
+    verdict = str(bstate.get("gatekeeper_verdict", "")).strip().upper()
+    status = bstate.get("status", "?")
+    outcome = f"**{status}**" + (f" / gatekeeper **{verdict}**" if verdict else "")
+
+    lines = [f"### Route: {route}  (branch `{branch}`)", f"- Outcome: {outcome}"]
+    if bstate.get("last_reason"):
+        lines.append(f"- Why it ended: {bstate['last_reason']}")
+
+    # Where the proof stalled: the latest reviewer's verdict + route-level read.
+    reviewer_path = _latest_context_file(ctx, "reviewer")
+    if reviewer_path is not None:
+        rv_text = reviewer_path.read_text(encoding="utf-8", errors="replace")
+        rv_control = parse_review_control(rv_text)
+        rv_verdict = rv_control.get("verdict", "").strip().upper()
+        rv_route = rv_control.get("route_status", "").strip()
+        bits = [b for b in [f"verdict {rv_verdict}" if rv_verdict else "", f"route {rv_route}" if rv_route else ""] if b]
+        if bits:
+            lines.append(f"- Last reviewer: {' / '.join(bits)}")
+        opinion = _trim_excerpt(_extract_md_section(rv_text, "Opinion and Next Move"))
+        if opinion:
+            lines.append("- Reviewer's read of where it stalled:")
+            lines += [f"  {ln}" for ln in opinion.splitlines()]
+
+    # The central obstruction the breakdown identified for this route.
+    breakdown_path = ctx / "breakdown.md"
+    if breakdown_path.exists():
+        obstruction = _trim_excerpt(
+            _extract_md_section(breakdown_path.read_text(encoding="utf-8", errors="replace"), "Critical Obstruction")
+        )
+        if obstruction:
+            lines.append("- Central obstruction (from breakdown):")
+            lines += [f"  {ln}" for ln in obstruction.splitlines()]
+
+    # Scope rejection detail, if the route died on scope.
+    if status == "fail_scope":
+        scope_path = ctx / "scope_decision.md"
+        if scope_path.exists():
+            scope = _trim_excerpt(scope_path.read_text(encoding="utf-8", errors="replace"), max_lines=8)
+            if scope:
+                lines.append("- Scope rejection:")
+                lines += [f"  {ln}" for ln in scope.splitlines()]
+
+    # Gatekeeper's strategic re-attack proposals (only present after a consolidated pass).
+    gk_path = ctx / "gatekeeper.md"
+    if gk_path.exists():
+        gk_text = gk_path.read_text(encoding="utf-8", errors="replace")
+        notes = _trim_excerpt(
+            _extract_md_section(gk_text, "Strategic Re-Attack") or _extract_md_section(gk_text, "Honest Assessment"),
+            max_lines=20,
+            max_chars=1600,
+        )
+        if notes:
+            lines.append("- Gatekeeper notes:")
+            lines += [f"  {ln}" for ln in notes.splitlines()]
+
+    lines.append("- Treat this route as refuted/exhausted for this objective; do not re-propose it verbatim.")
+    lines.append("")
+    return lines
+
+
+def _build_attempt_dossier(paths: RunPaths, state: dict, attempt_round: int, seed_phase: str) -> None:
+    """Append a lessons-learned section for the just-finished (short) attempt.
+
+    The dossier is a run-level, append-only file the searcher (and, on a formalization
+    re-read, the formalizer) reads on the next attempt. Prior attempts are never
+    overwritten.
+    """
+    run_dir = paths.run_dir
+    dossier_path = run_dir / "attempt_dossier.md"
+    existed = dossier_path.exists()
+
+    lines: list[str] = []
+    if not existed:
+        lines += [
+            "# Attempt Dossier",
+            "",
+            "Durable lessons-learned across attempts at the SAME original objective. Each",
+            "attempt that fell short appends a section below. The searcher (and, on a",
+            "formalization re-read, the formalizer) must read this and must NOT re-propose a",
+            "route already refuted here.",
+            "",
+        ]
+    lines += [f"## Attempt {attempt_round}", "", f"_Next attempt re-seeded at: **{seed_phase}**_", ""]
+
+    for branch in state.get("branch_order", []):
+        bstate = state.get("branches", {}).get(branch, {})
+        lines += _branch_dossier_lines(run_dir, branch, bstate)
+
+    text = "\n".join(lines).rstrip() + "\n"
+    with dossier_path.open("a", encoding="utf-8") as fh:
+        fh.write(("\n" if existed else "") + text)
+
+
+def _reseed_for_reattack(paths: RunPaths, state: dict, prev_round: int, seed_phase: str) -> None:
+    """Reset run state to start a fresh attempt at `seed_phase`, preserving invariants.
+
+    Snapshots the finished attempt's branches under attempts/attempt_<n>/, then resets
+    to a single fresh `main` branch. When re-seeding at the searcher, the formalizer and
+    literature outputs are kept (reused); when re-seeding at the formalizer, the branch
+    context is wiped so it is re-read from scratch. claim.md and the run-level dossier are
+    never touched here.
+    """
+    run_dir = paths.run_dir
+
+    # 1. Snapshot the finished attempt so nothing is lost.
+    src = run_dir / "branches"
+    dst = run_dir / "attempts" / f"attempt_{prev_round}" / "branches"
+    if src.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, dst, dirs_exist_ok=True)
+
+    # 2. Record a compact summary in run state for observability/resume.
+    state.setdefault("attempt_history", []).append(
+        {
+            "round": prev_round,
+            "seed_phase_next": seed_phase,
+            "branches": {
+                b: {
+                    "status": bs.get("status", ""),
+                    "gatekeeper_verdict": bs.get("gatekeeper_verdict", ""),
+                    "selected_route": bs.get("selected_route", ""),
+                    "last_reason": bs.get("last_reason", ""),
+                }
+                for b, bs in state.get("branches", {}).items()
+            },
+        }
+    )
+
+    # 3. Drop spawned (non-main) branch directories; main is reused.
+    for branch in list(state.get("branches", {}).keys()):
+        if branch != "main":
+            shutil.rmtree(run_dir / "branches" / branch, ignore_errors=True)
+
+    # 4. Clean main's context to the carry-over set for this seed phase.
+    keep = {"formalizer.md", "literature.md"} if seed_phase == "searcher" else set()
+    main_ctx = run_dir / "branches/main/context"
+    if main_ctx.exists():
+        for f in main_ctx.glob("*"):
+            if f.is_file() and f.name not in keep:
+                f.unlink()
+
+    # 5. Reset state to a single fresh main branch seeded at `seed_phase`.
+    state["branches"] = {
+        "main": {
+            "status": "running",
+            "review_cycles": 0,
+            "current_phase": seed_phase,
+            "selected_route": "",
+            "last_reason": "",
+            "score": 0.0,
+            "metrics": _blank_metric(),
+        }
+    }
+    state["branch_order"] = ["main"]
+    state["pruned_branches"] = []
+    state["winning_branch"] = ""
+    state["branches_spawned"] = False
+    state["prelude_done"] = False
+    state["prelude_phase"] = seed_phase
+    state["attempt_round"] = prev_round + 1
+    state["status"] = "running"
+    state["current_phase"] = f"prelude_{seed_phase}"
+    _append_event(run_dir, "main", f"re-attack: starting attempt {prev_round + 1} seeded at {seed_phase}")
+    _write_run_state(paths, state)
+
+
 def _run_scheduler(paths: RunPaths, state: dict, config: WorkflowConfig, hub: ProviderHub, prompts_root: Path) -> RunResult:
     run_dir = paths.run_dir
 
@@ -1384,7 +1637,39 @@ def _run_scheduler(paths: RunPaths, state: dict, config: WorkflowConfig, hub: Pr
                 _write_run_state(paths, state)
                 return RunResult(run_id=state["run_id"], run_dir=run_dir, status="failed")
 
+    soft_mode = _is_soft_scaffolding_run(config, prompts_root)
     pass_branches = [b for b in state.get("branch_order", []) if state["branches"].get(b, {}).get("status") == "pass"]
+    met_branches = [b for b in pass_branches if _branch_met_objective(state["branches"][b])]
+
+    # Objective achieved: pick the best branch that actually met it.
+    if met_branches:
+        winner = sorted(met_branches, key=lambda b: state["branches"][b].get("score", 0.0), reverse=True)[0]
+        state["winning_branch"] = winner
+        state["status"] = "complete"
+        state["current_phase"] = "done"
+        _append_event(run_dir, winner, f"run complete: winner={winner}")
+        _write_run_state(paths, state)
+        return RunResult(run_id=state["run_id"], run_dir=run_dir, status="complete")
+
+    # The attempt fell short of the objective (every route narrowed, missed, stalled, or
+    # failed). Re-attack by default if rounds remain. This is the API-pipeline automation
+    # of the rule that smart scaffolding applies by orchestrator judgment; it is bounded by
+    # max_attempt_rounds and still subject to the global token/call budget.
+    attempt_round = int(state.get("attempt_round", 1))
+    max_rounds = max(1, int(getattr(config, "max_attempt_rounds", 1)))
+    if not soft_mode and attempt_round < max_rounds:
+        short_verdicts = [str(state["branches"][b].get("gatekeeper_verdict", "")) for b in pass_branches]
+        seed_phase = _reattack_seed_phase(short_verdicts)
+        _append_event(
+            run_dir,
+            "main",
+            f"attempt {attempt_round} fell short; re-attacking (round {attempt_round + 1}/{max_rounds}) at {seed_phase}",
+        )
+        _build_attempt_dossier(paths, state, attempt_round, seed_phase)
+        _reseed_for_reattack(paths, state, attempt_round, seed_phase)
+        return RunResult(run_id=state["run_id"], run_dir=run_dir, status="reattack")
+
+    # Re-attack disabled or rounds exhausted: fall back to the prior terminal behavior.
     if pass_branches:
         winner = sorted(pass_branches, key=lambda b: state["branches"][b].get("score", 0.0), reverse=True)[0]
         state["winning_branch"] = winner
@@ -1613,17 +1898,24 @@ def _continue_run(paths: RunPaths, config: WorkflowConfig) -> RunResult:
     prompts_root = _resolve_prompts_root(paths, config)
 
     try:
-        if not state.get("prelude_done", False):
-            prelude_result = _run_prelude(paths, state, config, hub, prompts_root)
-            if prelude_result is not None:
-                return prelude_result
+        # The prelude -> spawn -> scheduler trio repeats once per attempt. The scheduler
+        # returns "reattack" (after re-seeding state) when an attempt fell short and a
+        # re-attack round remains; any other status is terminal for this call.
+        while True:
+            if not state.get("prelude_done", False):
+                prelude_result = _run_prelude(paths, state, config, hub, prompts_root)
+                if prelude_result is not None:
+                    return prelude_result
 
-        if not state.get("branches_spawned", False):
-            _spawn_strategy_branches(paths, state, config)
-            state["current_phase"] = "scheduler"
-            _write_run_state(paths, state)
+            if not state.get("branches_spawned", False):
+                _spawn_strategy_branches(paths, state, config)
+                state["current_phase"] = "scheduler"
+                _write_run_state(paths, state)
 
-        return _run_scheduler(paths, state, config, hub, prompts_root)
+            result = _run_scheduler(paths, state, config, hub, prompts_root)
+            if result.status == "reattack":
+                continue
+            return result
     except ExternalAgentPending as pending:
         state["status"] = "waiting_external_agent"
         state["pending_external_agent"] = {

@@ -36,7 +36,7 @@ This role exists for two reasons:
 
 ## Output Format
 
-The first fenced `gatekeeper_control` block is for the workflow and must appear first.
+The first fenced `gatekeeper_control` block is for the workflow and must appear first. When re-attack is enabled (`max_attempt_rounds > 1`), the engine reads this verdict: `OBJECTIVE_NARROWED`/`OBJECTIVE_MISSED` (or any short attempt) triggers a fresh attempt seeded from your strategic re-attack, and `OBJECTIVE_MISSED` specifically re-seeds at the formalizer. Make the verdict accurate.
 
 ````markdown
 ```gatekeeper_control

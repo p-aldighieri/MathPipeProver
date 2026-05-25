@@ -36,11 +36,17 @@ class WorkflowConfig:
     provider_browser_agent: str
     smoke_models: dict[str, str]
     role_access: dict[str, dict[str, list[str]]]
+    # Number of full pipeline attempts (searcher -> ... -> gatekeeper) the API
+    # pipeline will run before giving up. 1 = no re-attack (legacy behavior).
+    # >1 enables the bounded default re-attack loop: a short attempt is preserved
+    # as an attempt dossier and the run loops back to the searcher (or formalizer
+    # on OBJECTIVE_MISSED) for a fresh attempt.
+    max_attempt_rounds: int = 1
 
 
 DEFAULT_ROLE_ACCESS: dict[str, dict[str, list[str]]] = {
     "formalizer": {
-        "read": ["claim.md", "branches/{branch}/context/*.md"],
+        "read": ["claim.md", "attempt_dossier.md", "branches/{branch}/context/*.md"],
         "write": ["branches/{branch}/context/formalizer.md"],
     },
     "literature": {
@@ -48,7 +54,12 @@ DEFAULT_ROLE_ACCESS: dict[str, dict[str, list[str]]] = {
         "write": ["branches/{branch}/context/literature.md"],
     },
     "searcher": {
-        "read": ["claim.md", "branches/{branch}/context/formalizer.md", "branches/{branch}/context/literature.md"],
+        "read": [
+            "claim.md",
+            "attempt_dossier.md",
+            "branches/{branch}/context/formalizer.md",
+            "branches/{branch}/context/literature.md",
+        ],
         "write": ["branches/{branch}/context/strategy.md"],
     },
     "breakdown": {
@@ -171,4 +182,5 @@ def load_config(path: Path) -> WorkflowConfig:
         provider_browser_agent=str(providers.get("browser_agent", "external_agent")),
         smoke_models=smoke_models,
         role_access=parsed_role_access,
+        max_attempt_rounds=int(wf.get("max_attempt_rounds", 1)),
     )

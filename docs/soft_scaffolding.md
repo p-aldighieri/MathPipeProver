@@ -102,7 +102,32 @@ Verdicts:
 - `OBJECTIVE_NARROWED` — the result is real but answers a strictly weaker question; strategic re-attack required
 - `OBJECTIVE_MISSED` — the result does not answer the original question; strategic re-attack required and the formalization itself may need re-reading
 
-After the gatekeeper, the smart orchestrator reads the verdict + scope delta + strategies and decides the next move. Typical follow-ups: stop the loop and record/publish; re-rank routes via the searcher; check prior art via the literature role; decompose a proposed strategy into lemmas via breakdown; run another prover-reviewer cycle if the residual gap is small; or re-read the formalization if the original question itself was misframed. The gatekeeper does not loop back automatically.
+After the gatekeeper, the smart orchestrator reads the verdict + scope delta + strategies and decides the next move. When the result falls short of the original objective (`OBJECTIVE_NARROWED`/`OBJECTIVE_MISSED`), the default is to **re-attack, not to stop** — see *Attempts and the Default Re-Attack Loop* below. Typical follow-ups, in rough order of preference: re-rank routes via the searcher with the attempt dossier in hand; decompose a proposed strategy into lemmas via breakdown; check prior art via the literature role; re-read the formalization via the formalizer if the original question itself was misframed; run one more prover-reviewer cycle only if the residual gap is genuinely small. Stopping to record/publish is appropriate only when the objective is met, disproved, or genuinely distinct strategies are exhausted. The gatekeeper does not loop back automatically.
+
+## Attempts and the Default Re-Attack Loop
+
+An **attempt** is one full push of the pipeline — `searcher → breakdown → prover → reviewer → consolidator → gatekeeper` — together with the route-branches that push fans out into. This is a larger unit than an engine route-*branch*: one attempt usually contains several branches, one per candidate route.
+
+The failure mode this guards against is the orchestrator quietly calling it a day after a single attempt comes up short. That moment — many paths tried, nothing closed, energy low — is exactly when the pipeline should keep going, not stop.
+
+**Default behavior when an attempt ends short of the objective** — whether the gatekeeper returns `OBJECTIVE_NARROWED`/`OBJECTIVE_MISSED`, or every route stalled, exhausted its budget, or hit diminishing returns:
+
+1. **Document the attempt.** Commit the proof repo at the checkpoint and write (or append to) an **attempt dossier**: the routes tried, what closed vs. what stalled, the central obstruction each route hit, which routes are now refuted, and the gatekeeper's strategic re-attack proposals. This is the durable lessons-learned record. Preserve it; never overwrite a prior attempt's dossier — append a new section.
+2. **Re-attack from the searcher.** Loop back to the searcher and pass the dossier as an *explicit* input (same handling as `literature.md` — a file the searcher must read, not merely have available in the background). The searcher proposes a fresh route set that avoids the refuted routes and targets the recorded obstruction.
+
+**What carries across a re-attack (the invariants):**
+
+- the **original objective / claim** — fixed. We re-attack the *same* target, never a narrowed one; a moving objective would defeat the gatekeeper's reason for existing.
+- the **paper / source statement** and the **durable proof-state** (banked results stay banked).
+- the **formalizer and literature findings**, unless the gatekeeper specifically flags the formalization for re-reading.
+
+**What changes:** the dossier is added/refreshed (kept in durable sources, or attached to the searcher pass), and the spent attempt's route memo is removed per *Durable Source Housekeeping*. Durable sources must not accumulate dead-branch route memos across attempts.
+
+**When to loop all the way back to the formalizer.** `OBJECTIVE_MISSED` often means the formalization itself, not just the proof technique, was off. In that case it is legitimate to restart the attempt at the formalizer — re-reading the source statement with the dossier in hand — rather than only re-opening strategy. Going back to the first step is a valid move, not a failure.
+
+**When to actually stop.** Stopping is the exception, and the reason goes in the run record: the objective is met (`OBJECTIVE_MET` / `OBJECTIVE_MET_WITH_TRIVIAL_REGULARITY`), the claim is disproved, genuinely distinct strategies are exhausted, or a human calls it. "We tried a lot of paths" and "diminishing returns" are triggers to re-attack, not reasons to stop.
+
+In the API pipeline this same loop is automated and bounded by the `max_attempt_rounds` workflow config key (default `1` = no re-attack, i.e. today's behavior); see `config/default.toml`.
 
 ## Durable Sources vs Temporary Attachments
 

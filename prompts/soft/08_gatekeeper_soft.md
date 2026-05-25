@@ -80,7 +80,7 @@ Reason: ...
 
 ## Honest Assessment
 
-(One paragraph: is there a real path back to the original objective, or is the narrowed result the right place to stop? The smart orchestrator will read your verdict, scope delta, and strategies, and decide the next pipeline step itself.)
+(One paragraph: is there a live path back to the original objective, and which re-attack is the sharpest? Default to framing the re-attack; flag "stop here" only if the strategies are genuinely exhausted or the narrowed result is the natural endpoint. The smart orchestrator will read your verdict, scope delta, and strategies, and decide the next pipeline step itself.)
 ````
 
 ## Notes
