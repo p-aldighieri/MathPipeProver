@@ -30,7 +30,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 3. **Compose the prompt.** Use `prompts/soft/8a_lean_headline_translation_soft.md`. Append the headline list and the extracted Lean signatures.
 
-4. **Submit to a fresh ChatGPT chat**, Pro / 5.5 model. The reviewer will read the source memos + Lean signatures and produce a per-headline assessment.
+4. **Submit to a fresh ChatGPT chat** with Extended Pro. The reviewer will read the source memos + Lean signatures and produce a per-headline assessment.
 
 5. **Wait + dump** to `{PROOF_REPO}/03_runs/.../headline_translation_response.md`.
 

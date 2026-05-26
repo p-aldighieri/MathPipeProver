@@ -26,7 +26,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 4. **Submit.** `/submit-role --project-url URL --port PORT --prompt-file {PROOF_REPO}/lean/diagnostics/lean_structurer_request_<n>.md --response-file {PROOF_REPO}/lean/diagnostics/lean_structurer_response_<n>.md`
 
-5. **Wait + harvest.** Use `/heartbeat` or wait manually. When the response is in, parse the leading `lean_structure` fenced block to extract `object_count`, `lemma_count`, etc. If the block is missing or malformed, treat as a failed submission and re-submit with a clarifying note (the model occasionally drops the parseable block; re-prompting fixes it).
+5. **Wait + harvest.** Use the passive heartbeat JSON, `/inspect-chat`, `/recover-chat`, or manual polling. Do not start the deprecated recurring `/heartbeat` loop. When the response is in, parse the leading `lean_structure` fenced block to extract `object_count`, `lemma_count`, etc. If the block is missing or malformed, treat as a failed submission and re-submit with a clarifying note (the model occasionally drops the parseable block; re-prompting fixes it).
 
 6. **Save the structured artifact.** Write the response content to `{PROOF_REPO}/lean/decomposition.md`. Update `lean_state.md`: phase `→ structuring`, append history entry.
 

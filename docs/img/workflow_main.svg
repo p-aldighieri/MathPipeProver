@@ -96,7 +96,7 @@
 
   <rect class="card card-browser card-focus" x="470" y="540" width="330" height="108" />
   <text class="label" x="496" y="568">Submit</text>
-  <text class="card-title" x="496" y="596">ChatGPT 5.4 Pro + Extended Pro</text>
+  <text class="card-title" x="496" y="596">Extended Pro target</text>
   <text class="card-body" x="496" y="622">Send one focused role request with the</text>
   <text class="card-body" x="496" y="642">branch-local packet and file attachments.</text>
 

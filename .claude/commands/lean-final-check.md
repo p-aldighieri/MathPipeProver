@@ -55,7 +55,7 @@ The smuggling auditor returns a per-construct table covering ALL categories: SMU
 
 ### 5. Per-theorem deep audit (`8d`, batched)
 
-For each headline theorem, submit `${MATHPIPEPROVER}/prompts/soft/8d_lean_per_theorem_audit_soft.md` (translation + scope + smuggling bundled per theorem). Group headline theorems into thematic batches (typically 2–6 per batch; the paper's chapter structure suggests groupings). Dispatch via `cdp_submit_batch.mjs`; poll via the hardened `wait_chat_done.mjs` (chat-ID-pinned).
+For each headline theorem, submit `${MATHPIPEPROVER}/prompts/soft/8d_lean_per_theorem_audit_soft.md` (translation + scope + smuggling bundled per theorem). Group headline theorems into thematic batches (typically 2–6 per batch; the paper's chapter structure suggests groupings). Dispatch with separate Extended Pro submits, or use `cdp_submit_batch.mjs` only after validating it against the current submit helper. Poll via the hardened `wait_chat_done.mjs` (chat-ID-pinned).
 
 For each theorem, the auditor returns OVERALL: PASS / PASS-WITH-FLAG / FAIL.
 

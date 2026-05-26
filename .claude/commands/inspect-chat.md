@@ -21,4 +21,4 @@ Use inline Playwright CDP to:
 
 This is **read-only**. Do not modify anything. Do not submit or interact with the chat.
 
-Used for monitoring long-running Extended Pro responses between heartbeat ticks.
+Used for monitoring long-running Extended Pro responses during browser-backed submissions.

@@ -18,6 +18,12 @@ Translate a refereed natural-language mathematical proof into a Lean 4 / Mathlib
 
 Discovery is OK: if formalization surfaces clarifications the paper should add, flag them for paper update. Lean being **more explicit than English** is acceptable (and feeds back to improve the paper). Lean being **short of English** is a failure.
 
+## Subagent scope
+
+Subagents in this document are a Lean-formalization exception. They are allowed here because the work is Lean/Mathlib/AXLE proof engineering: editing Lean files, running build/check loops, probing Mathlib names, and repairing tactic scripts.
+
+This exception does not apply to the upstream analytical proof pipeline. Natural-language formalizer, searcher, breakdown, prover, reviewer, consolidator, and gatekeeper roles should still run through ChatGPT Extended Pro in the browser-backed workflow. Outside Lean formalization, use subagents only for a specifically requested coding or simulation task.
+
 ---
 
 ## Pipeline phases
@@ -59,7 +65,7 @@ For each lemma scheduled for proving:
 
 ### 4.2 prove (per-lemma, `87 lean_prover_soft`)
 
-- Dispatch to an **Opus subagent** with the brainstorm output + lemma signature + decomposition context.
+- Because this is Lean formalization, dispatch to a Lean proof-engineering subagent with the brainstorm output + lemma signature + decomposition context.
 - Subagent writes the proof body, edits `lemmas/<slug>.lean`.
 - Subagent must verify `lake build` exits 0 before returning.
 
@@ -93,11 +99,11 @@ The bundled translation + scope + smuggling check for ONE lemma.
 
 ### 4.7 concurrency constraints
 
-- **Brainstorm step (4.1)**: multiple in parallel — Extended Pro browser chats are isolated. Use `cdp_submit_batch.mjs` for N parallel dispatches.
-- **Prove step (4.2)**: Opus subagents edit the same file (`main.lean` or per-lemma files). Two concurrent Opus subagents on the same file WILL clobber each other. Either: (a) one Opus at a time, parallel only at the brainstorm + review + verify levels; or (b) use per-lemma files in `lemmas/<slug>.lean` so concurrent Opus subagents don't conflict.
+- **Brainstorm step (4.1)**: multiple in parallel — Extended Pro browser chats are isolated. Use separate `submit` calls, or `cdp_submit_batch.mjs` only after validating it against the current submit helper.
+- **Prove step (4.2)**: Lean proof-engineering subagents edit files (`main.lean` or per-lemma files). Two concurrent subagents on the same file WILL clobber each other. Either: (a) one proof-editing subagent at a time, parallel only at the brainstorm + review + verify levels; or (b) use per-lemma files in `lemmas/<slug>.lean` so concurrent subagents don't conflict.
 - **Review + verify steps**: parallel-safe (browser chats, no file edits).
 
-The pragmatic pattern is: brainstorm + review + verify run in parallel batches; prove runs sequentially (one Opus subagent at a time per shared file).
+The pragmatic pattern is: brainstorm + review + verify run in parallel batches; prove runs sequentially (one proof-editing subagent at a time per shared file).
 
 ---
 
@@ -109,7 +115,7 @@ Once all lemmas merged and `main.lean` builds clean, run the four-axis final pas
 
 - For each headline theorem in `main.lean`, run the per-theorem verifier (`8d`).
 - Group into thematic batches (typically: T1 / T2 / Binary / FBNF / Hall / P-class / G-addendum, or whatever the paper's chapter structure suggests).
-- Use `cdp_submit_batch.mjs` to dispatch N batches in parallel.
+- Dispatch batches in parallel with separate `submit` calls, or use `cdp_submit_batch.mjs` only after validating it against the current submit helper.
 
 ### 6.2 full-file smuggling (`8b`)
 
@@ -156,7 +162,7 @@ per_theorem_audits:
         run_at: 2026-05-23T01:30:00Z
         outcome: design-accepted
       prove:
-        agent: opus-subagent-id
+        backend: lean-subagent-id
         run_at: 2026-05-23T02:00:00Z
         outcome: lake-build-PASS
       review:
@@ -185,7 +191,7 @@ After any commit that touches `main.lean` or `lemmas/<slug>.lean`, mark all `per
 
 | Tool | Purpose |
 |---|---|
-| `cdp_submit_batch.mjs` | Parallel-submit N prompts, return N chat URLs |
+| `cdp_submit_batch.mjs` | Legacy parallel-submit helper. Validate it against the current submit helper before relying on it. |
 | `cdp_refresh_sources.mjs` | Cache-bust + re-upload project sources before reviewer pass |
 | `wait_chat_done.mjs` | Pin-to-chat-ID poller (hardened 2026-05-23) |
 | `cdp_dump_chat.mjs` | Targeted chat content dump (use when poller drifts) |

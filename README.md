@@ -6,7 +6,7 @@ The repository's primary operating model is not the hands-off API lane. It is th
 
 ## Starting a new proof project
 
-The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. Copy it into a new Claude Code (or Codex) session, fill in the six mustache slugs (`{{PROOF_REPO}}`, `{{TARGET_FILE}}`, `{{CHATGPT_PROJECT_URL}}`, `{{CDP_PORT}}`, `{{HEARTBEAT_INTERVAL}}`, `{{TASK_BRIEF}}`), and the orchestrator will run an 8-step bootstrap before touching the pipeline. `INIT.md` is the per-session ignition; `CLAUDE.md` is the always-loaded reference.
+The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. Copy it into a new Claude Code (or Codex) session, fill in the five mustache slugs (`{{PROOF_REPO}}`, `{{TARGET_FILE}}`, `{{CHATGPT_PROJECT_URL}}`, `{{CDP_PORT}}`, `{{TASK_BRIEF}}`), and the orchestrator will run an 8-step bootstrap before touching the pipeline. `INIT.md` is the per-session ignition; `CLAUDE.md` is the always-loaded reference.
 
 ## Operating modes
 
@@ -29,7 +29,7 @@ The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. 
 - Real provider adapters for OpenAI, Anthropic, and Gemini
 - Optional `external_agent` provider path (request/response files for browser-agent workflows)
 - Browser ChatGPT runner for the `external_agent` path via `scripts/chatgpt_browser_agent.sh`
-- Heartbeat watcher (`mpp watch-heartbeat`) for long-running browser roles
+- Passive heartbeat JSON plus `mpp watch-heartbeat` polling for long-running browser roles
 - Prompt roots in `prompts/soft/` (smart scaffolding) and `prompts/api/` (API pipeline); shared snippets in `prompts/fragments/`
 - Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)
 - Budget controls (`max_total_tokens`, `max_tokens_per_branch`, `max_total_calls`, `max_calls_per_branch`)
@@ -84,7 +84,7 @@ Key pieces:
 - lower-level browser transport profile: `config/browser_chatgpt.toml`
 - smart-scaffolding profile: `config/browser_chatgpt_soft.toml`
 - browser runner: `scripts/chatgpt_browser_agent.sh`
-- heartbeat watcher (manual blocking poll): `scripts/chatgpt_heartbeat_watch.sh`
+- passive heartbeat poller (manual blocking status only): `scripts/chatgpt_heartbeat_watch.sh`
 - detailed usage: `docs/browser_chatgpt.md`
 
 The transport loop is:
@@ -101,8 +101,9 @@ The smart-orchestrator rules:
 - Do not restart from `formalizer` when a late-stage branch already exists. Re-review the latest full prover artifact first if an earlier reviewer packet may have been tainted by missing context.
 - Prefer lemma-scoped prover cycles and delta-scoped reviewer cycles over one-shot full-proof requests.
 - Keep routing decisions and breakdown approval under orchestrator review even if the browser loop is automated.
+- Do not use subagents for analytical proof roles. Formal mathematical arguments, proof repair, route search, and reviewer audits go through ChatGPT Extended Pro; subagents are only for explicit coding/simulation tasks and Lean formalization proof-engineering.
 
-The current browser lane hard-codes `ChatGPT 5.4 Pro` plus `Extended Pro`.
+The current browser lane enforces the Extended Pro target: reasoning `Pro` plus model `5.5`.
 If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
 Browser submits default to a 90-minute wait budget and maintain a heartbeat JSON beside each response file while waiting.
 They also accept repeated `--attach-file` arguments so branch-local proof artifacts can travel with a request without becoming durable project sources.

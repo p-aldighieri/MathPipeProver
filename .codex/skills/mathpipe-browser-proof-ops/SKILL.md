@@ -1,6 +1,6 @@
 ---
 name: mathpipe-browser-proof-ops
-description: Use when working in MathPipeProver on ChatGPT project preparation, durable source refresh, project-source inspection, or browser-backed external_agent submission. Prefer scripts/chatgpt_browser_agent.sh prepare/submit over ad hoc UI work, enforce ChatGPT 5.4 Pro with Extended Pro, and keep durable sources separate from temporary attachments.
+description: Use when working in MathPipeProver on ChatGPT project preparation, durable source refresh, project-source inspection, or browser-backed external_agent submission. Prefer scripts/chatgpt_browser_agent.sh prepare/submit over ad hoc UI work, enforce the Extended Pro target, and keep durable sources separate from temporary attachments.
 ---
 
 # MathPipe Browser Proof Ops
@@ -47,10 +47,12 @@ scripts/chatgpt_browser_agent.sh submit --project-url URL --request-file PATH --
 6. Treat browser drift as part of the job, not as an automatic stop condition.
 
 - Re-open the project page and verify you are still in the intended project.
-- Re-check `ChatGPT 5.4 Pro` and `Extended Pro` before important prompts.
+- Re-check the Extended Pro target before important prompts: reasoning `Pro` plus model `5.5`.
 - If `prepare` reports missing durable sources, retry one file at a time and verify again.
 - If a response file is missing but the heartbeat or chat URL exists, recover the existing chat before resubmitting.
 - If ChatGPT lands on an account chooser and there is a single clear account entry, select it and continue.
+- Keep natural-language analytical proof roles on ChatGPT Extended Pro via `external_agent`. Use subagents only for explicit coding/simulation tasks or Lean formalization proof-engineering.
+- Do not start the deprecated recurring `/heartbeat` watcher loop. Use passive heartbeat JSON, live chat inspection, and recovery instead unless the user explicitly asks for a recurring reminder/automation.
 
 ## Durable Source Policy
 
@@ -65,8 +67,8 @@ scripts/chatgpt_browser_agent.sh submit --project-url URL --request-file PATH --
 
 ## Browser Policy
 
-- Base model must be `ChatGPT 5.4 Pro`.
-- Effort must be `Extended Pro`.
+- Reasoning must be `Pro`.
+- Model must be `5.5`.
 - In automated repo tests, use the same visible Chrome/CDP route that the live workflow uses.
 - Treat CDP attach failure as a hard stop, not as a cue to invent another browser launch path.
 - Treat ambiguous login/auth state as a hard stop, but handle straightforward account-selection and source-verification repairs autonomously.

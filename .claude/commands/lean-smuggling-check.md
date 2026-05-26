@@ -38,7 +38,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout. The audit prompt 
 
 5. **Compose the prompt.** Use `prompts/soft/8b_lean_smuggling_check_soft.md`. Append the whitelist + the literal-findings + the print-axioms output.
 
-6. **Submit to a fresh ChatGPT chat**, Pro / 5.5 model.
+6. **Submit to a fresh ChatGPT chat** with Extended Pro.
 
 7. **Wait + dump** to `{PROOF_REPO}/03_runs/.../smuggling_check_response.md`.
 

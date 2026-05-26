@@ -1,9 +1,13 @@
 ---
-description: Start an orchestrator heartbeat loop for the MathPipeProver pipeline (default 15m)
+description: DEPRECATED - do not start recurring MathPipeProver heartbeat loops
 argument-hint: [interval like 15m, 30m, 1h — default 15m]
 ---
 
-Start a recurring orchestrator heartbeat loop.
+This command is deprecated for normal MathPipeProver work.
+
+Do not start a recurring orchestrator heartbeat loop unless the user explicitly asks for that legacy behavior. The current workflow uses the browser agent's passive heartbeat JSON beside the response file, plus `/inspect-chat` and `/recover-chat` for recovery.
+
+If the user explicitly requests the legacy loop:
 
 **Interval:** use `$ARGUMENTS` if it is non-empty (e.g. `10m`, `1h`); otherwise default to `15m`.
 

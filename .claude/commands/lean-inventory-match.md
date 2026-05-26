@@ -31,7 +31,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 3. **Compose the prompt.** Use `prompts/soft/89_lean_inventory_match_soft.md` as the role; append the user's whitelist (accepted Inventory axioms from `source_proof.md §Inventory axioms expected`).
 
-4. **Submit to a fresh ChatGPT chat** on the project, via `scripts/chatgpt_browser_agent/cdp_submit.mjs` (or `cdp_submit_no_model_check.mjs` if the model-switcher is broken — see commit history). The model should be Pro / 5.5 (legacy "Extended Pro").
+4. **Submit to a fresh ChatGPT chat** on the project, via `scripts/chatgpt_browser_agent/cdp_submit.mjs` after verifying Extended Pro.
 
 5. **Wait + dump.** `node wait_chat_done.mjs --chat-url ... --out {PROOF_REPO}/03_runs/.../inventory_match_response.md`.
 

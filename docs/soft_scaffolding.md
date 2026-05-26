@@ -76,6 +76,17 @@ In practice, good soft scaffolding looks like a strong human research assistant:
 
 In soft mode, non-proof terminal conditions such as `FAIL_SCOPE`, `STALL`, or budget pressure should hand control back to the orchestrator for judgment. The run should not silently end just because the local pipeline hit one of those tags.
 
+## Subagent Boundary
+
+The browser-backed analytical proof loop is an Extended Pro workflow. Formalizer, literature, searcher, breakdown, prover, reviewer, consolidator, and gatekeeper work should be submitted through ChatGPT Extended Pro with the project sources and scoped attachments curated by the orchestrator.
+
+Do not replace those roles with Claude/Codex/Opus subagents. Subagents are reserved for:
+
+- a specifically requested coding or simulation task, where the deliverable is code, a computational experiment, or a simulation result
+- Lean formalization work, where the deliverable is Lean/Mathlib/AXLE proof engineering rather than a natural-language analytical proof
+
+When a task is an English mathematical argument, a proof repair, a reviewer audit, a route search, or a formal analytical derivation, use Extended Pro.
+
 ## Gatekeeper
 
 The gatekeeper runs automatically after every consolidator pass. It is a SCOPE check, not a logic audit, and its job is to compare the original objective against the achieved result and — when the result is real but the question got narrower along the way — propose route-level strategies for re-attacking the original objective.
@@ -160,15 +171,15 @@ Rules:
 
 ## Model And Effort Policy
 
-For the Robust Trust browser workflow, the live policy is:
+For the browser workflow, the live policy is the Extended Pro target:
 
-- base model: `ChatGPT 5.4 Pro`
-- effort mode: `Extended Pro`
+- reasoning `Pro`
+- model `5.5`
 
 Operationally:
 
-- the top model picker and the composer effort pill are separate controls
-- the effort pill beside `+` must be checked before important prompts
+- the UI may expose these as one composer pill or as separate model/effort controls
+- the composer pill beside `+` must be checked before important prompts
 - do not assume the browser preserved the intended setting
 
 ## Context Policy
@@ -309,7 +320,7 @@ In soft scaffolding mode, the orchestrator should not stop at the first browser 
 If something looks off, it should actively check and repair the state with the available tools:
 
 - re-open the project page and verify the correct project URL
-- re-check `ChatGPT 5.4 Pro` and `Extended Pro`
+- re-check the Extended Pro target (current UI: reasoning `Pro` + model `5.5`)
 - open the `Sources` tab and confirm the requested durable files are actually present
 - if source sync looks incomplete, retry one file at a time and verify the post-sync list
 - inspect a live chat URL before deciding a worker is dead

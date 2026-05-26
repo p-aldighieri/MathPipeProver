@@ -6,6 +6,8 @@ This is the **operating guide** for the Lean post-processing module — implemen
 
 > **Where this fits.** The proof loop (formalizer → … → consolidator) is the headline workflow; see `docs/soft_scaffolding.md` for that. This guide covers the *next* step: taking a finished `final_report.md` and producing a Lean file that compiles against Mathlib, with a per-paper INVENTORY.lean for results outside Mathlib.
 
+> **Subagent boundary.** The sub-agent language in this file is Lean-only. It applies to Lean/Mathlib/AXLE proof engineering after the English proof has been consolidated. It must not be generalized to the upstream analytical proof pipeline, where formalizer/searcher/breakdown/prover/reviewer/consolidator/gatekeeper roles go through ChatGPT Extended Pro.
+
 The headline pipeline shape has been updated (PIOTR v9 session, 2026-05-23):
 - Per-lemma cycle now includes a brainstorm step (8c) before prove (87/88).
 - Smuggling check (8b) deferred to AFTER prove+review+compile; not interleaved with proving.
@@ -175,6 +177,8 @@ The single most important architectural choice this module makes: **AXLE cannot 
 
 The dep-audit verification step iterates dozens to hundreds of AXLE checks. Doing this through Extended Pro round-trips is absurd: each ChatGPT submission costs 30–90 min wall-clock, but each AXLE check returns in <500 ms. So this step delegates to a local sub-agent with tool access.
 
+This is a narrow Lean-formalization exception. Do not use this section as precedent for assigning natural-language analytical proof roles to subagents.
+
 **Default backend: Codex CLI 5.5 with a persistent thread.**
 ```bash
 codex --model gpt-5.5 --effort extra-high \
@@ -258,7 +262,7 @@ Rough numbers for a paper-scale theorem with ~10 lemmas and ~30 external results
 | `/lean-merge` | <5 min | One AXLE call. |
 | `/lean-final-check` | 0.5–2 h | AXLE verify + per-lemma disprove (fast) + final meaning-check (Extended Pro pass). |
 
-Total: typically 10–30 hours wall-clock, of which the user is gated on Extended Pro maybe 60% of the time. Run `/heartbeat` and step away.
+Total: typically 10–30 hours wall-clock, of which the user is gated on Extended Pro maybe 60% of the time. Record the chat URLs and response/heartbeat paths, then use passive heartbeat polling, `/inspect-chat`, or `/recover-chat` when returning.
 
 ## Smart-Scaffolding Discipline, Applied Here
 
@@ -287,7 +291,7 @@ Discovered the hard way during the `robust_trust_extension` wet run: the origina
 
 2. **In-thread proofs for structural unpacks.** Lemmas of the form "∃ X, P X" where X is constructible from existing structure fields are 1-3 line term-mode proofs (`⟨bridge.extendRestricted σ, bridge.extendRestricted_eq σ⟩`). Don't queue these for Pro.
 
-3. **Pro 5.5 prover only for what AXLE + in-thread can't crack.** Genuine proof generation for substantive theorems (Tier 2 posterior identity, measurable-selection arguments, kernel restriction theorems, WTA cone intersection). Run Pro chats **in parallel** when the lemmas are independent (no inter-lemma dependencies in their proofs).
+3. **Extended Pro prover only for what AXLE + in-thread can't crack.** Genuine proof generation for substantive Lean theorem bodies (Tier 2 posterior identity, measurable-selection arguments, kernel restriction theorems, WTA cone intersection). Run Extended Pro chats **in parallel** when the lemmas are independent (no inter-lemma dependencies in their proofs).
 
 4. **AXLE check before the prover-reviewer**, not after. There's no point asking Pro to audit a proof that doesn't even compile — flip the order from the original skill flow.
 

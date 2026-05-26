@@ -5,6 +5,8 @@ argument-hint: --proof-repo PATH [--retries 5] [--force-opus]
 
 Take the dep-audit's *proposed* candidate table and verify each candidate against the live AXLE API. The verification is iterative — wrong-name candidates get re-proposed and re-checked up to N times — and runs in a **persistent sub-agent session** so the iteration loop doesn't consume the orchestrator's context.
 
+This is a Lean-formalization exception to the normal MathPipeProver rule. Subagents may be used here because the work is Lean/Mathlib/AXLE code checking. Do not use this command as precedent for natural-language analytical proof roles; those go through Extended Pro.
+
 **Arguments:** `$ARGUMENTS`
 - `--proof-repo PATH` — absolute path to the proof working folder
 - `--retries N` — max retries per wrong-name candidate (default 5)

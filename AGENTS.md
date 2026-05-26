@@ -7,9 +7,12 @@ Repo-local skills available in this repository:
 - If the task mentions ChatGPT projects, browser-backed proof orchestration, durable sources, `external_agent`, `Extended Pro`, `prepare`, or `submit`, use the matching repo-local skill.
 - Prefer repo scripts over ad hoc browser actions.
 - Keep durable project sources and temporary chat attachments separate.
+- Formal analytical proof roles must go through ChatGPT Extended Pro via the browser-backed `external_agent` workflow. Do not use subagents for formalizer/searcher/breakdown/prover/reviewer/consolidator/gatekeeper work.
+- Subagents are allowed only for a specifically requested coding/simulation problem, or inside the Lean formalization workflow for Lean/Mathlib/AXLE code-checking and proof-engineering loops.
 - For browser-backed MathPipeProver work, prefer attaching to the already-running visible Chrome session over CDP via `MPP_CHATGPT_CDP_URL` or `--cdp-url`.
 - Do not improvise alternate browser launch paths, headless runs, or profile-based fallbacks unless the user explicitly asks for that. If CDP attach fails, treat it as an infrastructure issue and report it.
 - Do not stop at the first browser inconsistency. Re-check the project URL, base model, effort pill, and durable sources before declaring the browser run broken.
 - If the Sources tab looks stale or incomplete, reopen it, retry one file at a time, and verify the post-sync source list before moving on.
 - If a response file is missing but a live `chat_url` exists, inspect or recover that chat before treating the step as dead.
 - If ChatGPT shows an account chooser and there is one clear account entry to continue with, select it and keep going. Escalate only when the login state is ambiguous or blocked.
+- Do not start the deprecated recurring `/heartbeat` watcher loop. Use the browser agent's heartbeat JSON, live chat inspection, and `/recover-chat` for recovery unless the user explicitly asks for a recurring reminder/automation.

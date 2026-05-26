@@ -22,6 +22,7 @@ These apply in smart-scaffolding mode. They are the difference between a smart o
 - **Ask for parseable output.** Submit role prompts that ask GPT Extended Pro for results in clearly-delimited blocks (the templates in `prompts/soft/` already do this). Without delimited output, dumps are slow and error-prone to parse. If you find yourself improvising a parse, the prompt template is what needs fixing.
 - **Commit at meaningful checkpoints.** Commit in the proof repo (not MathPipeProver) at the end of each verified unit, scope shift, or major artifact production. The proof repo is the durable record of mathematical progress; MathPipeProver is the toolchain. Do not let unstaged proof work accumulate across multiple verified results.
 - **Parallelize carefully.** You may run two subtasks in parallel when they are genuinely independent and the marginal context cost is justified (e.g., two unrelated reviewer verdicts in flight against different verification units). Keep an explicit log of which run owns which durable project source vs. which prompt-specific attachment, so concurrent runs do not collide on shared sources. When in doubt, sequence.
+- **Keep subagents out of analytical proof work.** In the main natural-language proof pipeline, formalizer/searcher/breakdown/prover/reviewer/consolidator/gatekeeper roles go through ChatGPT Extended Pro via the browser-backed `external_agent` workflow. Subagents are only for a specifically requested coding/simulation task, or for Lean formalization work where the task is Lean/Mathlib/AXLE code checking or proof engineering.
 
 ## Slash Commands
 
@@ -29,24 +30,46 @@ Available via `.claude/commands/`:
 
 | Command | Description |
 |---------|-------------|
-| `/set-model-extended` | Set ChatGPT to **Extended Pro** (Pro model + Extended effort). MUST run before any submission. |
+| `/set-model-extended` | Set/verify ChatGPT's **Extended Pro target**. MUST run before any submission. |
 | `/submit-role` | Submit a proof role prompt to a ChatGPT project. Verifies Extended Pro, sends, reports chat URL. |
 | `/set-sources` | Add/remove durable files in a ChatGPT project's Sources tab. |
 | `/inspect-chat` | Read-only check of a live chat's generation status. |
 | `/recover-chat` | Extract a completed response from a chat URL and save to file. |
-| `/heartbeat` | Start a 30-min recurring smart-scaffolding orchestrator heartbeat loop. |
+
+The old recurring `/heartbeat` watcher loop is deprecated for normal proof sessions. Use the browser agent's heartbeat JSON, `/inspect-chat`, and `/recover-chat` instead; create an explicit reminder or automation only when the user asks for one.
 
 ## CDP Browser Scripts
 
-Located in `scripts/chatgpt_browser_agent/`:
+Prefer the wrapper `scripts/chatgpt_browser_agent.sh` for normal proof work:
 
-| Script | Usage |
-|--------|-------|
-| `cdp_set_model_pro.mjs` | `node cdp_set_model_pro.mjs --port PORT` — Set Extended Pro (two-step: model + effort) |
-| `cdp_submit.mjs` | `node cdp_submit.mjs --project-url URL --port PORT [--check-effort] prompt.md` |
-| `cdp_add_source.mjs` | `node cdp_add_source.mjs --project-url URL --port PORT file1 file2 ...` |
+- `prepare --project-url URL [--cdp-url URL] [--add-source PATH ...] [--remove-source NAME ...]`
+- `submit --project-url URL --request-file PATH --response-file PATH [--cdp-url URL] [--attach-file PATH ...]`
+- `recover --chat-url URL --response-file PATH [--cdp-url URL]`
+- `inspect --chat-url URL [--cdp-url URL]`
 
-All scripts require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
+Current `.mjs` helpers live in `scripts/chatgpt_browser_agent/`:
+
+| Script | Purpose |
+|--------|---------|
+| `chatgpt_browser_agent.mjs` | Main prepare/submit/recover/inspect implementation used by the shell wrapper. |
+| `cdp_set_model_pro.mjs` | Verify or set the composer to the current Pro/Extended Pro target before submissions. |
+| `cdp_check_chat_model.mjs` | Inspect an existing chat for model/effort hints after submission. |
+| `list_sources.mjs` | List visible durable project sources. |
+| `cdp_add_source.mjs` | Add durable project sources. |
+| `cdp_remove_source_v2.mjs` | Remove durable project sources with confirmation-dialog handling. |
+| `cdp_refresh_sources.mjs` | Remove, pause, and re-add source files to avoid stale ChatGPT source caches. |
+| `cdp_submit.mjs` | Lower-level single prompt submitter; Extended Pro enforcement is built in. |
+| `cdp_submit_trustpill.mjs` | Project-specific diagnostic submitter that trusts a visible Pro pill. Not part of the standard workflow. |
+| `cdp_submit_batch.mjs` | Legacy batch helper for parallel prompt dispatch; validate it against the current submit helper before relying on it. |
+| `wait_chat_done.mjs` | Chat-ID-pinned poller/dumper for a known chat URL. |
+| `cdp_inspect_chat.mjs` | Read-only live chat inspection. |
+| `cdp_dump_chat.mjs` | Dump assistant text from a known chat when normal harvest fails. |
+| `cg_create_project.mjs` | Project creation/provisioning helper, not part of the normal role loop. |
+| `provision_inits.mjs` | Bulk INIT provisioning helper for prepared project folders, not part of the normal role loop. |
+
+Treat `_*.mjs`, `cdp_inspect_actions_menu.mjs`, and one-off diagnostic files as diagnostics, not standard workflow commands.
+
+All CDP helpers require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
 
 ## Chrome CDP Port Management
 
@@ -79,11 +102,12 @@ Each proof project must run in its **own Chrome instance** on a **unique port** 
 
 ## Model Configuration — CRITICAL
 
-**Extended Pro** requires TWO settings (they are independent):
-1. **Model**: Click "ChatGPT ˅" header dropdown → select **"Pro"** (NOT "Thinking")
-2. **Effort**: Click the "Pro >" pill in the composer → select **"Extended"**
+The browser scripts enforce the current **Extended Pro target**:
 
-The composer pill must show **"Extended Pro"**. "Thinking + Heavy" is a DIFFERENT, weaker model. Always verify before submitting.
+1. **Reasoning:** `Pro`
+2. **Model:** `5.5`
+
+The composer pill may read simply **"Pro"** when this target is set. "Thinking + Heavy", `High`, `Medium`, or any non-Pro reasoning mode is a weaker lane. Always verify before submitting.
 
 ## Key Documentation
 
@@ -114,13 +138,13 @@ The orchestrator is responsible for keeping the ChatGPT project's **Sources** ta
 **How to act:**
 Use the browser agent's `--add-source` and `--remove-source` flags directly, or invoke the `/set-sources` slash command from the orchestrator session.
 
-## Heartbeat file locations
+## Browser heartbeat files
 
 Heartbeat JSON files are written next to the response file by the browser agent:
 - `runs/<run>/branches/<branch>/external_agent/{role}_response_heartbeat.json`
 - Response at: `runs/<run>/branches/<branch>/external_agent/{role}_response.md`
 
-Use `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) to poll a heartbeat from a shell when you want a blocking "wait for completion" helper instead of in-orchestrator polling.
+These files are passive telemetry for recovery and status checks. Do not start the deprecated recurring `/heartbeat` watcher loop as part of the standard workflow. If you want a blocking shell wait, `mpp watch-heartbeat` (or `chatgpt_heartbeat_watch.sh`) can poll one heartbeat without resuming or routing the proof automatically.
 
 ## Lean formalization
 
@@ -131,7 +155,9 @@ A Lean 4 / Mathlib post-processing module sits on top of the smart-scaffolding p
 - **AXLE client.** `mathpipeprover/axle.py` wraps the AXLE Lean verification API (`https://axle.axiommath.ai/v1/docs/`). Shell surface: `mpp axle {environments,smoke,check,verify-proof,sorry2lemma,repair-proofs,merge,disprove,extract-decls}` — see `mpp axle --help`.
 - **Role templates** in `prompts/soft/80-8f_lean_*_soft.md` — generators + reviewers for structurer, dep_audit, formalizer, meaning_check, prover (80–88), plus auditors: inventory_match (89), headline_translation (8a), smuggling_check (8b), design_brainstorm (8c), per-theorem audit (8d), paper feedback (8e), gold check (8f). All translation-discipline prompts include `prompts/fragments/lean_translation_discipline.md`.
 - **Orchestrator skills** in `.claude/commands/lean-*.md`: `/lean-formalize-init`, `/lean-structure`, `/lean-dep-audit`, `/lean-verify-deps`, `/lean-formalize`, `/lean-prove-lemma`, `/lean-merge`, `/lean-final-check`, `/lean-status`, `/lean-inventory-match`, `/lean-headline-translation`, `/lean-smuggling-check`. The verification step (`/lean-verify-deps`) spawns a Codex CLI 5.5 thread (or Opus 4.7 sub-agent fallback) to iterate AXLE checks without round-tripping through Extended Pro.
-- **Browser tooling** in `scripts/chatgpt_browser_agent/`: `cdp_refresh_sources.mjs` (cache-bust + re-upload), `cdp_submit_batch.mjs` (N parallel chats), `wait_chat_done.mjs` (chat-ID-pinned poller, hardened 2026-05-23).
+- **Browser tooling** in `scripts/chatgpt_browser_agent/`: `cdp_refresh_sources.mjs` (cache-bust + re-upload), `wait_chat_done.mjs` (chat-ID-pinned poller, hardened 2026-05-23), and `cdp_submit_batch.mjs` only after validating it against the current submit helper.
+
+Lean formalization is the main exception to the no-subagents rule: subagents may be used for Lean/Mathlib search, AXLE iteration, and Lean proof-file engineering. That exception does not apply backward to formal analytical proof roles; those stay on Extended Pro.
 
 **Setup the orchestrator should verify before invoking Lean tooling:**
 

@@ -10,7 +10,6 @@ Copy this whole file into a fresh Claude Code session. Replace each `{{...}}` pl
 | `{{TARGET_FILE}}` | primary file under work, relative to `{{PROOF_REPO}}` (e.g. `Alternative.tex`) |
 | `{{CHATGPT_PROJECT_URL}}` | full URL of the ChatGPT project |
 | `{{CDP_PORT}}` | Chrome remote-debug port (e.g. `9222`) |
-| `{{HEARTBEAT_INTERVAL}}` | heartbeat cadence (e.g. `15m`) |
 | `{{TASK_BRIEF}}` | free-form description of what to do this session |
 
 ## Path conventions
@@ -31,7 +30,7 @@ You are the smart orchestrator for a smart-scaffolding proof pipeline (the repo'
 - `/MathPipeProver/prompts/soft/90_paper_writer_soft.md` … `92_paper_reviewer_soft.md` — paper-mode templates.
 - `/MathPipeProver/prompts/api/01_formalizer_api.md` … `92_paper_reviewer_api.md` — API-pipeline counterparts (the autonomous batch mode).
 - `/MathPipeProver/prompts/fragments/output_contract.md` — shared snippet included by every role template.
-- `/MathPipeProver/.claude/commands/` — `/set-model-extended`, `/submit-role`, `/set-sources`, `/inspect-chat`, `/recover-chat`, `/heartbeat`.
+- `/MathPipeProver/.claude/commands/` — `/set-model-extended`, `/submit-role`, `/set-sources`, `/inspect-chat`, `/recover-chat`.
 
 ## Standard startup sequence (do these in order)
 
@@ -42,9 +41,9 @@ You are the smart orchestrator for a smart-scaffolding proof pipeline (the repo'
 3. Read `{{PROOF_REPO}}/{{TARGET_FILE}}` end to end. Extract every embedded comment, if any, "tasks for AI" section, and in-prose question. Treat each as a task item even when not in `{{TASK_BRIEF}}`. These author requests are easy to miss because they live in the source, not the brief.
 4. Verify the CDP browser at port `{{CDP_PORT}}` is up and the ChatGPT project at `{{CHATGPT_PROJECT_URL}}` is open in it. Verify the composer pill reads "Extended Pro" — if not, fix via `/set-model-extended` (see CLAUDE.md §Model Configuration — CRITICAL; the wrong pill silently swaps to a weaker model).
 5. List the durable sources of the ChatGPT project (script: `/MathPipeProver/scripts/chatgpt_browser_agent/list_sources.mjs`). Assess whether any need refresh given the current state of `{{TARGET_FILE}}` (CLAUDE.md §Durable Source Housekeeping for what belongs and what does not).
-6. Build a written task checklist combining `{{TASK_BRIEF}}` with the embedded requests from step 3. Keep it somewhere you can re-read it between subagent calls (TaskCreate or a project-local notes file).
+6. Build a written task checklist combining `{{TASK_BRIEF}}` with the embedded requests from step 3. Keep it somewhere you can re-read between Extended Pro submissions (TaskCreate or a project-local notes file).
 7. Begin orchestrating per the checklist. Use `/MathPipeProver/prompts/soft/` files as role templates; adapt rather than copy verbatim, and follow the output-format conventions in those templates so dumps parse cleanly downstream.
-8. After the first submission to Extended Pro, run `/heartbeat {{HEARTBEAT_INTERVAL}}`.
+8. After each Extended Pro submission, record the chat URL and response/heartbeat file paths. Use `/inspect-chat`, `/recover-chat`, or the browser agent's passive heartbeat JSON for recovery; do not start the deprecated recurring `/heartbeat` loop.
 
 ## Tasks for this session
 

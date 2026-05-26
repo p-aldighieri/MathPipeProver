@@ -22,7 +22,9 @@ Read `docs/lean_pipeline.md` before invoking this skill. The per-lemma cycle des
 brainstorm (8c) → prove (87 + AXLE) → review (88) → compile → per-theorem verify (8d)
 ```
 
-This skill implements that cycle. Multiple lemmas can be in flight in parallel — brainstorm + review + verify are parallel-safe across lemmas (separate browser chats); the prove step is sequential per file (Opus subagents shouldn't clobber each other).
+This skill implements that cycle. Multiple lemmas can be in flight in parallel — brainstorm + review + verify are parallel-safe across lemmas (separate browser chats); the prove step is sequential per shared file so Lean proof-editing backends do not clobber each other.
+
+Subagents are allowed here only because this is Lean formalization and the deliverable is Lean/Mathlib/AXLE proof engineering. Do not generalize this to upstream analytical proof roles; those remain Extended Pro browser submissions.
 
 **Smuggling discipline**: do NOT run `8b_lean_smuggling_check` during the prove-review loop. The proof needs room to breathe. Smuggling-check happens AFTER the lemma passes prove+review+compile, bundled with translation+scope in step 11's per-theorem verify (8d).
 
@@ -127,7 +129,7 @@ This skill implements that cycle. Multiple lemmas can be in flight in parallel �
       last_modified_commit: <git-sha>
       audits:
         brainstorm: { chat: <chat-id>, run_at: <ts>, outcome: <PROCEED|PROCEED_WITH_CAUTION> }
-        prove: { agent: <subagent-id>, run_at: <ts>, outcome: AXLE-PASS }
+        prove: { backend: <lean-proof-backend-id>, run_at: <ts>, outcome: AXLE-PASS }
         review: { chat: <chat-id>, run_at: <ts>, verdict: PASS }
         verify: { chat: <chat-id>, run_at: <ts>, translation: PASS, scope: <verdict>, smuggling: <verdict>, flagged: [...] }
       stale: false

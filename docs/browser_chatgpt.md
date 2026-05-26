@@ -11,8 +11,8 @@ MathPipeProver already knows how to emit request files and wait for response fil
 The browser runner in `scripts/chatgpt_browser_agent.sh` turns that contract into the ChatGPT-project transport layer for a smart Claude Code or Codex orchestrator:
 
 1. Open a ChatGPT project in a persistent browser profile.
-2. Ensure the top model picker is `ChatGPT 5.4 Pro`.
-3. Ensure the composer pill is set to `Extended Pro`.
+2. Ensure the composer/model controls are on the Extended Pro target: reasoning `Pro` plus model `5.5`.
+3. Verify the visible composer pill before submitting.
 4. Optionally add or remove durable project sources.
 5. Submit the request markdown from `branches/<branch>/external_agent/<role>_request.md`.
 6. Wait for the reply to stabilize.
@@ -63,7 +63,7 @@ This avoids the separate Playwright-owned browser profile entirely.
 
 ### Prepare the project
 
-Use this to open the project, pin `ChatGPT 5.4 Pro`, switch the composer pill to `Extended Pro`, and sync durable project sources.
+Use this to open the project, pin the Extended Pro target, and sync durable project sources.
 
 ```bash
 scripts/chatgpt_browser_agent.sh prepare \
@@ -78,7 +78,7 @@ scripts/chatgpt_browser_agent.sh prepare \
 `prepare` should be treated as a verified sync step, not a best-effort hint. If the requested durable set is not confirmed:
 
 1. reopen the project page
-2. re-check `ChatGPT 5.4 Pro` and `Extended Pro`
+2. re-check the Extended Pro target (current UI: reasoning `Pro` + model `5.5`)
 3. reopen `Sources`
 4. retry the missing file one at a time
 5. confirm the final source list before continuing
@@ -112,9 +112,9 @@ The heartbeat is updated on each polling cycle with the current status, chat URL
 
 If the heartbeat has a real `chat_url` but the response file is still missing, treat that as a recovery candidate first. Inspect or recover the existing chat before deciding the role must be resubmitted from scratch.
 
-### Watch one heartbeat
+### Poll one heartbeat
 
-Use this when you want notification and terminal status detection without resuming the run automatically:
+Use this when you want notification and terminal status detection without resuming the run automatically. This is a passive poll of one browser-agent heartbeat file, not the deprecated recurring orchestrator `/heartbeat` watcher loop:
 
 ```bash
 scripts/chatgpt_heartbeat_watch.sh \
@@ -184,7 +184,7 @@ For iterative proof development, update the durable proof-state source after eac
 
 - Default max wait is 90 minutes (`5400` seconds).
 - Override with `--max-wait-seconds` if a role needs a different budget.
-- Use the heartbeat JSON beside the response file to check whether the worker is still active. `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) is a blocking shell helper that polls the heartbeat and reports completion.
+- Use the heartbeat JSON beside the response file to check whether the worker is still active. `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) is a blocking shell helper that polls that one heartbeat and reports completion; it does not route the proof or replace orchestrator judgment.
 
 ## Orchestrator handoff
 
@@ -199,14 +199,14 @@ After every soft role, control returns to the orchestrator, which judges the nex
 
 This first pass hard-codes two browser policies:
 
-- always use `ChatGPT 5.4 Pro` in the top model picker
-- always use `Extended Pro` in the composer pill
+- always use the Extended Pro target (current UI: reasoning `Pro` + model `5.5`)
+- always verify the visible composer pill before sending
 
 That is deliberate. The goal is a working browser path first, then a more flexible browser config later.
 
 ## Current limits
 
-- The browser runner assumes the ChatGPT UI still exposes the composer pill as `Pro -> Extended`.
+- The browser runner assumes the ChatGPT UI still exposes a composer model/reasoning pill it can read and set.
 - Source removal is selector-based and therefore more brittle than prompt submission.
 - The script creates a fresh chat from the project page for each request. It does not yet reuse branch-specific conversations.
 - The runner closes a Playwright-launched browser at the end of each command. In `--cdp-url` mode it only closes the automation connection and leaves the human-opened Chrome running.

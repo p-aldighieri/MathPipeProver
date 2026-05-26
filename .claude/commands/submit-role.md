@@ -18,9 +18,9 @@ Arguments: $ARGUMENTS
    ```
    The script navigates to the project (starts a fresh chat), verifies Extended Pro, fills the prompt, and sends.
 
-3. **Record the chat URL** from the script output for heartbeat monitoring.
+3. **Record the chat URL** from the script output for status checks and recovery.
 
-4. **Monitor** via heartbeat or manual polling. Extended Pro responses take 30-90+ minutes.
+4. **Monitor** via the passive heartbeat JSON, `/inspect-chat`, or manual polling. Extended Pro responses take 30-90+ minutes. Do not start the deprecated recurring `/heartbeat` loop.
 
 5. **Harvest** the response when complete using inline Playwright CDP (connect, extract assistant messages, write to response file).
 
