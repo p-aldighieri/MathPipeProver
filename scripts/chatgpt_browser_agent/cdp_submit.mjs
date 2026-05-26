@@ -35,11 +35,13 @@ let projectUrl = '';
 let port = 9222;
 let timeout = 30000;
 let promptFile = '';
+let dryRun = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--project-url' && args[i + 1]) { projectUrl = args[++i]; continue; }
   if (args[i] === '--port' && args[i + 1]) { port = parseInt(args[++i], 10); continue; }
   if (args[i] === '--timeout' && args[i + 1]) { timeout = parseInt(args[++i], 10); continue; }
+  if (args[i] === '--dry-run') { dryRun = true; continue; } // fill but do not send (for testing)
   if (args[i] === '--check-effort') { /* flag is now default; kept as no-op for back-compat */ continue; }
   if (args[i] === '--help' || args[i] === '-h') {
     console.log('Usage: node cdp_submit.mjs --project-url <URL> [--port <PORT>] <prompt_file>');
@@ -84,10 +86,20 @@ try {
   // When reasoning=Pro AND model=5.5 the pill text is exactly "Pro" — this
   // is the new equivalent of legacy "Extended Pro".
   const PILL = 'button.__composer-pill[aria-haspopup="menu"]';
-  const readPill = async () => await page.evaluate((s) => {
-    const el = document.querySelector(s);
-    return el ? (el.textContent || '').trim() : 'unknown';
-  }, PILL);
+  // Hardened: wait for the pill to render before reading; retry on a transient "unknown"
+  // (the composer can lag several seconds behind navigation/domcontentloaded).
+  const readPill = async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try { await page.locator(PILL).first().waitFor({ state: 'visible', timeout: 6000 }); } catch { /* keep trying */ }
+      const txt = await page.evaluate((s) => {
+        const el = document.querySelector(s);
+        return el ? (el.textContent || '').trim() : 'unknown';
+      }, PILL);
+      if (txt && txt !== 'unknown') return txt;
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    return 'unknown';
+  };
   const isMenuOpen = async () => await page.evaluate((s) =>
     document.querySelector(s)?.getAttribute('aria-expanded') === 'true', PILL);
   const closeMenu = async () => {
@@ -141,9 +153,16 @@ try {
   let composerPill = await readPill();
   console.log('Model pill before submit:', composerPill);
   const desired = { reasoning: 'Pro', model: '5.5' };
-  let current = await readCurrentSelection();
-  console.log('Current selection:', JSON.stringify(current));
-  if (current.reasoning !== desired.reasoning || current.model !== desired.model) {
+  // 2026-05-25 DOM update: the model picker collapsed the separate GPT-5.x
+  // submenu into a single combined reasoning radio "Pro | • Extended"; the
+  // composer pill then reads "Extended Pro". When the pill already reads
+  // "Extended Pro"/"Pro" the state is correct and the (now-absent) GPT
+  // submenu must NOT be probed — hovering it hangs. Accept and skip.
+  const pillOk = /^(Extended Pro|Pro)$/.test(composerPill);
+  let current = pillOk ? { ...desired } : await readCurrentSelection();
+  if (pillOk) console.log('Pill already Extended Pro/Pro — skipping model submenu probe.');
+  else console.log('Current selection:', JSON.stringify(current));
+  if (!pillOk && (current.reasoning !== desired.reasoning || current.model !== desired.model)) {
     console.log(`Selection != ${desired.reasoning}+${desired.model}; fixing.`);
     try {
       // Fix reasoning
@@ -160,33 +179,40 @@ try {
         await new Promise(r => setTimeout(r, 600));
         await closeMenu();
       }
-      // Fix model
+      // Fix model -> GPT-5.5, BEST-EFFORT: only if that submenu exists (older UI variant).
+      // In the current UI the GPT submenu is gone and the composer pill already encodes the
+      // model, so its absence must NOT throw (the old code hung on this hover for 30s).
       if (current.model !== desired.model) {
         await openMenu();
         const gpt = page.locator('[role="menuitem"]', { hasText: /^GPT/ }).first();
-        await gpt.hover();
-        await new Promise(r => setTimeout(r, 700));
-        const clicked = await page.evaluate((target) => {
-          for (const r of document.querySelectorAll('[role="menuitemradio"]')) {
-            const t = (r.innerText || '').trim();
-            if (t === target) { r.click(); return true; }
-          }
-          return false;
-        }, desired.model);
-        if (!clicked) throw new Error(`Model radio "${desired.model}" not found`);
-        await new Promise(r => setTimeout(r, 800));
+        if (await gpt.count() > 0) {
+          await gpt.hover();
+          await new Promise(r => setTimeout(r, 700));
+          await page.evaluate((target) => {
+            for (const r of document.querySelectorAll('[role="menuitemradio"]')) {
+              if ((r.innerText || '').trim() === target) { r.click(); return true; }
+            }
+            return false;
+          }, desired.model);
+          await new Promise(r => setTimeout(r, 800));
+        } else {
+          console.log('No GPT-version submenu in this UI; relying on composer pill.');
+        }
         await closeMenu();
       }
     } catch (e) {
-      console.error('ERROR setting Pro/5.5:', e.message);
-      process.exit(1);
+      // Menu adjustments are best-effort; fall through to the authoritative pill recheck.
+      console.warn('WARN: model-menu adjustment hiccup (continuing to pill recheck):', e.message);
+      await closeMenu().catch(() => {});
     }
+    // Authoritative recheck via the PILL. readCurrentSelection().model is unreadable in the
+    // current UI (no GPT submenu), so the pill — not the model field — is the gate.
     composerPill = await readPill();
-    current = await readCurrentSelection();
     console.log('Model pill after fix:', composerPill);
-    console.log('Selection after fix:', JSON.stringify(current));
-    if (current.reasoning !== desired.reasoning || current.model !== desired.model) {
-      console.error(`ERROR: still wrong after fix. Reasoning=${current.reasoning}, model=${current.model}`);
+    if (!/^(Extended Pro|Pro)$/.test(composerPill)) {
+      console.error(`ERROR: composer pill is "${composerPill}" after fix, not "Extended Pro"/"Pro". `
+        + `Refusing to submit (would silently use a weaker model). Set Extended Pro manually.`);
+      await browser.close();
       process.exit(1);
     }
   }
@@ -200,6 +226,13 @@ try {
   await textarea.fill(promptText);
   console.log('Filled prompt');
   await new Promise(r => setTimeout(r, 1500));
+
+  if (dryRun) {
+    console.log('DRY RUN: prompt filled but NOT sent; clearing draft.');
+    await textarea.fill('');
+    await browser.close();
+    process.exit(0);
+  }
 
   // Send
   const sendBtn = page.locator('[data-testid="send-button"]');
