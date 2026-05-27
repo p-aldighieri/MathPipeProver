@@ -78,14 +78,19 @@ In soft mode, non-proof terminal conditions such as `FAIL_SCOPE`, `STALL`, or bu
 
 ## Subagent Boundary
 
-The browser-backed analytical proof loop is an Extended Pro workflow. Formalizer, literature, searcher, breakdown, prover, reviewer, consolidator, and gatekeeper work should be submitted through ChatGPT Extended Pro with the project sources and scoped attachments curated by the orchestrator.
+The browser-backed analytical proof loop runs through two ChatGPT modes:
+
+- **Extended Pro** for analytical work: formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper. 30–90 min per role. The pipeline default.
+- **Deep Research** for the literature role only (`prompts/soft/02_literature_soft.md`). DR can browse the open web and academic repositories and return long-form synthesis with citations and quoted passages — capabilities Extended Pro lacks. 5–30 min per literature pass, occasionally up to 45.
+
+Each role is submitted through the orchestrator-curated browser flow (project sources + scoped attachments), with the model mode chosen automatically by `/submit-role` based on the prompt file. Manual invocations: pass `--deep-research` to `chatgpt_browser_agent.sh submit` (or `cdp_submit.mjs`) only when submitting the literature role; default is Extended Pro for everything else.
 
 Do not replace those roles with Claude/Codex/Opus subagents. Subagents are reserved for:
 
 - a specifically requested coding or simulation task, where the deliverable is code, a computational experiment, or a simulation result
 - Lean formalization work, where the deliverable is Lean/Mathlib/AXLE proof engineering rather than a natural-language analytical proof
 
-When a task is an English mathematical argument, a proof repair, a reviewer audit, a route search, or a formal analytical derivation, use Extended Pro.
+When a task is an English mathematical argument, a proof repair, a reviewer audit, a route search, or a formal analytical derivation, use Extended Pro. When the task is literature recon, use Deep Research.
 
 ## Gatekeeper
 

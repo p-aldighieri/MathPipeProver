@@ -1,18 +1,29 @@
 #!/usr/bin/env node
 /**
- * cdp_submit_trustpill.mjs — additive helper for the theory-problem-search project.
+ * cdp_submit_trustpill.mjs — diagnostic submitter that trusts the visible pill.
  *
- * Why this exists: the shared cdp_submit.mjs assumes the NEW split "Pro + GPT-5.5"
- * composer menu and tries to re-set the model via a GPT-5.5 submenu that DOES NOT
- * EXIST on this project's (legacy) UI, where the pill is directly "Extended Pro".
- * That re-set times out. This helper TRUSTS the visible pill (the authoritative
- * check per the project memory) and skips the submenu interaction entirely.
+ * ## Status
+ *
+ * After the lib refactor (lib/model_pill.mjs + lib/composer.mjs), the
+ * standard `cdp_submit.mjs` now also trusts a visible "Extended Pro"/"Pro"
+ * pill (its `ensureExtendedPro` fast-paths on a correct pill without
+ * probing the now-removed GPT submenu). This script is therefore
+ * functionally close to redundant — kept as a diagnostic that refuses
+ * outright if the pill is wrong, instead of trying to fix it.
+ *
+ * Difference from cdp_submit.mjs:
+ *   - cdp_submit.mjs: calls ensureExtendedPro → tries to fix wrong pill,
+ *     throws on failure. Suitable for production.
+ *   - this script:    refuses to submit on a wrong pill with exit code 2.
+ *     Useful when investigating "why did my submission use a weak model?"
  *
  * Usage: node cdp_submit_trustpill.mjs --project-url <URL> --port <PORT> <prompt_file>
  */
-import { chromium } from 'playwright';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { attachCDP } from './lib/browser.mjs';
+import { readPill, EXTENDED_PRO_LABELS } from './lib/model_pill.mjs';
+import { fillComposer, clickSend, isGenerating } from './lib/composer.mjs';
 
 const args = process.argv.slice(2);
 let projectUrl = '', port = 9222, promptFile = '';
@@ -25,44 +36,38 @@ if (!projectUrl || !promptFile) { console.error('ERROR: --project-url and prompt
 const promptText = readFileSync(promptFile, 'utf-8');
 console.log(`Prompt: ${promptFile.split(/[\\/]/).pop()} (${promptText.length} chars)`);
 
+let close = async () => {};
 try {
-  const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
-  const ctx = browser.contexts()[0];
+  const att = await attachCDP({ port });
+  close = att.close;
+  const ctx = att.context;
   let page = ctx.pages().find(p => p.url().includes('chatgpt.com')) || ctx.pages()[0] || await ctx.newPage();
   await page.goto(projectUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await new Promise(r => setTimeout(r, 5000));
   console.log('At:', page.url());
 
-  const PILL = 'button.__composer-pill[aria-haspopup="menu"]';
-  const pill = await page.evaluate((s) => {
-    const el = document.querySelector(s);
-    return el ? (el.textContent || '').trim() : 'unknown';
-  }, PILL);
+  const pill = await readPill(page);
   console.log('Composer pill:', pill);
-  if (!/pro/i.test(pill)) {
-    console.error(`ERROR: pill "${pill}" is not a Pro variant — refusing to submit on a weaker model.`);
+  if (!EXTENDED_PRO_LABELS.includes(pill)) {
+    console.error(`ERROR: pill "${pill}" is not Extended Pro/Pro — refusing to submit on a weaker model.`);
+    await close();
     process.exit(2);
   }
-  console.log('Model: trusting pill (Extended Pro). Skipping broken submenu re-set.');
+  console.log('Model: trusting pill (Extended Pro). Skipping fix attempt by design.');
 
-  const textarea = page.locator('[id="prompt-textarea"]');
-  await textarea.waitFor({ timeout: 10000 });
-  await textarea.click();
-  await new Promise(r => setTimeout(r, 500));
-  await textarea.fill(promptText);
+  const composer = await fillComposer(page, promptText);
   console.log('Filled prompt');
   await new Promise(r => setTimeout(r, 1500));
 
-  const sendBtn = page.locator('[data-testid="send-button"]');
-  if (await sendBtn.count() > 0) { await sendBtn.click(); console.log('SENT'); }
-  else { console.error('WARNING: send button not found'); }
+  const sent = await clickSend(page, composer);
+  console.log(sent ? 'SENT' : 'WARNING: send fallback chain exhausted');
 
   await new Promise(r => setTimeout(r, 8000));
   console.log('Chat URL:', page.url());
-  const generating = await page.locator('[data-testid="stop-button"]').count() > 0;
-  console.log('Generating:', generating ? 'YES' : 'NO');
-  await browser.close();
+  console.log('Generating:', (await isGenerating(page)) ? 'YES' : 'NO');
+  await close();
 } catch (e) {
   console.error('ERROR:', e.message);
+  await close();
   process.exit(1);
 }

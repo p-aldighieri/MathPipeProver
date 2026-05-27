@@ -11,13 +11,17 @@ MathPipeProver already knows how to emit request files and wait for response fil
 The browser runner in `scripts/chatgpt_browser_agent.sh` turns that contract into the ChatGPT-project transport layer for a smart Claude Code or Codex orchestrator:
 
 1. Open a ChatGPT project in a persistent browser profile.
-2. Ensure the composer/model controls are on the Extended Pro target: reasoning `Pro` plus model `5.5`.
-3. Verify the visible composer pill before submitting.
+2. Ensure the composer is in the right mode for the role:
+   - **Extended Pro** (default) for every analytical role — reasoning `Pro`, pill reads `Extended Pro` or `Pro`.
+   - **Deep Research** when `--deep-research` is passed (literature role only). 5–30 min wall-clock; web-browsing + multi-source synthesis.
+3. Verify the visible composer state before submitting.
 4. Optionally add or remove durable project sources.
 5. Submit the request markdown from `branches/<branch>/external_agent/<role>_request.md`.
 6. Wait for the reply to stabilize.
 7. Write the reply to `branches/<branch>/external_agent/<role>_response.md`.
 8. Optionally write a JSON session log beside the response file.
+
+The DOM logic for both Extended Pro and Deep Research lives in `scripts/chatgpt_browser_agent/lib/model_pill.mjs` — single source of truth shared by every script. ChatGPT's composer DOM changes every few weeks; when it does, fix the lib once, not each entry point.
 
 For proof projects, keep a durable proof-state markdown file attached as a project source and update it after each accepted reviewer pass or major proof amendment.
 
@@ -68,7 +72,7 @@ Use this to open the project, pin the Extended Pro target, and sync durable proj
 ```bash
 scripts/chatgpt_browser_agent.sh prepare \
   --cdp-url "http://127.0.0.1:9222" \
-  --project-url "https://chatgpt.com/g/g-p-6992190183fc8191aec8b0c2fad5c017-robust-trust-proof/project" \
+  --project-url "https://chatgpt.com/g/g-p-XXXX/project" \
   --add-source "/absolute/path/to/objective_statement.md" \
   --add-source "/absolute/path/to/proof_state.md" \
   --add-source "/absolute/path/to/Robust_trust_Dworczak_Smolin.pdf" \
@@ -88,7 +92,7 @@ scripts/chatgpt_browser_agent.sh prepare \
 ```bash
 scripts/chatgpt_browser_agent.sh submit \
   --cdp-url "http://127.0.0.1:9222" \
-  --project-url "https://chatgpt.com/g/g-p-6992190183fc8191aec8b0c2fad5c017-robust-trust-proof/project" \
+  --project-url "https://chatgpt.com/g/g-p-XXXX/project" \
   --request-file "runs/<run_id>/branches/main/external_agent/formalizer_request.md" \
   --attach-file "runs/<run_id>/branches/main/context/breakdown.md" \
   --attach-file "runs/<run_id>/branches/main/external_agent/prover_response.md" \
@@ -168,7 +172,7 @@ mpp inspect --run-id <run_id> --config config/browser_chatgpt.toml
 # 3. Fulfill the pending request in ChatGPT.
 scripts/chatgpt_browser_agent.sh submit \
   --cdp-url "http://127.0.0.1:9222" \
-  --project-url "https://chatgpt.com/g/g-p-6992190183fc8191aec8b0c2fad5c017-robust-trust-proof/project" \
+  --project-url "https://chatgpt.com/g/g-p-XXXX/project" \
   --request-file "runs/<run_id>/branches/main/external_agent/formalizer_request.md" \
   --response-file "runs/<run_id>/branches/main/external_agent/formalizer_response.md"
 

@@ -1,4 +1,17 @@
-import { chromium } from 'playwright';
+#!/usr/bin/env node
+/**
+ * list_sources.mjs — list durable project sources for a ChatGPT project.
+ *
+ * Thin shim over lib/sources.mjs (single source of truth for the
+ * Sources tab DOM heuristics). The earlier inline regex scrape in this
+ * file was a weaker fallback that often missed sources without standard
+ * file extensions.
+ *
+ * Usage:
+ *   node list_sources.mjs --project-url <URL> [--port <PORT>]
+ */
+import { attachCDP } from './lib/browser.mjs';
+import { openSourcesTab, listSources } from './lib/sources.mjs';
 
 const args = process.argv.slice(2);
 let projectUrl = '', port = 9222;
@@ -6,40 +19,25 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === '--project-url' && args[i + 1]) projectUrl = args[++i];
   if (args[i] === '--port' && args[i + 1]) port = parseInt(args[++i], 10);
 }
+if (!projectUrl) { console.error('ERROR: --project-url required'); process.exit(1); }
 
-const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
-const ctx = browser.contexts()[0];
-let page = ctx.pages().find(p => p.url().includes('chatgpt.com')) || ctx.pages()[0];
-await page.bringToFront();
-await page.goto(projectUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-await new Promise(r => setTimeout(r, 3000));
+try {
+  const { context, close } = await attachCDP({ port });
+  let page = context.pages().find(p => p.url().includes('chatgpt.com')) || context.pages()[0];
+  await page.bringToFront();
+  await page.goto(projectUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await new Promise(r => setTimeout(r, 3000));
 
-const sourcesTab = page.getByText('Sources', { exact: true }).first();
-if (await sourcesTab.count() > 0) {
-  await sourcesTab.click();
-  await new Promise(r => setTimeout(r, 2000));
+  await openSourcesTab(page);
+  await new Promise(r => setTimeout(r, 1500));
+
+  const names = await listSources(page);
+  console.log('Detected sources:');
+  for (const n of names) console.log('  ', n);
+  console.log(JSON.stringify({ count: names.length, sources: names }, null, 2));
+
+  await close();
+} catch (e) {
+  console.error('ERROR:', e.message);
+  process.exit(1);
 }
-
-// Try to extract visible file names from the sources panel
-const names = await page.evaluate(() => {
-  // Look for elements that look like file list entries
-  const candidates = Array.from(document.querySelectorAll('[class*="source"], [data-testid*="source"], div[class*="file"], li'));
-  const seen = new Set();
-  const results = [];
-  candidates.forEach(el => {
-    const txt = (el.innerText || '').trim();
-    // Heuristic: file-like names with extension
-    const match = txt.match(/([a-zA-Z0-9_\-]+\.(?:tex|md|pdf|txt))/);
-    if (match && !seen.has(match[1])) {
-      seen.add(match[1]);
-      results.push(match[1]);
-    }
-  });
-  return results;
-});
-
-console.log('Detected sources:');
-names.forEach(n => console.log('  ', n));
-await page.screenshot({ path: 'C:/tmp/sources_listing.png' });
-console.log('Screenshot: C:/tmp/sources_listing.png');
-await browser.close();

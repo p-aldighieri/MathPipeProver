@@ -43,31 +43,69 @@ The old recurring `/heartbeat` watcher loop is deprecated for normal proof sessi
 Prefer the wrapper `scripts/chatgpt_browser_agent.sh` for normal proof work:
 
 - `prepare --project-url URL [--cdp-url URL] [--add-source PATH ...] [--remove-source NAME ...]`
-- `submit --project-url URL --request-file PATH --response-file PATH [--cdp-url URL] [--attach-file PATH ...]`
+- `submit --project-url URL --request-file PATH --response-file PATH [--cdp-url URL] [--attach-file PATH ...] [--deep-research]`
 - `recover --chat-url URL --response-file PATH [--cdp-url URL]`
 - `inspect --chat-url URL [--cdp-url URL]`
 
-Current `.mjs` helpers live in `scripts/chatgpt_browser_agent/`:
+**Pass `--deep-research` only when submitting the literature role** (`prompts/soft/02_literature_soft.md`). Every other role runs in Extended Pro. See "Model modes" below.
+
+### Library / entry-point split (post 2026-05-26 lib unification)
+
+DOM logic lives in `scripts/chatgpt_browser_agent/lib/`:
+
+| Module | Purpose |
+|--------|---------|
+| `lib/model_pill.mjs` | Composer pill reading + Extended Pro / Deep Research enforcement. Single source of truth for model state. |
+| `lib/composer.mjs` | Composer textarea detection (multi-candidate), send-button fallback chain, isGenerating. |
+| `lib/browser.mjs` | CDP attach (`attachCDP`) and persistent Chrome launch (`launchPersistent`). |
+| `lib/auth.mjs` | Login readiness wait + single-account chooser auto-pick. |
+| `lib/sources.mjs` | Durable Sources tab: list / add / remove with confirmation-dialog handling. |
+| `lib/attachments.mjs` | Per-prompt composer attachments. |
+| `lib/poll.mjs` | Assistant-text reading, stability polling, clipboard-based clean extraction. |
+| `lib/heartbeat.mjs` | Heartbeat JSON writer (preserves the `mpp watch-heartbeat` schema). |
+
+Entry-point `.mjs` scripts are thin shims over lib:
 
 | Script | Purpose |
 |--------|---------|
-| `chatgpt_browser_agent.mjs` | Main prepare/submit/recover/inspect implementation used by the shell wrapper. |
-| `cdp_set_model_pro.mjs` | Verify or set the composer to the current Pro/Extended Pro target before submissions. |
+| `chatgpt_browser_agent.mjs` | Main prepare/submit/recover/inspect CLI used by the shell wrapper. Supports `--deep-research` on submit. |
+| `cdp_set_model_pro.mjs` | Verify or set the composer to Extended Pro/Pro before submissions. |
 | `cdp_check_chat_model.mjs` | Inspect an existing chat for model/effort hints after submission. |
 | `list_sources.mjs` | List visible durable project sources. |
-| `cdp_add_source.mjs` | Add durable project sources. |
-| `cdp_remove_source_v2.mjs` | Remove durable project sources with confirmation-dialog handling. |
-| `cdp_refresh_sources.mjs` | Remove, pause, and re-add source files to avoid stale ChatGPT source caches. |
-| `cdp_submit.mjs` | Lower-level single prompt submitter; Extended Pro enforcement is built in. |
-| `cdp_submit_trustpill.mjs` | Project-specific diagnostic submitter that trusts a visible Pro pill. Not part of the standard workflow. |
-| `cdp_submit_batch.mjs` | Legacy batch helper for parallel prompt dispatch; validate it against the current submit helper before relying on it. |
-| `wait_chat_done.mjs` | Chat-ID-pinned poller/dumper for a known chat URL. |
+| `cdp_add_source.mjs` | Add durable project sources (with optional `--on-duplicate replace`). |
+| `cdp_remove_source_v2.mjs` | Remove durable project sources (lib handles confirmation dialogs). |
+| `cdp_refresh_sources.mjs` | Remove → sleep → re-add cycle to bust ChatGPT's per-chat source cache. |
+| `cdp_submit.mjs` | Lower-level single prompt submitter; supports `--deep-research`. |
+| `cdp_submit_trustpill.mjs` | Diagnostic submitter that refuses on non-Pro pill instead of trying to fix. Functionally close to redundant — kept as a strict-check variant. |
+| `cdp_submit_batch.mjs` | Sequential parallel-prompt dispatcher (post-refactor: now actually works; the pre-refactor version spawned a nonexistent target). |
+| `wait_chat_done.mjs` | Chat-ID-pinned poller/dumper for a known chat URL (uses lib's hardened poll). |
 | `cdp_inspect_chat.mjs` | Read-only live chat inspection. |
-| `cdp_dump_chat.mjs` | Dump assistant text from a known chat when normal harvest fails. |
+| `cdp_dump_chat.mjs` | Dump every message (user + assistant) of a chat. |
 | `cg_create_project.mjs` | Project creation/provisioning helper, not part of the normal role loop. |
 | `provision_inits.mjs` | Bulk INIT provisioning helper for prepared project folders, not part of the normal role loop. |
 
 Treat `_*.mjs`, `cdp_inspect_actions_menu.mjs`, and one-off diagnostic files as diagnostics, not standard workflow commands.
+
+**Maintenance rule:** when ChatGPT's DOM changes again, fix it in the relevant `lib/*.mjs` file only. Do not duplicate DOM logic in entry-point scripts.
+
+## Model modes
+
+Two model modes are wired through the browser scripts:
+
+| Mode | Used for | Wall-clock | How to invoke |
+|---|---|---|---|
+| **Extended Pro** | All analytical roles (formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper) and the Lean roles. The pipeline default. | 30–90 min | Default. No flag. |
+| **Deep Research** | Literature role only (`02_literature_soft.md`). Web-browsing + multi-source synthesis with citations. | 5–30 min (occasionally 45) | Pass `--deep-research` to `chatgpt_browser_agent.sh submit` or `cdp_submit.mjs`. |
+
+The `/submit-role` skill picks the right flag based on the prompt file. If you invoke the browser scripts manually, the rule is: literature ⇒ DR; everything else ⇒ Extended Pro.
+
+DR jobs do **not** use the same pill enforcement as Extended Pro. The `ensureDeepResearch` function in `lib/model_pill.mjs` handles the DR-specific composer toggle, verified live against `chatgpt.com` on 2026-05-26:
+
+- DR is toggled via `[role="menuitemradio"]` (text "Deep research") inside the composer "+" button menu.
+- Active state is detected via the composer chip with `aria-label="Deep research, click to remove"` (the menuitemradio's `aria-checked` lies — don't trust it).
+- The pill reads "Pro" (not "Extended Pro") while DR is active. `ensureExtendedPro` therefore explicitly toggles DR off via the chip before its pill-based fast path; otherwise a DR-active session would silently pass for "Extended Pro" and submit on the wrong mode.
+
+DR DOM is more stable than the model-picker DOM has been historically, but if ChatGPT changes it again, update `lib/model_pill.mjs` only.
 
 All CDP helpers require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
 

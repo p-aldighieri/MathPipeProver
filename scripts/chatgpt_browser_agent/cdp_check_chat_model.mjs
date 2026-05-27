@@ -6,19 +6,19 @@
  * Usage: node cdp_check_chat_model.mjs <chatUrl> [port]
  *   port defaults to 9222.
  */
-import { chromium } from 'playwright';
+import { attachCDP } from './lib/browser.mjs';
+import { PILL_SELECTOR } from './lib/model_pill.mjs';
 const [,, chatUrl, portArg] = process.argv;
 const port = parseInt(portArg || '9222', 10);
-const browser = await chromium.connectOverCDP(`http://localhost:${port}`);
-const ctx = browser.contexts()[0];
-let page = ctx.pages().find(p => p.url().includes('chatgpt.com')) || ctx.pages()[0];
+const { context, close } = await attachCDP({ port });
+let page = context.pages().find(p => p.url().includes('chatgpt.com')) || context.pages()[0];
 await page.bringToFront();
 await page.goto(chatUrl, { waitUntil: 'domcontentloaded' });
 try {
   await page.waitForSelector('[data-message-author-role="assistant"]', { timeout: 15000 });
 } catch {}
 await page.waitForTimeout(2000);
-const state = await page.evaluate(() => {
+const state = await page.evaluate((pillSelector) => {
   const out = { modelHints: [], thoughtCount: 0, assistantCount: 0 };
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let n;
@@ -33,11 +33,11 @@ const state = await page.evaluate(() => {
     }
   }
   out.assistantCount = document.querySelectorAll('[data-message-author-role="assistant"]').length;
-  const pillBtn = document.querySelector('button.__composer-pill[aria-haspopup="menu"]');
+  const pillBtn = document.querySelector(pillSelector);
   out.composerPill = pillBtn ? (pillBtn.textContent || '').trim() : null;
   return out;
-});
+}, PILL_SELECTOR);
 console.log(JSON.stringify(state, null, 2));
 await page.screenshot({ path: 'C:/tmp/chat_model_check.png', fullPage: false });
 console.log('Screenshot: C:/tmp/chat_model_check.png');
-await browser.close();
+await close();

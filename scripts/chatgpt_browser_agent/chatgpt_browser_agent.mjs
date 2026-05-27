@@ -4,19 +4,28 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { chromium } from "playwright";
+import { ensureExtendedPro, ensureDeepResearch, BASE_MODEL_LABEL, EFFORT_LABEL, EFFORT_LABEL_DR } from "./lib/model_pill.mjs";
+import { getComposer, fillComposer, clickSend, isGenerating } from "./lib/composer.mjs";
+import { openBrowser } from "./lib/browser.mjs";
+import { ensureChatReady } from "./lib/auth.mjs";
+import {
+  openSourcesTab, openChatsTab, listSources, sourceExists,
+  addSource, removeSource,
+} from "./lib/sources.mjs";
+import { attachFile, clearComposerAttachments } from "./lib/attachments.mjs";
+import {
+  latestAssistantText, assistantTurnHasCopyButton, isInterimAssistantText,
+  extractAssistantResponse, waitForStableAssistantReply,
+} from "./lib/poll.mjs";
+import { createHeartbeatWriter, resolveHeartbeatPath } from "./lib/heartbeat.mjs";
 
-// New ChatGPT model selector (composer pill, no header dropdown). The pill
-// resolves both model and effort. Stable testids:
-//   - model radio:           data-testid="model-switcher-gpt-5-5-pro"
-//   - effort submenu chevron: data-testid="model-switcher-gpt-5-5-pro-thinking-effort"
-// Pill button: button.__composer-pill[aria-haspopup="menu"]
-const COMPOSER_PILL_SELECTOR = 'button.__composer-pill[aria-haspopup="menu"]';
-const PRO_MODEL_TESTID = "model-switcher-gpt-5-5-pro";
-const PRO_EFFORT_BTN_TESTID = "model-switcher-gpt-5-5-pro-thinking-effort";
-const TARGET_BASE_MODEL_BUTTON_LABEL = "Pro";
-const TARGET_EFFORT_LABEL = "Extended Pro";
+// Wrapper keeps the legacy local name `attachFileToComposer` for callsite readability.
+const attachFileToComposer = attachFile;
+
+// DOM primitives — pill, composer, send, generating-state — live in lib/.
+// Single source of truth shared with cdp_submit.mjs and the diagnostic
+// helpers. Do NOT add new pill/composer helpers here; update the lib
+// instead so every entry point gets the fix at once.
 
 function usage() {
   return `Usage:
@@ -42,6 +51,12 @@ Options:
   --chat-url URL              Existing chat URL to reopen for recovery.
   --log-json PATH              Optional JSON session log path.
   --heartbeat-json PATH        Optional heartbeat JSON path.
+  --deep-research              Submit via ChatGPT Deep Research mode instead of
+                               Extended Pro. Used by the literature role. DR
+                               jobs run 5-30 min (Extended Pro: 30-90 min).
+                               Applies to 'submit' only; ignored by other
+                               subcommands. NOTE: DR DOM selector is a stub
+                               pending live-inspect wiring.
   --help                       Show this help.
 
 Environment:
@@ -70,6 +85,7 @@ function parseArgs(argv) {
     chatUrl: "",
     logJson: "",
     heartbeatJson: "",
+    deepResearch: false,
   };
 
   const rest = [...argv];
@@ -111,6 +127,8 @@ function parseArgs(argv) {
       args.chatUrl = rest.shift() || "";
     } else if (token === "--log-json") {
       args.logJson = rest.shift() || "";
+    } else if (token === "--deep-research") {
+      args.deepResearch = true;
     } else if (token === "--heartbeat-json") {
       args.heartbeatJson = rest.shift() || "";
     } else {
@@ -121,441 +139,18 @@ function parseArgs(argv) {
   return { help: false, args };
 }
 
-function expandHome(inputPath) {
-  if (!inputPath) {
-    return inputPath;
-  }
-  if (inputPath === "~") {
-    return os.homedir();
-  }
-  if (inputPath.startsWith("~/")) {
-    return path.join(os.homedir(), inputPath.slice(2));
-  }
-  return inputPath;
-}
-
-async function getComposer(page) {
-  const candidates = [
-    page.locator('[contenteditable="true"][role="textbox"]').first(),
-    page.getByRole("textbox").first(),
-    page.locator('textarea[name="prompt-textarea"]').first(),
-  ];
-
-  for (const candidate of candidates) {
-    if ((await candidate.count()) === 0) {
-      continue;
-    }
-    try {
-      await candidate.waitFor({ state: "visible", timeout: 1000 });
-      return candidate;
-    } catch {
-      // Try the next candidate.
-    }
-  }
-
-  throw new Error("Timed out waiting for the ChatGPT composer.");
-}
-
-async function maybeSelectSingleAccountChoice(page) {
-  return await page.evaluate(() => {
-    const bodyText = (document.body.innerText || "").toLowerCase();
-    if (!/(choose|select|pick)\s+an\s+account|continue as/i.test(bodyText)) {
-      return { clicked: false, reason: "not_account_chooser" };
-    }
-
-    const isVisible = (element) => {
-      if (!(element instanceof HTMLElement)) {
-        return false;
-      }
-      const style = window.getComputedStyle(element);
-      const rect = element.getBoundingClientRect();
-      return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
-    };
-
-    const excluded = [
-      /use another account/i,
-      /use a different account/i,
-      /another account/i,
-      /different account/i,
-      /cancel/i,
-      /back/i,
-      /learn more/i,
-      /privacy/i,
-      /terms/i,
-      /help/i,
-    ];
-    const preferred = [
-      /continue as/i,
-      /@/,
-      /\.com\b/i,
-      /gmail/i,
-      /google/i,
-      /openai/i,
-    ];
-
-    const elements = [...document.querySelectorAll("button, a, [role='button']")]
-      .filter(isVisible)
-      .map((element) => {
-        const text = (element.innerText || element.getAttribute("aria-label") || "").trim();
-        return { element, text };
-      })
-      .filter(({ text }) => text.length > 0)
-      .filter(({ text }) => !excluded.some((pattern) => pattern.test(text)));
-
-    const accountLike = elements.filter(({ element, text }) => {
-      if (preferred.some((pattern) => pattern.test(text))) {
-        return true;
-      }
-      const parentText = (element.parentElement?.innerText || "").trim();
-      return /@/.test(parentText) || /(choose|select|pick)\s+an\s+account/i.test(parentText);
-    });
-
-    if (accountLike.length !== 1) {
-      return {
-        clicked: false,
-        reason: "ambiguous_account_chooser",
-        candidates: accountLike.slice(0, 5).map(({ text }) => text),
-      };
-    }
-
-    accountLike[0].element.click();
-    return { clicked: true, label: accountLike[0].text };
-  });
-}
-
-async function ensureChatReady(page, waitForLoginSeconds) {
-  const deadline = Date.now() + waitForLoginSeconds * 1000;
-  let noticeShown = false;
-  while (Date.now() < deadline) {
-    try {
-      await getComposer(page);
-      return;
-    } catch {
-      // Fall through to login wait logic.
-    }
-
-    const bodyText = await page.locator("body").innerText().catch(() => "");
-    const accountChoice = await maybeSelectSingleAccountChoice(page).catch(() => ({ clicked: false }));
-    if (accountChoice.clicked) {
-      console.error(`Selected account chooser entry automatically: ${accountChoice.label}`);
-      await page.waitForTimeout(1500);
-      continue;
-    }
-    if (!noticeShown && /log in|sign up|continue with/i.test(bodyText)) {
-      console.error("ChatGPT login required in the persistent browser profile. Complete login in the opened browser window.");
-      noticeShown = true;
-    }
-    await page.waitForTimeout(1000);
-  }
-  throw new Error("Timed out waiting for the ChatGPT composer. If this is the first run, log into chatgpt.com in the opened browser profile.");
-}
-
-async function launchPersistentBrowser(args) {
-  const profileDir = expandHome(args.profileDir);
-  const options = {
-    headless: args.headless,
-    viewport: { width: 1440, height: 1000 },
-  };
-
-  try {
-    return await chromium.launchPersistentContext(profileDir, {
-      ...options,
-      channel: args.browserChannel,
-    });
-  } catch (error) {
-    if (args.browserChannel !== "chrome") {
-      throw error;
-    }
-    return await chromium.launchPersistentContext(profileDir, options);
-  }
-}
-
-async function connectToExistingBrowser(args) {
-  const browser = await chromium.connectOverCDP(args.cdpUrl);
-  const context = browser.contexts()[0];
-  if (!context) {
-    await browser.close();
-    throw new Error(`No browser context was available at ${args.cdpUrl}.`);
-  }
-  return {
-    context,
-    close: async () => {
-      await browser.close();
-    },
-  };
-}
-
-async function openBrowser(args) {
-  if (args.cdpUrl) {
-    return await connectToExistingBrowser(args);
-  }
-
-  const context = await launchPersistentBrowser(args);
-  return {
-    context,
-    close: async () => {
-      await context.close();
-    },
-  };
-}
+// Login readiness + account-chooser handling lives in lib/auth.mjs.
+// Browser entry (CDP attach OR persistent launch) lives in lib/browser.mjs.
+// The lib's openBrowser takes named params; adapt at the callsite below.
 
 async function openProject(page, projectUrl, waitForLoginSeconds) {
   await page.goto(projectUrl, { waitUntil: "domcontentloaded" });
   await ensureChatReady(page, waitForLoginSeconds);
 }
 
-async function getComposerPillText(page) {
-  return page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    return el ? (el.textContent || "").trim() : null;
-  }, COMPOSER_PILL_SELECTOR);
-}
-
-async function isComposerPillOpen(page) {
-  return page.evaluate((sel) => {
-    const el = document.querySelector(sel);
-    return el ? el.getAttribute("aria-expanded") === "true" : false;
-  }, COMPOSER_PILL_SELECTOR);
-}
-
-async function closePillMenu(page) {
-  if (await isComposerPillOpen(page)) {
-    await page.keyboard.press("Escape").catch(() => {});
-    await page.waitForTimeout(250);
-  }
-}
-
-async function openPillMenu(page) {
-  await closePillMenu(page);
-  const pill = page.locator(COMPOSER_PILL_SELECTOR).first();
-  await pill.waitFor({ state: "visible", timeout: 10000 });
-  await pill.click();
-  await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first()
-    .waitFor({ state: "visible", timeout: 5000 });
-}
-
-async function ensureBaseModel(page) {
-  // Fast path: composer pill already shows Pro/Extended Pro.
-  const pillText = await getComposerPillText(page);
-  if (pillText === "Extended Pro" || pillText === "Standard Pro" || pillText === "Pro") {
-    return;
-  }
-
-  await openPillMenu(page);
-  const proSelected = await page.evaluate((tid) => {
-    const el = document.querySelector(`[data-testid="${tid}"]`);
-    return el ? el.getAttribute("aria-checked") === "true" : false;
-  }, PRO_MODEL_TESTID);
-  if (!proSelected) {
-    await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first().click();
-    await page.waitForTimeout(800);
-  } else {
-    await closePillMenu(page);
-  }
-}
-
-async function ensureExtendedPro(page) {
-  // Fast path: pill already reads "Extended Pro".
-  if ((await getComposerPillText(page)) === TARGET_EFFORT_LABEL) {
-    return;
-  }
-
-  await openPillMenu(page);
-
-  // Verify Pro row is the active model; if not, set it first then re-open.
-  const proSelected = await page.evaluate((tid) => {
-    const el = document.querySelector(`[data-testid="${tid}"]`);
-    return el ? el.getAttribute("aria-checked") === "true" : false;
-  }, PRO_MODEL_TESTID);
-  if (!proSelected) {
-    await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first().click();
-    await page.waitForTimeout(800);
-    await openPillMenu(page);
-  }
-
-  // Read effort from "Pro• Extended" / "Pro• Standard" row text.
-  const currentEffort = await page.evaluate((tid) => {
-    const row = document.querySelector(`[data-testid="${tid}"]`);
-    if (!row) return null;
-    const m = (row.textContent || "").trim().match(/^Pro[•\s·]+(Standard|Extended)/i);
-    return m ? m[1] : null;
-  }, PRO_MODEL_TESTID);
-
-  if (currentEffort !== "Extended") {
-    // Reveal trailing chevron via row hover, then JS-click it (chevron is
-    // .invisible until row hover, but DOM .click() works regardless).
-    await page.locator(`[data-testid="${PRO_MODEL_TESTID}"]`).first().hover();
-    await page.waitForTimeout(300);
-    const chevronClicked = await page.evaluate((tid) => {
-      const el = document.querySelector(`[data-testid="${tid}"]`);
-      if (!el) return false;
-      el.click();
-      return true;
-    }, PRO_EFFORT_BTN_TESTID);
-    if (!chevronClicked) {
-      throw new Error("Could not find the Pro effort chevron button.");
-    }
-    await page.waitForTimeout(700);
-
-    const extendedClicked = await page.evaluate(() => {
-      for (const radio of document.querySelectorAll('[role="menuitemradio"]')) {
-        if ((radio.textContent || "").trim() === "Extended") {
-          radio.click();
-          return true;
-        }
-      }
-      return false;
-    });
-    if (!extendedClicked) {
-      throw new Error("Could not find the Extended option in the Pro effort submenu.");
-    }
-    await page.waitForTimeout(800);
-  }
-
-  await closePillMenu(page);
-  // Final verification: pill must read "Extended Pro".
-  for (let i = 0; i < 10; i += 1) {
-    if ((await getComposerPillText(page)) === TARGET_EFFORT_LABEL) return;
-    await page.waitForTimeout(300);
-  }
-  throw new Error(`Composer pill did not reach "${TARGET_EFFORT_LABEL}" after model/effort updates.`);
-}
-
-async function openSourcesTab(page) {
-  const sourcesTab = page.getByRole("tab", { name: "Sources", exact: true });
-  if ((await sourcesTab.count()) === 0) {
-    throw new Error("Could not find the Sources tab on the project page.");
-  }
-  await sourcesTab.click();
-  await page.waitForTimeout(500);
-}
-
-async function openChatsTab(page) {
-  const chatsTab = page.getByRole("tab", { name: "Chats", exact: true });
-  if ((await chatsTab.count()) > 0) {
-    await chatsTab.click();
-  }
-}
-
-async function listSources(page) {
-  return await page.evaluate(() => {
-    const ignoredLines = new Set([
-      "Source actions",
-      "Remove",
-      "File",
-      "Files",
-      "Source",
-      "Sources",
-      "Add sources",
-      "Uploads",
-    ]);
-    const filenamePattern = /\.[A-Za-z0-9]{1,8}$/;
-    const pickLikelyName = (lines) => {
-      for (const line of lines) {
-        if (filenamePattern.test(line)) {
-          return line;
-        }
-      }
-      for (const line of lines) {
-        if (!ignoredLines.has(line) && !/^uploaded\b/i.test(line) && !/^added\b/i.test(line)) {
-          return line;
-        }
-      }
-      return "";
-    };
-    const bodyLines = (document.body.innerText || "")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    const names = new Set();
-    for (let index = 0; index < bodyLines.length - 1; index += 1) {
-      if (bodyLines[index + 1].startsWith("File")) {
-        names.add(bodyLines[index]);
-      }
-    }
-
-    if (names.size > 0) {
-      return [...names].sort((left, right) => left.localeCompare(right));
-    }
-
-    const actionButtons = [...document.querySelectorAll('button[aria-label="Source actions"]')];
-
-    for (const button of actionButtons) {
-      let current = button.parentElement;
-      for (let depth = 0; depth < 6 && current; depth += 1) {
-        const lines = (current.innerText || "")
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .filter((line) => !ignoredLines.has(line));
-        const candidate = pickLikelyName(lines);
-        if (candidate) {
-          names.add(candidate);
-          break;
-        }
-        current = current.parentElement;
-      }
-    }
-
-    return [...names].sort((left, right) => left.localeCompare(right));
-  });
-}
-
-async function sourceExists(page, sourceName) {
-  if ((await page.getByText(sourceName, { exact: true }).count()) > 0) {
-    return true;
-  }
-  if ((await page.getByText(sourceName, { exact: false }).count()) > 0) {
-    return true;
-  }
-  const sourceNames = await listSources(page);
-  return sourceNames.includes(sourceName);
-}
-
-async function addSource(page, filePath) {
-  const resolved = path.resolve(filePath);
-  const baseName = path.basename(resolved);
-  if (await sourceExists(page, baseName)) {
-    return;
-  }
-
-  const fileInputs = page.locator('input[type="file"]:not([accept="image/*"])');
-  if ((await fileInputs.count()) === 0) {
-    throw new Error("Could not find a project source file input on the Sources tab.");
-  }
-
-  const inputCount = await fileInputs.count();
-  for (let index = 0; index < inputCount; index += 1) {
-    await fileInputs.nth(index).setInputFiles(resolved);
-    const deadline = Date.now() + 10000;
-    while (Date.now() < deadline) {
-      await openSourcesTab(page).catch(() => {});
-      if (await sourceExists(page, baseName)) {
-        return;
-      }
-      const duplicateModal = page.getByTestId("modal-file-already-exists");
-      if ((await duplicateModal.count()) > 0) {
-        throw new Error(`Project source '${baseName}' already exists and was not removed before refresh.`);
-      }
-      await page.waitForTimeout(250);
-    }
-  }
-
-  const deadline = Date.now() + 30000;
-  while (Date.now() < deadline) {
-    await openSourcesTab(page).catch(() => {});
-    if (await sourceExists(page, baseName)) {
-      return;
-    }
-    const duplicateModal = page.getByTestId("modal-file-already-exists");
-    if ((await duplicateModal.count()) > 0) {
-      throw new Error(`Project source '${baseName}' already exists and was not removed before refresh.`);
-    }
-    await page.waitForTimeout(250);
-  }
-  throw new Error(`Timed out waiting for project source '${baseName}' to appear.`);
-}
+// Durable Sources tab management lives in lib/sources.mjs.
+// verifySources is kept here because it composes wrapper-specific
+// resettle logic (ensureChatReady + ensureExtendedPro after reload).
 
 async function verifySources(page, expectedPresent, expectedAbsent, waitForLoginSeconds) {
   let lastNames = [];
@@ -566,7 +161,6 @@ async function verifySources(page, expectedPresent, expectedAbsent, waitForLogin
     if (attempt > 0) {
       await page.reload({ waitUntil: "domcontentloaded" });
       await ensureChatReady(page, waitForLoginSeconds);
-      await ensureBaseModel(page);
       await ensureExtendedPro(page);
     }
 
@@ -603,98 +197,19 @@ async function verifySources(page, expectedPresent, expectedAbsent, waitForLogin
   );
 }
 
-async function attachFileToComposer(page, filePath) {
-  const resolved = path.resolve(filePath);
-  const baseName = path.basename(resolved);
-
-  const addButton = page.getByRole("button", { name: "Add files and more", exact: true }).first();
-  await addButton.click();
-
-  const [chooser] = await Promise.all([
-    page.waitForEvent("filechooser"),
-    page.getByRole("menuitem", { name: /Add photos & files/i }).click(),
-  ]);
-  await chooser.setFiles(resolved);
-
-  await page.getByText(baseName, { exact: true }).waitFor({ state: "visible", timeout: 30000 });
-  await page.waitForTimeout(1000);
-}
-
-async function clearComposerAttachments(page) {
-  const removeButtons = page.getByRole("button", { name: "Remove file", exact: true });
-  const count = await removeButtons.count();
-  for (let index = 0; index < count; index += 1) {
-    await removeButtons.first().click();
-    await page.waitForTimeout(200);
-  }
-}
-
-async function clickSourceActionsByName(page, sourceName) {
-  const clicked = await page.evaluate((name) => {
-    const nodes = [...document.querySelectorAll("*")];
-    for (const node of nodes) {
-      if ((node.textContent || "").trim() !== name) {
-        continue;
-      }
-      let current = node;
-      for (let depth = 0; depth < 6 && current; depth += 1) {
-        const button = current.querySelector('button[aria-label="Source actions"]');
-        if (button) {
-          button.click();
-          return true;
-        }
-        current = current.parentElement;
-      }
-    }
-    return false;
-  }, sourceName);
-
-  if (!clicked) {
-    throw new Error(`Could not locate source actions for '${sourceName}'.`);
-  }
-}
-
-async function removeSource(page, sourceName) {
-  if (!(await sourceExists(page, sourceName))) {
-    return;
-  }
-
-  await clickSourceActionsByName(page, sourceName);
-  await page.getByRole("menuitem", { name: "Remove", exact: true }).click();
-  const deadline = Date.now() + 10000;
-  while (Date.now() < deadline) {
-    if (!(await sourceExists(page, sourceName))) {
-      return;
-    }
-    await page.waitForTimeout(250);
-  }
-  throw new Error(`Timed out waiting for project source '${sourceName}' to be removed.`);
-}
+// Per-prompt composer attachments live in lib/attachments.mjs.
+// clickSourceActionsByName + removeSource (with confirmation dialog handling)
+// live in lib/sources.mjs.
 
 async function submitPrompt(page, requestText) {
+  // Wrapper-specific orchestration: ensure Chats tab is active (sources flow
+  // may have left us on the Sources tab), submit via lib primitives, then
+  // wait for the conversation route to appear.
   await openChatsTab(page);
-  const composer = await getComposer(page);
-  await composer.fill(requestText);
+  const composer = await fillComposer(page, requestText);
 
   const currentUrl = page.url();
-  const sendButton = page.getByRole("button", { name: "Send prompt", exact: true }).first();
-
-  if ((await sendButton.count()) > 0) {
-    await sendButton.click();
-  } else {
-    const submitted = await page.evaluate(() => {
-      const form = document.querySelector('form[aria-label]');
-      if (!form) {
-        return false;
-      }
-      form.requestSubmit();
-      return true;
-    });
-
-    if (!submitted) {
-      await composer.press("Enter");
-    }
-  }
+  await clickSend(page, composer);
 
   try {
     await page.waitForURL((url) => url.toString() !== currentUrl, { timeout: 15000 });
@@ -720,237 +235,12 @@ function buildAttachmentPrompt(requestFile, attachFiles) {
   ].join("\n");
 }
 
-async function latestAssistantText(page) {
-  return await page.evaluate(() => {
-    const articles = [...document.querySelectorAll('article[data-testid^="conversation-turn-"]')];
-    const assistantTexts = [];
-
-    for (const article of articles) {
-      const clone = article.cloneNode(true);
-      clone.querySelectorAll("button").forEach((button) => button.remove());
-      const raw = (clone.innerText || "").trim();
-      if (!raw) {
-        continue;
-      }
-
-      const hasAssistantPrefix = /^ChatGPT said:/i.test(raw);
-      if (!hasAssistantPrefix) {
-        continue;
-      }
-
-      const cleaned = raw.replace(/^ChatGPT said:\s*/i, "").trim();
-      if (!cleaned || /^Thought for\b/i.test(cleaned)) {
-        continue;
-      }
-      assistantTexts.push(cleaned);
-    }
-
-    if (assistantTexts.length > 0) {
-      return assistantTexts[assistantTexts.length - 1];
-    }
-
-    const body = (document.body.innerText || "").trim();
-    const marker = "ChatGPT said:";
-    const start = body.lastIndexOf(marker);
-    if (start === -1) {
-      return "";
-    }
-
-    let tail = body.slice(start + marker.length).trim();
-    for (const stopMarker of [
-      "\n\nExtended Pro",
-      "\n\nChatGPT can make mistakes.",
-      "\n\nAdd files and more",
-      "\n\nStart Voice",
-    ]) {
-      const stop = tail.indexOf(stopMarker);
-      if (stop !== -1) {
-        tail = tail.slice(0, stop).trim();
-      }
-    }
-    return tail;
-  });
-}
-
-async function assistantTurnHasCopyButton(page) {
-  return await page.evaluate(() => {
-    const articles = [...document.querySelectorAll('article[data-testid^="conversation-turn-"]')];
-    const assistantArticle = [...articles].reverse().find((article) =>
-      /^ChatGPT said:/i.test((article.innerText || "").trim())
-    );
-    if (!assistantArticle) {
-      return [...document.querySelectorAll("button")].some((button) =>
-        (button.getAttribute("aria-label") || "").toLowerCase().includes("copy response")
-      );
-    }
-    return Boolean(assistantArticle.querySelector('[data-testid="copy-turn-action-button"]'));
-  });
-}
-
-function isInterimAssistantText(text) {
-  const normalized = (text || "").trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  if (normalized.length > 400) {
-    return false;
-  }
-
-  return (
-    normalized.includes("reading documents") ||
-    normalized.includes("searching the web") ||
-    normalized.includes("thinking") ||
-    normalized.includes("analyzing")
-  );
-}
-
-function readClipboardText() {
-  if (process.platform !== "darwin") {
-    return null;
-  }
-
-  try {
-    return execFileSync("pbpaste", { encoding: "utf8" });
-  } catch {
-    return null;
-  }
-}
-
-function restoreClipboardText(text) {
-  if (process.platform !== "darwin" || text == null) {
-    return;
-  }
-
-  try {
-    execFileSync("pbcopy", { input: text, encoding: "utf8" });
-  } catch {
-    // Best-effort only.
-  }
-}
-
-async function extractAssistantResponse(page, fallbackOverride = "") {
-  const fallbackText = (fallbackOverride || await latestAssistantText(page)).trim();
-  const previousClipboard = readClipboardText();
-
-  try {
-    const copied = await page.evaluate(() => {
-      const articles = [...document.querySelectorAll('article[data-testid^="conversation-turn-"]')];
-      const assistantArticle = [...articles].reverse().find((article) =>
-        /^ChatGPT said:/i.test((article.innerText || "").trim())
-      );
-      if (!assistantArticle) {
-        const pageButton = [...document.querySelectorAll("button")].find((button) =>
-          (button.getAttribute("aria-label") || "").toLowerCase().includes("copy response")
-        );
-        if (!pageButton) {
-          return false;
-        }
-        pageButton.click();
-        return true;
-      }
-      const button = assistantArticle.querySelector('[data-testid="copy-turn-action-button"]');
-      if (!button) {
-        return false;
-      }
-      button.click();
-      return true;
-    });
-
-    if (copied) {
-      await page.waitForTimeout(1200);
-      const copiedText = (readClipboardText() || "").trim();
-      if (copiedText && !copiedText.includes("[TRUNCATED]")) {
-        if (!fallbackText) {
-          return copiedText;
-        }
-        // Reject obviously bad clipboard captures, such as a single URL or a much
-        // shorter fragment than the full assistant turn still visible in the DOM.
-        if (copiedText === fallbackText) {
-          return copiedText;
-        }
-        if (copiedText.length >= Math.max(200, Math.floor(fallbackText.length * 0.6))) {
-          return copiedText;
-        }
-      }
-    }
-  } finally {
-    restoreClipboardText(previousClipboard);
-  }
-
-  return fallbackText;
-}
-
-async function isLikelyGenerating(page) {
-  return await page.evaluate(() => {
-    return [...document.querySelectorAll("button")].some((button) => {
-      const label = `${button.getAttribute("aria-label") || ""} ${(button.innerText || "").trim()}`.toLowerCase();
-      return (
-        label.includes("stop streaming") ||
-        label.includes("stop generating") ||
-        label.includes("stop response") ||
-        label.includes("pause generating") ||
-        label.includes("pause streaming")
-      );
-    });
-  });
-}
-
-async function waitForStableAssistantReply(page, pollSeconds, maxWaitSeconds, onPoll = null) {
-  const deadline = Date.now() + maxWaitSeconds * 1000;
-  let lastText = "";
-  let stableCycles = 0;
-  let unchangedCycles = 0;
-
-  while (Date.now() < deadline) {
-    const currentText = await latestAssistantText(page);
-    const generating = await isLikelyGenerating(page);
-    const readyToCopy = await assistantTurnHasCopyButton(page);
-
-    if (currentText && currentText === lastText) {
-      unchangedCycles += 1;
-    } else {
-      unchangedCycles = 0;
-    }
-
-    if (currentText && currentText === lastText && !generating) {
-      stableCycles += 1;
-    } else {
-      stableCycles = 0;
-    }
-
-    if (currentText) {
-      lastText = currentText;
-    }
-
-    if (onPoll) {
-      await onPoll({
-        chatUrl: page.url(),
-        currentTextLength: currentText.length,
-        lastTextLength: lastText.length,
-        generating,
-        readyToCopy,
-        stableCycles,
-        deadlineAt: new Date(deadline).toISOString(),
-      });
-    }
-
-    if (lastText && stableCycles >= 2 && readyToCopy && !isInterimAssistantText(lastText)) {
-      return lastText;
-    }
-
-    // The ChatGPT UI can leave a stale stop button behind after the text has
-    // already stabilized. If the assistant text stops changing for long enough,
-    // trust the stable text rather than waiting forever on a false positive.
-    if (lastText && unchangedCycles >= 4 && readyToCopy && !isInterimAssistantText(lastText)) {
-      return lastText;
-    }
-
-    await page.waitForTimeout(pollSeconds * 1000);
-  }
-
-  throw new Error("Timed out waiting for a stable assistant reply.");
-}
+// Assistant-text reading, stability polling, and clipboard extraction
+// live in lib/poll.mjs. Wrapper kept its old `waitForStableAssistantReply`
+// signature (positional pollSeconds, maxWaitSeconds, onPoll) — provide a
+// thin adapter so existing callers don't change.
+const _waitStable = (page, pollSeconds, maxWaitSeconds, onPoll = null) =>
+  waitForStableAssistantReply(page, { pollSeconds, maxWaitSeconds, onPoll });
 
 async function writeJsonLog(logPath, payload) {
   await fs.mkdir(path.dirname(logPath), { recursive: true });
@@ -959,7 +249,6 @@ async function writeJsonLog(logPath, payload) {
 
 async function runPrepare(page, args) {
   await openProject(page, args.projectUrl, args.waitForLoginSeconds);
-  await ensureBaseModel(page);
   await ensureExtendedPro(page);
   await openSourcesTab(page);
   await page.waitForTimeout(1500);
@@ -974,8 +263,8 @@ async function runPrepare(page, args) {
   console.log(JSON.stringify({
     command: "prepare",
     project_url: args.projectUrl,
-    base_model: TARGET_BASE_MODEL_BUTTON_LABEL,
-    effort_mode: TARGET_EFFORT_LABEL,
+    base_model: BASE_MODEL_LABEL,
+    effort_mode: EFFORT_LABEL,
     add_sources: args.addSources.map((item) => path.resolve(item)),
     remove_sources: args.removeSources,
     source_names: verification.sourceNames,
@@ -995,7 +284,7 @@ async function runRecover(page, args) {
   await page.goto(args.chatUrl, { waitUntil: "domcontentloaded" });
   await ensureChatReady(page, args.waitForLoginSeconds);
   await page.waitForTimeout(1500);
-  const stableText = await waitForStableAssistantReply(page, args.pollSeconds, args.maxWaitSeconds).catch(async () => {
+  const stableText = await _waitStable(page, args.pollSeconds, args.maxWaitSeconds).catch(async () => {
     return (await latestAssistantText(page)).trim();
   });
   const responseText = await extractAssistantResponse(page, stableText);
@@ -1027,7 +316,7 @@ async function runInspect(page, args) {
   await page.waitForTimeout(1000);
 
   const latestText = (await latestAssistantText(page)).trim();
-  const generating = await isLikelyGenerating(page);
+  const generating = await isGenerating(page);
   const hash = crypto.createHash("sha256").update(latestText).digest("hex");
 
   console.log(JSON.stringify({
@@ -1050,31 +339,28 @@ async function runSubmit(page, args) {
   const submissionPrompt = buildAttachmentPrompt(args.requestFile, args.attachFiles);
   const submittedAt = new Date().toISOString();
   const logPath = args.logJson || args.responseFile.replace(/\.md$/i, "_session.json");
-  const heartbeatPath = args.heartbeatJson || args.responseFile.replace(/\.md$/i, "_heartbeat.json");
-
-  const writeHeartbeat = async (status, extra = {}) => {
-    await writeJsonLog(heartbeatPath, {
-      command: "submit",
-      status,
-      project_url: args.projectUrl,
-      request_file: path.resolve(args.requestFile),
-      response_file: path.resolve(args.responseFile),
-      heartbeat_at: new Date().toISOString(),
-      submitted_at: submittedAt,
-      poll_seconds: args.pollSeconds,
-      max_wait_seconds: args.maxWaitSeconds,
-      base_model: TARGET_BASE_MODEL_BUTTON_LABEL,
-      effort_mode: TARGET_EFFORT_LABEL,
-      ...extra,
-    });
-  };
+  const heartbeatPath = resolveHeartbeatPath(args.responseFile, args.heartbeatJson);
+  const effortLabel = args.deepResearch ? EFFORT_LABEL_DR : EFFORT_LABEL;
+  const writeHeartbeat = createHeartbeatWriter({
+    heartbeatPath,
+    projectUrl: args.projectUrl,
+    requestFile: args.requestFile,
+    responseFile: args.responseFile,
+    submittedAt,
+    pollSeconds: args.pollSeconds,
+    maxWaitSeconds: args.maxWaitSeconds,
+    effortLabel,
+  });
 
   await writeHeartbeat("starting");
 
   try {
   await openProject(page, args.projectUrl, args.waitForLoginSeconds);
-  await ensureBaseModel(page);
-  await ensureExtendedPro(page);
+  if (args.deepResearch) {
+    await ensureDeepResearch(page);
+  } else {
+    await ensureExtendedPro(page);
+  }
   await clearComposerAttachments(page);
   await attachFileToComposer(page, args.requestFile);
   for (const attachmentPath of args.attachFiles) {
@@ -1083,7 +369,7 @@ async function runSubmit(page, args) {
   await submitPrompt(page, submissionPrompt);
   await writeHeartbeat("submitted", { chat_url: page.url() });
 
-  const stableText = await waitForStableAssistantReply(page, args.pollSeconds, args.maxWaitSeconds, async (state) => {
+  const stableText = await _waitStable(page, args.pollSeconds, args.maxWaitSeconds, async (state) => {
     await writeHeartbeat("waiting_reply", {
       chat_url: state.chatUrl,
       generating: state.generating,
@@ -1107,8 +393,8 @@ async function runSubmit(page, args) {
     chat_url: page.url(),
     request_file: path.resolve(args.requestFile),
     response_file: path.resolve(args.responseFile),
-    base_model: TARGET_BASE_MODEL_BUTTON_LABEL,
-    effort_mode: TARGET_EFFORT_LABEL,
+    base_model: BASE_MODEL_LABEL,
+    effort_mode: effortLabel,
     submission_method: "file_attachment",
     attachment_files: args.attachFiles.map((item) => path.resolve(item)),
     submission_prompt: submissionPrompt,
@@ -1144,7 +430,12 @@ async function main() {
     throw new Error("Missing --project-url (or MPP_CHATGPT_PROJECT_URL).");
   }
 
-  const runtime = await openBrowser(args);
+  const runtime = await openBrowser({
+    cdpUrl: args.cdpUrl,
+    profileDir: args.profileDir,
+    browserChannel: args.browserChannel,
+    headless: args.headless,
+  });
   const page = runtime.context.pages()[0] || await runtime.context.newPage();
 
   try {

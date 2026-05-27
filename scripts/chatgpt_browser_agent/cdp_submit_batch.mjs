@@ -1,10 +1,24 @@
 #!/usr/bin/env node
 /**
- * cdp_submit_batch.mjs — Submit N prompts to a ChatGPT project in parallel.
+ * cdp_submit_batch.mjs — Submit N prompts to a ChatGPT project in sequence.
  *
- * Each prompt file is submitted via `cdp_submit_no_model_check.mjs`, creating
- * a separate chat. The script returns the N resulting chat URLs as JSON for
- * the orchestrator to dispatch parallel pollers (typically `wait_chat_done`).
+ * Each prompt is submitted via the canonical `cdp_submit.mjs`, creating a
+ * separate chat. The script returns the resulting chat URLs as JSON so the
+ * orchestrator can dispatch parallel pollers (typically `wait_chat_done`).
+ *
+ * Despite the name, submissions are sequential with a configurable delay
+ * (too short causes submit-collision: two prompts land in the same chat).
+ * "Batch" refers to the API surface, not parallelism on the browser side
+ * — ChatGPT's composer is single-threaded per tab.
+ *
+ * ## Refactor note (post lib-unification)
+ *
+ * Earlier versions of this script spawned `cdp_submit_no_model_check.mjs`,
+ * a sibling that no longer exists in the repository (silent FAIL on every
+ * batch). After the lib refactor, `cdp_submit.mjs` enforces Extended Pro
+ * via lib/model_pill.mjs with adaptive fallback — there's no longer a
+ * reason to skip the model check, and the spawn target is now the
+ * canonical `cdp_submit.mjs`.
  *
  * Usage:
  *   node cdp_submit_batch.mjs \
@@ -12,12 +26,10 @@
  *     [--delay-ms <ms-between-submits>] \
  *     <prompt-file-1> [<prompt-file-2> ...]
  *
- * Output (stdout): JSON array of {file, chatUrl} objects.
+ * Output (stdout): JSON array of {file, chatUrl, status} objects.
  * Output (stderr): per-submit progress.
  *
- * Default delay between submits: 2000ms (gives ChatGPT time to register each
- * chat creation; too short can cause submit-collision where two prompts land
- * in the same chat).
+ * Default delay between submits: 2000ms.
  */
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -59,7 +71,7 @@ function extractChatUrl(stdoutText) {
 }
 
 (async () => {
-  const submitScript = join(__dirname, 'cdp_submit_no_model_check.mjs');
+  const submitScript = join(__dirname, 'cdp_submit.mjs');
   const results = [];
 
   for (let i = 0; i < promptFiles.length; i++) {
