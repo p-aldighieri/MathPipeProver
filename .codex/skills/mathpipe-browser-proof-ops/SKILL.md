@@ -49,10 +49,11 @@ scripts/chatgpt_browser_agent.sh submit --project-url URL --request-file PATH --
 - Re-open the project page and verify you are still in the intended project.
 - Re-check the Extended Pro target before important prompts: reasoning `Pro` plus model `5.5`.
 - If `prepare` reports missing durable sources, retry one file at a time and verify again.
-- If a response file is missing but the heartbeat or chat URL exists, recover the existing chat before resubmitting.
+- If a response file is missing but the chat URL exists, recover the existing chat before resubmitting (use `/inspect-chat` for a one-shot status read, `/recover-chat` to harvest).
 - If ChatGPT lands on an account chooser and there is a single clear account entry, select it and continue.
 - Keep natural-language analytical proof roles on ChatGPT Extended Pro via `external_agent`. Use subagents only for explicit coding/simulation tasks or Lean formalization proof-engineering.
-- Do not start the deprecated recurring `/heartbeat` watcher loop. Use passive heartbeat JSON, live chat inspection, and recovery instead unless the user explicitly asks for a recurring reminder/automation.
+- For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes the orchestrator periodically and advances the pipeline on its own (this is the orchestrator-loop skill, not the old Python watcher chain which was removed).
+- For the literature role specifically (`prompts/soft/02_literature_soft.md`), submit with `--deep-research` instead of Extended Pro — DR can browse the open web and academic repositories and return long-form synthesis with citations.
 
 ## Durable Source Policy
 

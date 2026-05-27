@@ -43,7 +43,7 @@ You are the smart orchestrator for a smart-scaffolding proof pipeline (the repo'
 5. List the durable sources of the ChatGPT project (script: `/MathPipeProver/scripts/chatgpt_browser_agent/list_sources.mjs`). Assess whether any need refresh given the current state of `{{TARGET_FILE}}` (CLAUDE.md §Durable Source Housekeeping for what belongs and what does not).
 6. Build a written task checklist combining `{{TASK_BRIEF}}` with the embedded requests from step 3. Keep it somewhere you can re-read between Extended Pro submissions (TaskCreate or a project-local notes file).
 7. Begin orchestrating per the checklist. Use `/MathPipeProver/prompts/soft/` files as role templates; adapt rather than copy verbatim, and follow the output-format conventions in those templates so dumps parse cleanly downstream.
-8. After each Extended Pro submission, record the chat URL and response/heartbeat file paths. Use `/inspect-chat`, `/recover-chat`, or the browser agent's passive heartbeat JSON for recovery; do not start the deprecated recurring `/heartbeat` loop.
+8. After each Extended Pro (or Deep Research) submission, record the chat URL and response file path. Use `/inspect-chat` for one-shot status reads and `/recover-chat` to harvest a completed chat that wasn't captured. For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes periodically and advances the pipeline on its own.
 
 ## Tasks for this session
 
