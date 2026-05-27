@@ -11,6 +11,7 @@ Copy this whole file into a fresh Claude Code session. Replace each `{{...}}` pl
 | `{{CHATGPT_PROJECT_URL}}` | full URL of the ChatGPT project |
 | `{{CDP_PORT}}` | Chrome remote-debug port (e.g. `9222`) |
 | `{{TASK_BRIEF}}` | free-form description of what to do this session |
+| `{{TARGET_JOURNALS}}` | **(optional)** comma-separated journal slugs you might submit the finished result to, e.g. `AER, JET, TheorEcon`. Used to seed `{{PROOF_REPO}}/referee_targets.yaml` via `/set-referee-targets`. Leave empty if you don't want bar-clearance judgment yet; the `paper_referee` role works without it (generic publishability check). |
 
 ## Path conventions
 
@@ -27,10 +28,11 @@ You are the smart orchestrator for a smart-scaffolding proof pipeline (the repo'
 - `/MathPipeProver/docs/soft_scaffolding.md` — smart-scaffolding operating guide (primary).
 - `/MathPipeProver/docs/browser_chatgpt.md` — browser / CDP transport and recovery.
 - `/MathPipeProver/prompts/soft/01_formalizer_soft.md` … `07_consolidator_soft.md` — role templates: formalizer, literature, searcher, breakdown, prover, reviewer, consolidator.
-- `/MathPipeProver/prompts/soft/90_paper_writer_soft.md` … `92_paper_reviewer_soft.md` — paper-mode templates.
-- `/MathPipeProver/prompts/api/01_formalizer_api.md` … `92_paper_reviewer_api.md` — API-pipeline counterparts (the autonomous batch mode).
+- `/MathPipeProver/prompts/soft/90_paper_writer_soft.md` … `92_paper_referee_soft.md` — paper-mode templates (writer / editor / referee, where the referee judges per-journal bar clearance, not proof correctness).
+- `/MathPipeProver/prompts/api/01_formalizer_api.md` … `92_paper_referee_api.md` — API-pipeline counterparts (the autonomous batch mode).
 - `/MathPipeProver/prompts/fragments/output_contract.md` — shared snippet included by every role template.
-- `/MathPipeProver/.claude/commands/` — `/set-model-extended`, `/submit-role`, `/set-sources`, `/inspect-chat`, `/recover-chat`.
+- `/MathPipeProver/prompts/fragments/referee_targets_template.yaml` — template for the optional per-proof journal-targets registry.
+- `/MathPipeProver/.claude/commands/` — `/set-model-extended`, `/submit-role`, `/set-sources`, `/inspect-chat`, `/recover-chat`, `/search-council`, `/set-referee-targets`, `/heartbeat`.
 
 ## Standard startup sequence (do these in order)
 
@@ -41,9 +43,10 @@ You are the smart orchestrator for a smart-scaffolding proof pipeline (the repo'
 3. Read `{{PROOF_REPO}}/{{TARGET_FILE}}` end to end. Extract every embedded comment, if any, "tasks for AI" section, and in-prose question. Treat each as a task item even when not in `{{TASK_BRIEF}}`. These author requests are easy to miss because they live in the source, not the brief.
 4. Verify the CDP browser at port `{{CDP_PORT}}` is up and the ChatGPT project at `{{CHATGPT_PROJECT_URL}}` is open in it. Verify the composer pill reads "Extended Pro" — if not, fix via `/set-model-extended` (see CLAUDE.md §Model Configuration — CRITICAL; the wrong pill silently swaps to a weaker model).
 5. List the durable sources of the ChatGPT project (script: `/MathPipeProver/scripts/chatgpt_browser_agent/list_sources.mjs`). Assess whether any need refresh given the current state of `{{TARGET_FILE}}` (CLAUDE.md §Durable Source Housekeeping for what belongs and what does not).
-6. Build a written task checklist combining `{{TASK_BRIEF}}` with the embedded requests from step 3. Keep it somewhere you can re-read between Extended Pro submissions (TaskCreate or a project-local notes file).
-7. Begin orchestrating per the checklist. Use `/MathPipeProver/prompts/soft/` files as role templates; adapt rather than copy verbatim, and follow the output-format conventions in those templates so dumps parse cleanly downstream.
-8. After each Extended Pro (or Deep Research) submission, record the chat URL and response file path. Use `/inspect-chat` for one-shot status reads and `/recover-chat` to harvest a completed chat that wasn't captured. For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes periodically and advances the pipeline on its own.
+6. **Optional — referee targets.** If `{{TARGET_JOURNALS}}` is non-empty, run `/set-referee-targets --proof-repo {{PROOF_REPO}} --journals {{TARGET_JOURNALS}}` to seed `{{PROOF_REPO}}/referee_targets.yaml` from the template. This file is what the `paper_referee` role consults when judging whether the finished result clears the bar for those journals. Skip if you don't have a paper-writing pass in this session's plan.
+7. Build a written task checklist combining `{{TASK_BRIEF}}` with the embedded requests from step 3. Keep it somewhere you can re-read between Extended Pro submissions (TaskCreate or a project-local notes file).
+8. Begin orchestrating per the checklist. Use `/MathPipeProver/prompts/soft/` files as role templates; adapt rather than copy verbatim, and follow the output-format conventions in those templates so dumps parse cleanly downstream.
+9. After each Extended Pro (or Deep Research) submission, record the chat URL and response file path. Use `/inspect-chat` for one-shot status reads and `/recover-chat` to harvest a completed chat that wasn't captured. For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes periodically and advances the pipeline on its own.
 
 ## Tasks for this session
 

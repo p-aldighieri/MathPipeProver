@@ -36,6 +36,8 @@ Available via `.claude/commands/`:
 | `/inspect-chat` | Read-only check of a live chat's generation status. |
 | `/recover-chat` | Extract a completed response from a chat URL and save to file. |
 | `/search-council` | **Re-attack only** (attempt ≥2). Fan out 2 Codex + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. Opt-in, ~3× the cost of a single search. Adapters at `scripts/council/dispatch_{codex,opus,extended_pro}.sh`. |
+| `/set-referee-targets` | Create or update `{PROOF_REPO}/referee_targets.yaml` — the per-proof registry of target journals + clearance bars that the `paper_referee` role consults. Optional (referee falls back to a generic publishability check without it). Template at `prompts/fragments/referee_targets_template.yaml`. |
+| `/heartbeat` | Start an orchestrator-pace loop (`/loop <interval>`) that wakes the orchestrator periodically and advances the pipeline. Useful for unattended runs. |
 
 For long-running submissions, use `/inspect-chat` for one-shot status checks and `/recover-chat` to harvest a completed chat. For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and advances the pipeline on its own.
 

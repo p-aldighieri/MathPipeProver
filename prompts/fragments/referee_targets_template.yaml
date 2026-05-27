@@ -1,0 +1,99 @@
+# referee_targets.yaml — target-journal registry for the paper_referee role.
+#
+# Lives in the PROOF REPO (not in MathPipeProver), typically at
+# `{PROOF_REPO}/referee_targets.yaml`. Optional — the paper_referee role
+# works without it (falls back to a generic "is this publishable in a top
+# field journal?" check) but is much sharper when given a real list.
+#
+# Create via the `/set-referee-targets` skill, or copy this template and
+# fill it in by hand.
+#
+# Schema
+# ──────
+# target_journals: list of journals you would consider submitting to,
+#   in roughly the order you'd try them. Each entry has:
+#     slug: short stable identifier (e.g., AER, JET, TheorEcon, Annals, JAMS).
+#     full_name: human-readable journal name.
+#     field: subject area (used by the referee to ground its judgment).
+#     bar_criteria: 2–6 sentences describing what clears that journal's
+#       bar in your honest editorial opinion. Be specific: the referee
+#       judges your result against this exact text, not against its prior
+#       beliefs about the journal.
+#
+# Honest framings are better than aspirational ones — the bar should be
+# what you actually think the journal demands, not what you'd like it to
+# demand. If you're not sure, write a conservative description (a slightly
+# higher bar than you think the journal really has). A FAIL-by-conservative-
+# bar is a useful signal; a PASS-by-aspirational-bar is misleading.
+
+# ──────────────────────────────────────────────────────────────────────
+# Example: economics-theory paper. Replace with your own targets.
+# Delete entries you don't care about; add entries for your field.
+# ──────────────────────────────────────────────────────────────────────
+
+target_journals:
+
+  - slug: AER
+    full_name: American Economic Review
+    field: economics (general)
+    bar_criteria: |
+      Top general-interest econ journal. Demands a substantive contribution
+      to economic understanding with broad readership appeal. For theory:
+      the model + result combination must speak to a question economists
+      across subfields recognize as important. Pure technical advance
+      without an interpretive payoff usually doesn't clear.
+
+  - slug: ECMA
+    full_name: Econometrica
+    field: economic theory / econometrics
+    bar_criteria: |
+      Top theoretical-economics journal. Allows more technical / formal
+      papers than AER. The bar is mathematical depth + economic interpretation;
+      a clean theorem with a non-trivial proof that resolves or sharpens a
+      foundational question clears. Pure technique without economic
+      grounding does not.
+
+  - slug: TheorEcon
+    full_name: Theoretical Economics
+    field: economic theory
+    bar_criteria: |
+      Open-access theoretical-economics journal. Pure-theory papers with
+      conceptual or methodological novelty. The contribution can be more
+      narrowly scoped than AER/ECMA as long as the formal setup is well
+      motivated and the result is non-trivial.
+
+  - slug: JET
+    full_name: Journal of Economic Theory
+    field: economic theory
+    bar_criteria: |
+      Specialist theory journal. Bar is rigorous methodological contribution
+      or non-trivial generalization of an existing framework. Welcomes
+      technical papers that wouldn't fit a general-interest venue.
+
+  # ────────────────────────────────────────────────────────────────────
+  # Examples for other fields (delete or replace as appropriate):
+  # ────────────────────────────────────────────────────────────────────
+
+  # - slug: Annals
+  #   full_name: Annals of Mathematics
+  #   field: mathematics
+  #   bar_criteria: |
+  #     Top pure-math journal. Bar is a major advance — a resolution of a
+  #     long-standing open problem, a fundamental new technique, or a
+  #     genuinely surprising structural result. Beautiful proofs of
+  #     well-known small results don't clear.
+
+  # - slug: JAMS
+  #   full_name: Journal of the American Mathematical Society
+  #   field: mathematics
+  #   bar_criteria: |
+  #     Top general-interest math journal alongside Annals/Inventiones. Bar:
+  #     significant new result, ideally cross-subfield, with techniques that
+  #     are likely to be used elsewhere.
+
+  # - slug: TQE
+  #   full_name: Quantitative Economics
+  #   field: applied / econometrics
+  #   bar_criteria: |
+  #     Quantitative-economics journal. Applied + structural-estimation work
+  #     with clean identification and substantive policy or empirical payoff.
