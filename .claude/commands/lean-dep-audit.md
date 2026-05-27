@@ -26,7 +26,7 @@ Paths inside `{PROOF_REPO}/lean/` follow the canonical layout from `/lean-formal
 
 4. **Submit.** `/submit-role --project-url URL --port PORT --prompt-file {PROOF_REPO}/lean/diagnostics/lean_dep_audit_request.md --response-file {PROOF_REPO}/lean/diagnostics/lean_dep_audit_response.md`
 
-5. **Wait + harvest.** Use the passive heartbeat JSON, `/inspect-chat`, or manual polling. Extended Pro will take 30–90 minutes.
+5. **Wait + harvest.** Use `/inspect-chat` or manual polling. Extended Pro will take 30–90 minutes.
 
 6. **Parse the response.** Extract the leading `dep_audit` fenced block (`total_external`, `total_candidates`, `needs_inventory_lean_stub`). Save the full response to `{PROOF_REPO}/lean/dep_audit_proposed.md`.
 

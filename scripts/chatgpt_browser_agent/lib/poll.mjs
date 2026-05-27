@@ -240,7 +240,7 @@ import { isGenerating } from './composer.mjs';
  * @param {function?} opts.onPoll            optional async callback per poll;
  *                                           receives { chatUrl, currentTextLength,
  *                                           generating, readyToCopy, stableCycles,
- *                                           deadlineAt }. Used for heartbeat emission.
+ *                                           deadlineAt }. Used for status snapshots.
  * @param {boolean} opts.requireCopyButton   default true. submit-flow needs the
  *                                           copy button for clipboard extraction;
  *                                           wait_chat_done sets false (lighter check).

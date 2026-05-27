@@ -108,31 +108,7 @@ The script writes a JSON session log next to the response file by default:
 
 - `formalizer_response_session.json`
 
-The script also writes a heartbeat JSON next to the response file by default while it is waiting:
-
-- `formalizer_response_heartbeat.json`
-
-The heartbeat is updated on each polling cycle with the current status, chat URL, latest response length, and deadline. This makes it easy to distinguish an alive long-running role from a dead worker.
-
-If the heartbeat has a real `chat_url` but the response file is still missing, treat that as a recovery candidate first. Inspect or recover the existing chat before deciding the role must be resubmitted from scratch.
-
-### Poll one heartbeat
-
-Use this when you want notification and terminal status detection without resuming the run automatically. This is a passive poll of one browser-agent heartbeat file, not the deprecated recurring orchestrator `/heartbeat` watcher loop:
-
-```bash
-scripts/chatgpt_heartbeat_watch.sh \
-  --heartbeat-json "runs/<run_id>/branches/main/external_agent/formalizer_response_heartbeat.json" \
-  --response-file "runs/<run_id>/branches/main/external_agent/formalizer_response.md" \
-  --notify-command 'printf %s "$MPP_HEARTBEAT_STATUS" > /tmp/mpp-heartbeat-status.txt'
-```
-
-The watcher exits with:
-
-- `0` on `completed`
-- `1` on `error`
-- `2` on `stale`
-- `3` on `timeout`
+If the response file is still missing after a long wait but you have the chat URL from the submit command, treat that as a recovery candidate first. Inspect or recover the existing chat before deciding the role must be resubmitted from scratch — use `/inspect-chat` for a one-shot status read and `/recover-chat` to harvest the chat content into a response file.
 
 ## Context policy for long proofs
 
@@ -188,7 +164,7 @@ For iterative proof development, update the durable proof-state source after eac
 
 - Default max wait is 90 minutes (`5400` seconds).
 - Override with `--max-wait-seconds` if a role needs a different budget.
-- Use the heartbeat JSON beside the response file to check whether the worker is still active. `mpp watch-heartbeat` (or the `chatgpt_heartbeat_watch.sh` wrapper) is a blocking shell helper that polls that one heartbeat and reports completion; it does not route the proof or replace orchestrator judgment.
+- Use `/inspect-chat` to one-shot read the current state of the chat (generating? assistant turn count? last text length?). For unattended long runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and advances the pipeline on its own.
 
 ## Orchestrator handoff
 

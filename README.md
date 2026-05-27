@@ -29,7 +29,6 @@ The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. 
 - Real provider adapters for OpenAI, Anthropic, and Gemini
 - Optional `external_agent` provider path (request/response files for browser-agent workflows)
 - Browser ChatGPT runner for the `external_agent` path via `scripts/chatgpt_browser_agent.sh`
-- Passive heartbeat JSON plus `mpp watch-heartbeat` polling for long-running browser roles
 - Prompt roots in `prompts/soft/` (smart scaffolding) and `prompts/api/` (API pipeline); shared snippets in `prompts/fragments/`
 - Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)
 - Budget controls (`max_total_tokens`, `max_tokens_per_branch`, `max_total_calls`, `max_calls_per_branch`)
@@ -84,7 +83,6 @@ Key pieces:
 - lower-level browser transport profile: `config/browser_chatgpt.toml`
 - smart-scaffolding profile: `config/browser_chatgpt_soft.toml`
 - browser runner: `scripts/chatgpt_browser_agent.sh`
-- passive heartbeat poller (manual blocking status only): `scripts/chatgpt_heartbeat_watch.sh`
 - detailed usage: `docs/browser_chatgpt.md`
 
 The transport loop is:
@@ -105,7 +103,7 @@ The smart-orchestrator rules:
 
 The current browser lane enforces the Extended Pro target: reasoning `Pro` plus model `5.5`.
 If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
-Browser submits default to a 90-minute wait budget and maintain a heartbeat JSON beside each response file while waiting.
+Browser submits default to a 90-minute wait budget.
 They also accept repeated `--attach-file` arguments so branch-local proof artifacts can travel with a request without becoming durable project sources.
 
 ## Key docs

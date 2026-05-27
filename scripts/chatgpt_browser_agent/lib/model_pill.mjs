@@ -35,18 +35,18 @@
  *       state — callers should treat this as a hard "refuse to submit" gate.
  *
  *   PILL_SELECTOR, EXTENDED_PRO_LABELS, BASE_MODEL_LABEL, EFFORT_LABEL
- *       Exported constants. BASE_MODEL_LABEL/EFFORT_LABEL feed the heartbeat
- *       and session-log JSON shapes — do not change their string values
- *       without coordinating with `mathpipeprover/heartbeat.py` consumers.
+ *       Exported constants. BASE_MODEL_LABEL/EFFORT_LABEL feed the
+ *       session-log JSON's `base_model` / `effort_mode` fields — change
+ *       their string values only if you also coordinate downstream consumers.
  */
 
 export const PILL_SELECTOR = 'button.__composer-pill[aria-haspopup="menu"]';
 export const EXTENDED_PRO_LABELS = ['Extended Pro', 'Pro'];
 
-// These two constants are the strings emitted into the heartbeat JSON
-// (`base_model`, `effort_mode` fields) consumed by `mpp watch-heartbeat`.
-// Stability matters more than precision: keep "Pro" + "Extended Pro" even
-// if the UI label drifts, unless you are coordinating the schema change.
+// These two constants are the strings emitted into the session-log JSON
+// (`base_model`, `effort_mode` fields). Stability matters more than precision:
+// keep "Pro" + "Extended Pro" even if the UI label drifts, unless you are
+// coordinating a schema change.
 export const BASE_MODEL_LABEL = 'Pro';
 export const EFFORT_LABEL = 'Extended Pro';
 // Heartbeat/log effort_mode value when the wrapper is told `--deep-research`.

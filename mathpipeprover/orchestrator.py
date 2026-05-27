@@ -110,7 +110,7 @@ def _clear_external_agent_artifacts(run_dir: Path, branch: str, from_phase: str)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
     for role in ordered_roles[ordered_roles.index(from_phase) :]:
-        for suffix in ("request.md", "response.md", "response_heartbeat.json", "response_session.json"):
+        for suffix in ("request.md", "response.md", "response_session.json"):
             src = ext_dir / f"{role}_{suffix}"
             if not src.exists():
                 continue

@@ -17,7 +17,6 @@ import {
   latestAssistantText, assistantTurnHasCopyButton, isInterimAssistantText,
   extractAssistantResponse, waitForStableAssistantReply,
 } from "./lib/poll.mjs";
-import { createHeartbeatWriter, resolveHeartbeatPath } from "./lib/heartbeat.mjs";
 
 // Wrapper keeps the legacy local name `attachFileToComposer` for callsite readability.
 const attachFileToComposer = attachFile;
@@ -50,7 +49,6 @@ Options:
   --attach-file PATH           Extra chat attachment to upload with the request. Repeatable.
   --chat-url URL              Existing chat URL to reopen for recovery.
   --log-json PATH              Optional JSON session log path.
-  --heartbeat-json PATH        Optional heartbeat JSON path.
   --deep-research              Submit via ChatGPT Deep Research mode instead of
                                Extended Pro. Used by the literature role. DR
                                jobs run 5-30 min (Extended Pro: 30-90 min).
@@ -84,7 +82,6 @@ function parseArgs(argv) {
     attachFiles: [],
     chatUrl: "",
     logJson: "",
-    heartbeatJson: "",
     deepResearch: false,
   };
 
@@ -129,8 +126,6 @@ function parseArgs(argv) {
       args.logJson = rest.shift() || "";
     } else if (token === "--deep-research") {
       args.deepResearch = true;
-    } else if (token === "--heartbeat-json") {
-      args.heartbeatJson = rest.shift() || "";
     } else {
       throw new Error(`Unknown argument: ${token}`);
     }
@@ -339,22 +334,8 @@ async function runSubmit(page, args) {
   const submissionPrompt = buildAttachmentPrompt(args.requestFile, args.attachFiles);
   const submittedAt = new Date().toISOString();
   const logPath = args.logJson || args.responseFile.replace(/\.md$/i, "_session.json");
-  const heartbeatPath = resolveHeartbeatPath(args.responseFile, args.heartbeatJson);
   const effortLabel = args.deepResearch ? EFFORT_LABEL_DR : EFFORT_LABEL;
-  const writeHeartbeat = createHeartbeatWriter({
-    heartbeatPath,
-    projectUrl: args.projectUrl,
-    requestFile: args.requestFile,
-    responseFile: args.responseFile,
-    submittedAt,
-    pollSeconds: args.pollSeconds,
-    maxWaitSeconds: args.maxWaitSeconds,
-    effortLabel,
-  });
 
-  await writeHeartbeat("starting");
-
-  try {
   await openProject(page, args.projectUrl, args.waitForLoginSeconds);
   if (args.deepResearch) {
     await ensureDeepResearch(page);
@@ -367,26 +348,12 @@ async function runSubmit(page, args) {
     await attachFileToComposer(page, attachmentPath);
   }
   await submitPrompt(page, submissionPrompt);
-  await writeHeartbeat("submitted", { chat_url: page.url() });
 
-  const stableText = await _waitStable(page, args.pollSeconds, args.maxWaitSeconds, async (state) => {
-    await writeHeartbeat("waiting_reply", {
-      chat_url: state.chatUrl,
-      generating: state.generating,
-      stable_cycles: state.stableCycles,
-      latest_response_chars: state.lastTextLength,
-      deadline_at: state.deadlineAt,
-    });
-  });
+  const stableText = await _waitStable(page, args.pollSeconds, args.maxWaitSeconds);
   const responseText = await extractAssistantResponse(page, stableText);
   const completedAt = new Date().toISOString();
   await fs.mkdir(path.dirname(args.responseFile), { recursive: true });
   await fs.writeFile(args.responseFile, `${responseText.trim()}\n`, "utf8");
-  await writeHeartbeat("completed", {
-    chat_url: page.url(),
-    completed_at: completedAt,
-    response_chars: responseText.length,
-  });
   await writeJsonLog(logPath, {
     command: "submit",
     project_url: args.projectUrl,
@@ -407,13 +374,6 @@ async function runSubmit(page, args) {
     request_text: requestText,
     response_text: responseText,
   });
-  } catch (error) {
-    await writeHeartbeat("error", {
-      chat_url: page.url(),
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
 }
 
 async function main() {

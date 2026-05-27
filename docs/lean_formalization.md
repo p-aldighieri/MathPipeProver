@@ -262,7 +262,7 @@ Rough numbers for a paper-scale theorem with ~10 lemmas and ~30 external results
 | `/lean-merge` | <5 min | One AXLE call. |
 | `/lean-final-check` | 0.5–2 h | AXLE verify + per-lemma disprove (fast) + final meaning-check (Extended Pro pass). |
 
-Total: typically 10–30 hours wall-clock, of which the user is gated on Extended Pro maybe 60% of the time. Record the chat URLs and response/heartbeat paths, then use passive heartbeat polling, `/inspect-chat`, or `/recover-chat` when returning.
+Total: typically 10–30 hours wall-clock, of which the user is gated on Extended Pro maybe 60% of the time. Record the chat URLs and response paths, then use `/inspect-chat` or `/recover-chat` when returning.
 
 ## Smart-Scaffolding Discipline, Applied Here
 

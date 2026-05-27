@@ -392,7 +392,6 @@ orchestrator_controls_stop = true
     for name in [
         "breakdown_request.md",
         "breakdown_response.md",
-        "breakdown_response_heartbeat.json",
         "breakdown_response_session.json",
         "prover_request.md",
         "prover_response.md",

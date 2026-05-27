@@ -51,10 +51,10 @@ and will produce a much weaker result. Submitting an analytical role with
 
 4. **Record the chat URL** from the script output for status checks and recovery.
 
-5. **Monitor.** Use the passive heartbeat JSON, `/inspect-chat`, or manual polling.
+5. **Monitor.** Use `/inspect-chat` for one-shot status reads, `/recover-chat` to harvest a completed chat, or manual polling.
    - Extended Pro responses: 30–90+ minutes.
    - Deep Research responses: 5–30 minutes (sometimes 45 for hard topics).
-   Do not start the deprecated recurring `/heartbeat` loop.
+   For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and continues the pipeline.
 
 6. **Harvest** the response when complete using inline Playwright CDP (connect,
    extract assistant messages, write to response file).

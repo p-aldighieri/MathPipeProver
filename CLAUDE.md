@@ -37,7 +37,7 @@ Available via `.claude/commands/`:
 | `/recover-chat` | Extract a completed response from a chat URL and save to file. |
 | `/search-council` | **Re-attack only** (attempt ≥2). Fan out 2 Codex + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. Opt-in, ~3× the cost of a single search. Adapters at `scripts/council/dispatch_{codex,opus,extended_pro}.sh`. |
 
-The old recurring `/heartbeat` watcher loop is deprecated for normal proof sessions. Use the browser agent's heartbeat JSON, `/inspect-chat`, and `/recover-chat` instead; create an explicit reminder or automation only when the user asks for one.
+For long-running submissions, use `/inspect-chat` for one-shot status checks and `/recover-chat` to harvest a completed chat. For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and advances the pipeline on its own.
 
 ## CDP Browser Scripts
 
@@ -63,7 +63,6 @@ DOM logic lives in `scripts/chatgpt_browser_agent/lib/`:
 | `lib/sources.mjs` | Durable Sources tab: list / add / remove with confirmation-dialog handling. |
 | `lib/attachments.mjs` | Per-prompt composer attachments. |
 | `lib/poll.mjs` | Assistant-text reading, stability polling, clipboard-based clean extraction. |
-| `lib/heartbeat.mjs` | Heartbeat JSON writer (preserves the `mpp watch-heartbeat` schema). |
 
 Entry-point `.mjs` scripts are thin shims over lib:
 
@@ -176,14 +175,6 @@ The orchestrator is responsible for keeping the ChatGPT project's **Sources** ta
 
 **How to act:**
 Use the browser agent's `--add-source` and `--remove-source` flags directly, or invoke the `/set-sources` slash command from the orchestrator session.
-
-## Browser heartbeat files
-
-Heartbeat JSON files are written next to the response file by the browser agent:
-- `runs/<run>/branches/<branch>/external_agent/{role}_response_heartbeat.json`
-- Response at: `runs/<run>/branches/<branch>/external_agent/{role}_response.md`
-
-These files are passive telemetry for recovery and status checks. Do not start the deprecated recurring `/heartbeat` watcher loop as part of the standard workflow. If you want a blocking shell wait, `mpp watch-heartbeat` (or `chatgpt_heartbeat_watch.sh`) can poll one heartbeat without resuming or routing the proof automatically.
 
 ## Lean formalization
 

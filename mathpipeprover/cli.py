@@ -8,7 +8,6 @@ import sys
 
 from .config import load_config
 from .dotenv_loader import load_dotenv
-from .heartbeat import format_watch_result, watch_heartbeat
 from .orchestrator import inspect_run, orchestrator_continue_run, orchestrator_revive_run, orchestrator_stop_run, report_run, resume_run, start_run
 from .providers import ProviderHub
 
@@ -76,15 +75,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     _add_axle_parser(sub)
-
-    heartbeat_p = sub.add_parser("watch-heartbeat", help="Wait for a browser-agent heartbeat to complete")
-    heartbeat_p.add_argument("--heartbeat-json", required=True)
-    heartbeat_p.add_argument("--response-file", default="")
-    heartbeat_p.add_argument("--poll-seconds", type=float, default=10.0)
-    heartbeat_p.add_argument("--stale-after-seconds", type=float, default=120.0)
-    heartbeat_p.add_argument("--max-wait-seconds", type=float, default=0.0)
-    heartbeat_p.add_argument("--notify", action="store_true", help="Show a macOS notification on terminal status")
-    heartbeat_p.add_argument("--notify-command", default="", help="Shell command run on terminal status")
 
     return parser
 
@@ -447,21 +437,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "axle":
         return _run_axle(args)
-
-    if args.command == "watch-heartbeat":
-        response_path = Path(args.response_file) if args.response_file else None
-        max_wait_seconds = args.max_wait_seconds if args.max_wait_seconds > 0 else None
-        result = watch_heartbeat(
-            heartbeat_path=Path(args.heartbeat_json),
-            response_path=response_path,
-            poll_seconds=args.poll_seconds,
-            stale_after_seconds=args.stale_after_seconds,
-            max_wait_seconds=max_wait_seconds,
-            notify=args.notify,
-            notify_command=args.notify_command,
-        )
-        print(format_watch_result(result), end="")
-        return {"completed": 0, "error": 1, "stale": 2, "timeout": 3}.get(result.status, 4)
 
     return 1
 
