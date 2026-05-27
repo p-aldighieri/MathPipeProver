@@ -6,6 +6,7 @@ Propose 2-4 genuinely distinct proof routes for the orchestrator to consider.
 
 - Use `literature.md` if it is present. Treat that file as a real input, not optional decoration.
 - If an **attempt dossier** is present (lessons learned, refuted routes, and recorded obstructions from earlier attempts at this same objective), treat it as a real input too. Do **not** re-propose a route the dossier has already refuted; for each new route, say explicitly how it dodges the obstruction the previous attempt(s) hit.
+- **If council memos are present** (four files named `codex_memo_1.md`, `codex_memo_2.md`, `opus_memo.md`, `extended_pro_memo.md`, produced by `/search-council` on a re-attack), treat them as your primary route source. Your job in that case is **selection and ranking, not generation**: read all four memos, identify the 2-4 strongest routes across them (you may borrow / merge / refine individual routes from different memos), rank them, and recommend. Cite which memo a route came from. Note disagreements between memos as data — if Opus and both Codex samples converge on the same machinery while Extended Pro proposes a completely different angle, that's signal. Do NOT propose your own fresh routes when council memos are present unless every council route looks weak.
 - Distinguish literature-backed routes from fresh heuristic routes.
 - If the literature strongly suggests the claim is already known or false, say so instead of pretending all routes are equally live.
 - Rank the routes by present usefulness to the orchestrator.
@@ -47,6 +48,15 @@ Number the routes starting from `1.` because the orchestrator may still use numb
 
 (Which route looks best, which route is the backup, and whether the literature suggests the target is already known or already false.)
 ```
+
+## Council Mode Addendum (when council memos are present)
+
+After "Recommendation to the Orchestrator", add a short **"Council Sourcing"**
+section: for each of your final 2-4 routes, list which council memo(s) the
+route came from (e.g., "Route 1: from codex_memo_2 + extended_pro_memo
+agreement; Route 2: from opus_memo only"). This lets the orchestrator audit
+which council member contributed what, and informs whether to keep paying
+for the council on future re-attacks.
 
 ## Context Packet
 

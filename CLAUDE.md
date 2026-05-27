@@ -35,6 +35,7 @@ Available via `.claude/commands/`:
 | `/set-sources` | Add/remove durable files in a ChatGPT project's Sources tab. |
 | `/inspect-chat` | Read-only check of a live chat's generation status. |
 | `/recover-chat` | Extract a completed response from a chat URL and save to file. |
+| `/search-council` | **Re-attack only** (attempt ≥2). Fan out 2 Codex + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. Opt-in, ~3× the cost of a single search. Adapters at `scripts/council/dispatch_{codex,opus,extended_pro}.sh`. |
 
 The old recurring `/heartbeat` watcher loop is deprecated for normal proof sessions. Use the browser agent's heartbeat JSON, `/inspect-chat`, and `/recover-chat` instead; create an explicit reminder or automation only when the user asks for one.
 
