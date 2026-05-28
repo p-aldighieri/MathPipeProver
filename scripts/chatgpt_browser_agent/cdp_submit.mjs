@@ -15,9 +15,16 @@
  *   --deep-research       Switch the composer into Deep Research mode
  *                         instead of Extended Pro. Used by the literature
  *                         role; DR responses take 5-30 min (vs 30-90 for
- *                         Extended Pro). NOTE: the DR DOM selector is
- *                         currently a stub — requires live-inspect wiring
- *                         before this flag works end-to-end.
+ *                         Extended Pro). Engages via ensureDeepResearch in
+ *                         lib/model_pill.mjs (DOM verified live 2026-05-26;
+ *                         re-verified end-to-end 2026-05-27 — SUBMIT works).
+ *                         Note that DR's research phase shows NO stop button, so
+ *                         isGenerating reads false while it works (expected). Heavy
+ *                         DR jobs return the report in a CANVAS that is not in the
+ *                         chat DOM (wait_chat_done would time out); once research is
+ *                         done, harvest with `harvest_deep_research.mjs --repost-now`
+ *                         (canvas → inline repost). See CLAUDE.md "Harvesting a DR
+ *                         chat is different".
  *   --check-effort        Legacy no-op kept for back-compat.
  *
  * Flow:

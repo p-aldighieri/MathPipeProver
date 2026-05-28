@@ -80,7 +80,8 @@ Entry-point `.mjs` scripts are thin shims over lib:
 | `cdp_submit.mjs` | Lower-level single prompt submitter; supports `--deep-research`. |
 | `cdp_submit_trustpill.mjs` | Diagnostic submitter that refuses on non-Pro pill instead of trying to fix. Functionally close to redundant — kept as a strict-check variant. |
 | `cdp_submit_batch.mjs` | Sequential parallel-prompt dispatcher (post-refactor: now actually works; the pre-refactor version spawned a nonexistent target). |
-| `wait_chat_done.mjs` | Chat-ID-pinned poller/dumper for a known chat URL (uses lib's hardened poll). |
+| `wait_chat_done.mjs` | Chat-ID-pinned poller/dumper for a known chat URL (uses lib's hardened poll). `--deep-research` keeps it waiting through DR's stop-button-less research phase. |
+| `harvest_deep_research.mjs` | Harvest a **Deep Research** chat whose report is in a canvas/artifact. `--repost-now` (after research is confirmed done) reposts the packet inline, then captures it. See "Model modes" → DR harvest. |
 | `cdp_inspect_chat.mjs` | Read-only live chat inspection. |
 | `cdp_dump_chat.mjs` | Dump every message (user + assistant) of a chat. |
 | `cg_create_project.mjs` | Project creation/provisioning helper, not part of the normal role loop. |
@@ -108,6 +109,41 @@ DR jobs do **not** use the same pill enforcement as Extended Pro. The `ensureDee
 - The pill reads "Pro" (not "Extended Pro") while DR is active. `ensureExtendedPro` therefore explicitly toggles DR off via the chip before its pill-based fast path; otherwise a DR-active session would silently pass for "Extended Pro" and submit on the wrong mode.
 
 DR DOM is more stable than the model-picker DOM has been historically, but if ChatGPT changes it again, update `lib/model_pill.mjs` only.
+
+**Harvesting a DR chat is different from Extended Pro** (investigated + solved live
+2026-05-27; heavy DR reports need the canvas → inline-repost flow described below):
+
+- DR's research phase shows a plan/activity UI and **no stop button**, so
+  `isGenerating` reads `false` the whole time it works. `cdp_submit.mjs` therefore
+  prints `Generating: NO` right after a DR submit — that is expected, not a failure.
+  `isDeepResearchWorking` (lib/model_pill.mjs) is the substitute "still working"
+  signal, and `wait_chat_done.mjs --deep-research` ORs it into the generating check
+  so the poller does not declare "done" during research.
+- **A heavy DR job delivers its report as a canvas / artifact "document"** (collapsed card
+  titled by the report's first heading, with download + expand icons, e.g.
+  *"Research completed in 19m · 12 citations · 131 searches"*), **not** as chat text. While
+  collapsed the report markdown is **not in the chat DOM**, so `latestAssistantText`
+  (assistant-role attr / `article` scan / body scrape) returns empty and
+  `wait_chat_done.mjs --deep-research` will WAIT then TIME OUT even though the report is
+  finished. Only a trivial DR query (which skips the canvas flow) answers inline.
+- The copy button does **not** write to the OS clipboard under CDP (even with
+  `clipboard-read`/`clipboard-write` granted), so clipboard extraction is a dead end on
+  this transport — this is why `extractAssistantResponse`'s clipboard path is macOS-only.
+  A Windows `Get-Clipboard` path was tried 2026-05-27 and abandoned: the JS-clicked copy is
+  a no-op under CDP, so the OS clipboard returns STALE content. Non-darwin falls back to innerText.
+- DR chat DOM is genuinely **flaky across reloads** (the canvas card appears/vanishes;
+  content lazy-renders only when the document is opened) — the "open it twice / refresh the
+  URL" behavior operators have hit.
+- **HARVEST THE CANVAS with `harvest_deep_research.mjs --repost-now`.** It turns DR off and
+  asks the model to reproduce the finished packet INLINE as a plain-markdown message, which
+  renders as a normal assistant turn that `latestAssistantText` captures cleanly (validated
+  8.4 KB packet, all sections + citations + final marker). **Run it only once you have
+  confirmed research finished** (look at the chat — the canvas card / "Research completed"
+  line is shown); reposting mid-research would toggle DR off and disrupt the running job.
+  This operator-confirmed flow is intentional — blind DR-completion detection is unreliable
+  because the canvas UI is virtualized (`--auto-wait` exists but is best-effort/experimental).
+- Caveat: the repost is a faithful model reproduction, not the byte-identical canvas. For
+  citation-critical packets, spot-check against the open canvas document.
 
 All CDP helpers require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
 

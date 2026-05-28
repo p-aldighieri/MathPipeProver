@@ -9,12 +9,19 @@
  *
  * Usage:
  *   node wait_chat_done.mjs --chat-url URL [--port PORT] --out PATH \
- *     [--poll-secs N] [--max-mins N] [--min-stable-length N]
+ *     [--poll-secs N] [--max-mins N] [--min-stable-length N] [--deep-research]
  *
  * Polls every --poll-secs (default 60). Generation is "done" when the
  * assistant text stays stable across 2 polls AND no stop button is
  * present AND text length >= --min-stable-length (default 200, blocks
  * premature triggers on short interim outputs).
+ *
+ * --deep-research: harvest a Deep Research chat. DR's research phase shows
+ * no stop button, so the normal "no stop button = done" signal would declare
+ * done during research. This flag treats DR-active-with-no-answer-yet as
+ * still-generating (via isDeepResearchWorking) and finalizes only on stable,
+ * non-empty report text. Use it whenever the chat was submitted with
+ * `cdp_submit.mjs --deep-research`.
  *
  * Exits 0 on success, 1 on transport/auth/URL-drift errors, 2 on timeout.
  */
@@ -23,7 +30,7 @@ import { attachCDP } from './lib/browser.mjs';
 import { waitForStableAssistantReply, extractChatId, latestAssistantText } from './lib/poll.mjs';
 
 const args = process.argv.slice(2);
-let chatUrl = '', port = 9222, outPath = '', pollSecs = 60, maxMins = 180, minStableLength = 200;
+let chatUrl = '', port = 9222, outPath = '', pollSecs = 60, maxMins = 180, minStableLength = 200, deepResearch = false;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--chat-url') chatUrl = args[++i];
   else if (args[i] === '--port') port = parseInt(args[++i], 10);
@@ -31,6 +38,7 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--poll-secs') pollSecs = parseInt(args[++i], 10);
   else if (args[i] === '--max-mins') maxMins = parseInt(args[++i], 10);
   else if (args[i] === '--min-stable-length') minStableLength = parseInt(args[++i], 10);
+  else if (args[i] === '--deep-research') deepResearch = true;
 }
 if (!chatUrl || !outPath) { console.error('Need --chat-url and --out'); process.exit(1); }
 
@@ -62,11 +70,17 @@ try {
     const stableText = await waitForStableAssistantReply(page, {
       pollSeconds: pollSecs,
       maxWaitSeconds: maxMins * 60,
-      requireCopyButton: false,    // legacy wait_chat_done semantics: trust length-stability
+      // Trust length-stability, not the copy button: DR's research-plan turn
+      // carries a stray copy button and the DR report turn doesn't match the
+      // copy-button heuristic's "ChatGPT said:" filter. DR completion is gated
+      // instead by stable non-empty report text + the deepResearch generating
+      // augmentation below (which keeps the empty research phase "generating").
+      requireCopyButton: false,
       minStableLength,
       chatIdPin: chatId,
       chatUrl,
       renavigateEveryNPolls: 5,
+      deepResearch,
       onPoll: ({ chatUrl: u, currentTextLength, generating }) => {
         pollIdx += 1;
         const elapsedMin = Math.round((Date.now() - startMs) / 60000);

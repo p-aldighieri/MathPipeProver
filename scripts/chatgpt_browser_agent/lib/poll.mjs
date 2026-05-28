@@ -165,6 +165,14 @@ export function extractChatId(url) {
 }
 
 // ── Clipboard extraction (macOS only) ──────────────────────────────────
+//
+// Deliberately macOS-only. A Windows path was tried 2026-05-27 (PowerShell
+// Get-Clipboard/clip) but ABANDONED: ChatGPT's copy button writes via the async
+// Clipboard API, which does NOT reach the OS clipboard under CDP automation even
+// with clipboard-read/write permissions granted — the JS-clicked copy is a no-op,
+// so reading the OS clipboard returns STALE content and extractAssistantResponse
+// would hand back junk instead of the answer. On non-darwin the safe behaviour is
+// to return null here and let callers fall back to innerText.
 
 function readClipboardText() {
   if (process.platform !== 'darwin') return null;
@@ -230,6 +238,7 @@ export async function extractAssistantResponse(page, fallbackOverride = '') {
 // ── Stability polling ──────────────────────────────────────────────────
 
 import { isGenerating } from './composer.mjs';
+import { isDeepResearchWorking } from './model_pill.mjs';
 
 /**
  * Poll a chat until the assistant turn stabilizes.
@@ -255,6 +264,16 @@ import { isGenerating } from './composer.mjs';
  *                                           as the re-navigation target.
  * @param {number?} opts.renavigateEveryNPolls  re-goto chatUrl every N polls. Opt-in
  *                                              hardening from wait_chat_done.
+ * @param {boolean} opts.deepResearch        default false. Set for Deep Research
+ *                                           chats: DR's research phase has no stop
+ *                                           button so isGenerating reads false the
+ *                                           whole time; this ORs in isDeepResearchWorking
+ *                                           so the poller keeps waiting through the
+ *                                           research phase instead of finalizing early.
+ *                                           Keep requireCopyButton false (DR's copy
+ *                                           button is unreliable — see wait_chat_done);
+ *                                           DR completion rides on stable report text
+ *                                           plus minStableLength.
  *
  * @returns the stable assistant text. Throws on deadline or URL drift.
  */
@@ -267,6 +286,7 @@ export async function waitForStableAssistantReply(page, opts) {
     chatIdPin = null,
     chatUrl = null,
     renavigateEveryNPolls = null,
+    deepResearch = false,
   } = opts;
 
   if (chatIdPin && !chatUrl) {
@@ -294,7 +314,10 @@ export async function waitForStableAssistantReply(page, opts) {
     }
 
     const currentText = await latestAssistantText(page);
-    const generating = await isGenerating(page);
+    // DR's research phase shows no stop button (isGenerating blind), so OR in
+    // the DR-working signal when polling a Deep Research chat.
+    const generating = (await isGenerating(page))
+      || (deepResearch && await isDeepResearchWorking(page));
     const readyToCopy = requireCopyButton ? await assistantTurnHasCopyButton(page) : true;
 
     if (currentText && currentText === lastText) unchangedCycles += 1;

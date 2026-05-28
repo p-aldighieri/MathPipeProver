@@ -57,7 +57,12 @@ and will produce a much weaker result. Submitting an analytical role with
    For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and continues the pipeline.
 
 6. **Harvest** the response when complete using inline Playwright CDP (connect,
-   extract assistant messages, write to response file).
+   extract assistant messages, write to response file). **Deep Research harvests
+   differently:** heavy DR jobs return the report in a **canvas/artifact** that is not
+   in the chat DOM, so `wait_chat_done.mjs --deep-research` would time out. Once you
+   have confirmed research finished (canvas card / "Research completed" shown), harvest
+   with **`harvest_deep_research.mjs --repost-now`** (it reposts the packet inline, then
+   captures it). See CLAUDE.md "Model modes" → "Harvesting a DR chat is different."
 
 ## Recovery
 

@@ -190,6 +190,29 @@ export async function isDeepResearchActive(page) {
 }
 
 /**
+ * Is a Deep Research job still in flight (research phase, no answer yet)?
+ *
+ * DR's research phase shows a plan/activity UI but NO stop button, so
+ * isGenerating (composer.mjs) reads false the entire time it works — verified
+ * live 2026-05-27. The copy button is NOT a usable signal either: the
+ * research-plan turn carries its own copy button while nAssistant is still 0.
+ * The reliable discriminator is the assistant-role message node: the plan UI
+ * is not one (no [data-message-author-role="assistant"] text during research),
+ * whereas the final DR report is. So "still working" = DR active AND no
+ * assistant-role node has any text yet. poll.mjs ORs this into its generating
+ * signal so it doesn't declare the (empty) research phase "stable & done".
+ */
+export async function isDeepResearchWorking(page) {
+  if (!(await isDeepResearchActive(page))) return false;
+  const hasAssistantText = await page.evaluate(() => {
+    const nodes = [...document.querySelectorAll('[data-message-author-role="assistant"]')];
+    if (nodes.length === 0) return false;
+    return (nodes[nodes.length - 1].innerText || '').trim().length > 0;
+  });
+  return !hasAssistantText;
+}
+
+/**
  * Click the "Deep research, click to remove" chip to turn DR off.
  * No-op if DR isn't currently active. Internal helper.
  */
