@@ -22,7 +22,7 @@ Mechanics: the skill fans out four adapters in parallel from
   verified live 2026-05-27: meaningfully different proof routes across two
   calls)
 - `dispatch_opus.sh` × 1 (different RLHF priors, surfaces cross-domain leaps)
-- `dispatch_extended_pro.sh` × 1 (slowest member, 30-90 min — determines
+- `dispatch_extended_pro.sh` × 1 (slowest member, 8-20 min — determines
   council wall-clock)
 
 All four adapters honor the same `--packet-dir / --prompt / --out` contract.

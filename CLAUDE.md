@@ -97,7 +97,7 @@ Two model modes are wired through the browser scripts:
 
 | Mode | Used for | Wall-clock | How to invoke |
 |---|---|---|---|
-| **Extended Pro** | All analytical roles (formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper) and the Lean roles. The pipeline default. | 30–90 min | Default. No flag. |
+| **Extended Pro** | All analytical roles (formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper) and the Lean roles. The pipeline default. | 8–20 min | Default. No flag. |
 | **Deep Research** | Literature role only (`02_literature_soft.md`). Web-browsing + multi-source synthesis with citations. | 5–30 min (occasionally 45) | Pass `--deep-research` to `chatgpt_browser_agent.sh submit` or `cdp_submit.mjs`. |
 
 The `/submit-role` skill picks the right flag based on the prompt file. If you invoke the browser scripts manually, the rule is: literature ⇒ DR; everything else ⇒ Extended Pro.

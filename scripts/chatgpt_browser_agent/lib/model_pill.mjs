@@ -162,7 +162,7 @@ async function readCurrentReasoning(page) {
  *
  * ## DR semantics differ from Extended Pro
  *
- *   - Submissions take 5–30 min (vs Extended Pro's 30–90 min). The
+ *   - Submissions take 5–30 min (vs Extended Pro's 8–20 min). The
  *     existing `wait_chat_done.mjs` `--max-mins 180` default is generous.
  *   - DR uses its own "thinking phase" UI ("Researching...", "Reading
  *     sources..."). The existing `isInterimAssistantText` filter catches

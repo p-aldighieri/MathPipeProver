@@ -8,7 +8,7 @@ Arguments: $ARGUMENTS
 Two model modes are supported. The orchestrator picks the right one for the role:
 
 - **Extended Pro** (default) — for analytical proof roles: formalizer, searcher,
-  breakdown, prover, reviewer, consolidator, gatekeeper. 30–90 min response time.
+  breakdown, prover, reviewer, consolidator, gatekeeper. 8–20 min response time.
   Pass no extra flags.
 - **Deep Research** — for the literature role only (`02_literature_soft.md`). DR
   can browse the open web and academic repositories, return long-form synthesis
@@ -52,7 +52,7 @@ and will produce a much weaker result. Submitting an analytical role with
 4. **Record the chat URL** from the script output for status checks and recovery.
 
 5. **Monitor.** Use `/inspect-chat` for one-shot status reads, `/recover-chat` to harvest a completed chat, or manual polling.
-   - Extended Pro responses: 30–90+ minutes.
+   - Extended Pro responses: 8–20+ minutes.
    - Deep Research responses: 5–30 minutes (sometimes 45 for hard topics).
    For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and continues the pipeline.
 

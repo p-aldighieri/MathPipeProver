@@ -175,7 +175,7 @@ The single most important architectural choice this module makes: **AXLE cannot 
 
 ## Sub-Agent Backend (`/lean-verify-deps`)
 
-The dep-audit verification step iterates dozens to hundreds of AXLE checks. Doing this through Extended Pro round-trips is absurd: each ChatGPT submission costs 30–90 min wall-clock, but each AXLE check returns in <500 ms. So this step delegates to a local sub-agent with tool access.
+The dep-audit verification step iterates dozens to hundreds of AXLE checks. Doing this through Extended Pro round-trips is absurd: each ChatGPT submission costs 8–20 min wall-clock, but each AXLE check returns in <500 ms. So this step delegates to a local sub-agent with tool access.
 
 This is a narrow Lean-formalization exception. Do not use this section as precedent for assigning natural-language analytical proof roles to subagents.
 
@@ -254,7 +254,7 @@ Rough numbers for a paper-scale theorem with ~10 lemmas and ~30 external results
 
 | Phase | Wall-clock | Why |
 |---|---|---|
-| `/lean-structure` | 1–3 h | One structurer pass + one reviewer pass, with possible retry. Each pass is 30–90 min on Extended Pro. |
+| `/lean-structure` | 1–3 h | One structurer pass + one reviewer pass, with possible retry. Each pass is 8–20 min on Extended Pro. |
 | `/lean-dep-audit` | 0.5–1.5 h | Single Extended Pro proposal. |
 | `/lean-verify-deps` | 0.2–1 h | Sub-agent's AXLE loop, dominated by API latency, ~1 sec per candidate with parallel fan-out. |
 | `/lean-formalize` | 1.5–4 h | Formalizer + reviewer + meaning-check + one AXLE skeleton verify. Possible retry loop on signature issues. |

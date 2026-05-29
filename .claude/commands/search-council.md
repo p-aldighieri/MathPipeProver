@@ -77,7 +77,7 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
      --out "$OUT/opus_memo.md" &
    OPUS_PID=$!
 
-   # Extended Pro — slowest (30-90 min); determines wall-clock
+   # Extended Pro — slowest (8-20 min); determines wall-clock
    scripts/council/dispatch_extended_pro.sh --packet-dir "$PACKET" --prompt "$PROMPT" \
      --out "$OUT/extended_pro_memo.md" \
      --project-url "$PROJECT_URL" --cdp-url "$CDP_URL" &
@@ -89,8 +89,7 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
    should finish well before EP.
 
 4. **Heartbeat / partial-completion handling.** EP can fail (network, model
-   refusal, etc.). If 3/4 members complete and EP is still running after
-   90 min, the orchestrator may proceed with the 3 memos rather than block
+   refusal, etc.). If 3/4 members complete and EP is still running after 30 min, the orchestrator may proceed with the 3 memos rather than block
    indefinitely; record the partial completion in `council_log.json`.
 
 5. **Write `council_log.json`** when all members have returned (or been

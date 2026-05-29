@@ -29,7 +29,7 @@ The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. 
 - Real provider adapters for OpenAI, Anthropic, and Gemini
 - Optional `external_agent` provider path (request/response files for browser-agent workflows)
 - Browser ChatGPT runner for the `external_agent` path via `scripts/chatgpt_browser_agent.sh`; all composer DOM logic lives in `scripts/chatgpt_browser_agent/lib/` (single source of truth — when ChatGPT's UI changes, fix the lib once)
-- Two model modes wired through the browser: **Extended Pro** for all analytical roles (default, 30–90 min); **Deep Research** for the literature role only (`--deep-research` flag, 5–30 min, web-browsing + multi-source synthesis with citations)
+- Two model modes wired through the browser: **Extended Pro** for all analytical roles (default, 8–20 min); **Deep Research** for the literature role only (`--deep-research` flag, 5–30 min, web-browsing + multi-source synthesis with citations)
 - `/search-council` skill for stalled re-attacks: fans out 2 Codex + 1 Opus + 1 Extended Pro on the same packet, preserves four independent memos, hands off to the regular Strategy Searcher for selection. Opt-in (re-attempt ≥2), ~3× the cost of a single search
 - Prompt roots in `prompts/soft/` (smart scaffolding) and `prompts/api/` (API pipeline); shared snippets in `prompts/fragments/`
 - Token accounting artifacts (`token_usage_summary.json`, `token_events.jsonl`)

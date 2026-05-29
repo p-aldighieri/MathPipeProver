@@ -51,7 +51,7 @@ Options:
   --log-json PATH              Optional JSON session log path.
   --deep-research              Submit via ChatGPT Deep Research mode instead of
                                Extended Pro. Used by the literature role. DR
-                               jobs run 5-30 min (Extended Pro: 30-90 min).
+                               jobs run 5-30 min (Extended Pro: 8-20 min).
                                Applies to 'submit' only; ignored by other
                                subcommands. NOTE: DR DOM selector is a stub
                                pending live-inspect wiring.

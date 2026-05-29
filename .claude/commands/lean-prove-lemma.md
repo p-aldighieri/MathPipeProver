@@ -44,7 +44,7 @@ Subagents are allowed here only because this is Lean formalization and the deliv
    Skip brainstorm for trivial lemmas (e.g., AXLE terminal-tactic closures, definitional unpacks). Use judgment.
 
 2. **CHEAP-FIRST: try AXLE terminal tactics before any Pro round-trip.**
-   Before spending a 30-90 min Extended Pro pass, try the auto-prover. AXLE's `repair_proofs` lets you stack multiple terminal tactics, so a single call often closes the easy and medium lemmas at no Pro cost.
+   Before spending a 8-20 min Extended Pro pass, try the auto-prover. AXLE's `repair_proofs` lets you stack multiple terminal tactics, so a single call often closes the easy and medium lemmas at no Pro cost.
 
    ```bash
    mpp axle repair-proofs \

@@ -6,7 +6,7 @@
 # optional --cdp-url / --port). Builds the combined prompt the same way,
 # then submits via the validated lib-backed browser flow.
 #
-# Wall-clock: typically the slowest council member (30–90 min). The
+# Wall-clock: typically the slowest council member (8–20 min). The
 # /search-council skill fans this out in parallel with Codex (5–8 min) and
 # Opus (1–3 min), so wall-clock = max(members) ≈ EP's time.
 #
@@ -112,7 +112,7 @@ echo "  request file:    $REQUEST_FILE"
 echo "  project:         $PROJECT_URL"
 echo "  cdp-url:         ${CDP_URL:-(persistent profile)}"
 echo "  log:             $LOG_FILE"
-echo "  expect 30–90 min wall-clock"
+echo "  expect 8–20 min wall-clock"
 echo
 
 if "${CMD[@]}" > "$LOG_FILE" 2>&1; then

@@ -14,7 +14,7 @@
  *   --dry-run             Fill the composer but do not send (testing).
  *   --deep-research       Switch the composer into Deep Research mode
  *                         instead of Extended Pro. Used by the literature
- *                         role; DR responses take 5-30 min (vs 30-90 for
+ *                         role; DR responses take 5-30 min (vs 8-20 for
  *                         Extended Pro). Engages via ensureDeepResearch in
  *                         lib/model_pill.mjs (DOM verified live 2026-05-26;
  *                         re-verified end-to-end 2026-05-27 — SUBMIT works).

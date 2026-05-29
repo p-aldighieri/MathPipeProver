@@ -80,7 +80,7 @@ In soft mode, non-proof terminal conditions such as `FAIL_SCOPE`, `STALL`, or bu
 
 The browser-backed analytical proof loop runs through two ChatGPT modes:
 
-- **Extended Pro** for analytical work: formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper. 30–90 min per role. The pipeline default.
+- **Extended Pro** for analytical work: formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper. 8–20 min per role. The pipeline default.
 - **Deep Research** for the literature role only (`prompts/soft/02_literature_soft.md`). DR can browse the open web and academic repositories and return long-form synthesis with citations and quoted passages — capabilities Extended Pro lacks. 5–30 min per literature pass, occasionally up to 45.
 
 Each role is submitted through the orchestrator-curated browser flow (project sources + scoped attachments), with the model mode chosen automatically by `/submit-role` based on the prompt file. Manual invocations: pass `--deep-research` to `chatgpt_browser_agent.sh submit` (or `cdp_submit.mjs`) only when submitting the literature role; default is Extended Pro for everything else.

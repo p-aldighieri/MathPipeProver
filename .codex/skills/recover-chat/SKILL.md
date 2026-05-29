@@ -20,7 +20,7 @@ scripts/chatgpt_browser_agent.sh recover --chat-url URL --response-file PATH [--
 
 This is also the right recovery path when a submit died mid-flight after the
 model started responding. Always try `/recover-chat` before resubmitting —
-re-running a 30-90 min Extended Pro role only to find the prior chat had
+re-running a 8-20 min Extended Pro role only to find the prior chat had
 already completed is the worst-case outcome.
 
 Read `.claude/commands/recover-chat.md` for the full step-by-step.
