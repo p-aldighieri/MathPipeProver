@@ -25,9 +25,11 @@ parallel against the **same packet**, preserving four independent memos
 
 - One Codex (GPT-5.5 thinking-high) — ephemeral session, structured route
   generation.
-- One Gemini (Gemini 3 Pro) — a different pretraining/RLHF lineage, broadening
-  the architecture spread (replaces the former second Codex sample, whose
-  same-model variance was bonus diversity, not load-bearing).
+- One Gemini (the latest Gemini Pro) — a different pretraining/RLHF lineage,
+  broadening the architecture spread (replaces the former second Codex sample,
+  whose same-model variance was bonus diversity, not load-bearing). The adapter
+  passes no model flag, so it tracks the Gemini CLI's built-in latest-Pro
+  default (currently gemini-3.1-pro-preview) rather than pinning a version.
 - One Claude Opus — different RLHF priors, often surfaces creative
   cross-domain leaps.
 - One Extended Pro — deep single-thread reasoning, structurally rigorous.
@@ -69,7 +71,7 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
      --out "$OUT/codex_memo.md" &
    CODEX_PID=$!
 
-   # Gemini — Gemini 3 Pro (different architecture)
+   # Gemini — latest Gemini Pro via the CLI default (different architecture)
    scripts/council/dispatch_gemini.sh --packet-dir "$PACKET" --prompt "$PROMPT" \
      --out "$OUT/gemini_memo.md" &
    GEMINI_PID=$!

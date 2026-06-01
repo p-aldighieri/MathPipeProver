@@ -1,6 +1,6 @@
 ---
 name: search-council
-description: Fan out a 4-member council (1 Codex thinking-high + 1 Gemini 3 Pro + 1 Claude Opus + 1 ChatGPT Extended Pro) on a stalled re-attack. Preserves all four independent memos; hands off to the regular Strategy Searcher for pure selection. Opt-in (attempt ≥2), ~3× the cost of a single search.
+description: Fan out a 4-member council (1 Codex thinking-high + 1 Gemini Pro + 1 Claude Opus + 1 ChatGPT Extended Pro) on a stalled re-attack. Preserves all four independent memos; hands off to the regular Strategy Searcher for pure selection. Opt-in (attempt ≥2), ~3× the cost of a single search.
 ---
 
 # search-council
@@ -19,8 +19,9 @@ Mechanics: the skill fans out four adapters in parallel from
 `scripts/council/`, one per model architecture:
 
 - `dispatch_codex.sh` × 1 (Codex GPT-5.5 thinking-high, ephemeral session)
-- `dispatch_gemini.sh` × 1 (Gemini 3 Pro; different pretraining/RLHF lineage —
-  requires the `gemini` CLI on PATH, see below)
+- `dispatch_gemini.sh` × 1 (latest Gemini Pro — the adapter passes no model
+  flag, so it tracks the Gemini CLI's built-in latest-Pro default; different
+  pretraining/RLHF lineage; requires the `gemini` CLI on PATH, see below)
 - `dispatch_opus.sh` × 1 (different RLHF priors, surfaces cross-domain leaps)
 - `dispatch_extended_pro.sh` × 1 (slowest member, 8-20 min — determines
   council wall-clock)

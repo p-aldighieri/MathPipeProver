@@ -9,7 +9,7 @@
 #
 # One of four peer adapters under scripts/council/:
 #   dispatch_codex.sh         — Codex CLI (GPT-5.5 thinking high)
-#   dispatch_gemini.sh        — this script (Gemini 3 Pro via Gemini CLI)
+#   dispatch_gemini.sh        — this script (latest Gemini Pro via Gemini CLI)
 #   dispatch_opus.sh          — Claude Opus via CC Agent
 #   dispatch_extended_pro.sh  — ChatGPT Extended Pro via browser
 # All four honor the same --packet-dir / --prompt / --out contract so the
@@ -20,12 +20,20 @@
 # absent, this member is simply skipped (--skip-member gemini) and the
 # council runs with the remaining members. See docs/soft_scaffolding.md.
 #
+# Model selection: by default this adapter passes NO model flag, so the
+# Gemini CLI uses its own built-in default — which Google maintains as the
+# latest Gemini Pro (verified 2026-05-31: resolves to gemini-3.1-pro-preview).
+# This is deliberate: it is a live "pointer to latest Pro" with no version
+# string to go stale. There is no server-side `-latest` alias on the OAuth
+# path (gemini-pro-latest / gemini-3-pro-latest both 404), so the CLI default
+# is the cleanest pointer. Pass --model NAME only to pin a specific version.
+#
 # Usage:
 #   ./dispatch_gemini.sh \
 #     --packet-dir PATH \
 #     --prompt PATH/to/03b_council_member_soft.md \
 #     --out PATH/to/gemini_memo.md \
-#     [--model gemini-3-pro-preview]   # default; fallback: gemini-2.5-pro
+#     [--model NAME]   # optional; default = Gemini CLI's built-in latest Pro
 #
 # Exit codes:
 #   0 — memo written
@@ -37,7 +45,7 @@ set -euo pipefail
 PACKET_DIR=""
 PROMPT_TEMPLATE=""
 OUTPUT_FILE=""
-MODEL="gemini-3-pro-preview"
+MODEL=""   # empty => let the Gemini CLI pick its built-in default (latest Pro)
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,7 +54,8 @@ while [[ $# -gt 0 ]]; do
     --out) OUTPUT_FILE="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
     --help|-h)
-      echo "Usage: $0 --packet-dir DIR --prompt PATH --out PATH [--model gemini-3-pro-preview]"
+      echo "Usage: $0 --packet-dir DIR --prompt PATH --out PATH [--model NAME]"
+      echo "  --model is optional; default = Gemini CLI's built-in latest-Pro model"
       exit 0 ;;
     *) echo "ERROR: unknown arg $1" >&2; exit 1 ;;
   esac
@@ -95,7 +104,7 @@ echo "  packet:          $PACKET_DIR"
 echo "  prompt template: $PROMPT_TEMPLATE"
 echo "  output:          $OUTPUT_FILE"
 echo "  combined prompt: $(wc -l < "$PROMPT_FILE") lines, $(wc -c < "$PROMPT_FILE") bytes"
-echo "  model:           $MODEL"
+echo "  model:           ${MODEL:-<Gemini CLI default = latest Pro>}"
 echo "  log:             $LOG_FILE"
 echo
 
@@ -105,9 +114,12 @@ echo
 # member only reasons + emits a memo; it never edits the proof repo) and
 # --skip-trust is required because the council runs inside arbitrary
 # proof-repo directories Gemini has not marked "trusted". -o text yields
-# clean stdout (warnings go to stderr / the log).
-if gemini --model "$MODEL" --approval-mode plan --skip-trust -o text \
-     < "$PROMPT_FILE" > "$OUTPUT_FILE" 2> "$LOG_FILE"; then
+# clean stdout (warnings go to stderr / the log). When --model is omitted
+# we pass NO model flag, so the CLI uses its built-in latest-Pro default.
+GEMINI_ARGS=(--approval-mode plan --skip-trust -o text)
+[[ -n "$MODEL" ]] && GEMINI_ARGS+=(--model "$MODEL")
+
+if gemini "${GEMINI_ARGS[@]}" < "$PROMPT_FILE" > "$OUTPUT_FILE" 2> "$LOG_FILE"; then
   if [[ ! -s "$OUTPUT_FILE" ]]; then
     echo "ERROR: gemini returned empty output; see $LOG_FILE" >&2
     tail -10 "$LOG_FILE" >&2
