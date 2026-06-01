@@ -1,6 +1,6 @@
-Fan out a 4-member council (2 Codex + 1 Opus + 1 Extended Pro) on a stalled
-re-attack, write three independent memos, hand off to the regular Strategy
-Searcher.
+Fan out a 4-member council (1 Codex + 1 Gemini + 1 Opus + 1 Extended Pro) on a
+stalled re-attack, write four independent memos, hand off to the regular
+Strategy Searcher.
 
 **Use only on attempt ≥2** — when first-attempt routes stalled or the
 gatekeeper flagged `OBJECTIVE_NARROWED` / `OBJECTIVE_MISSED` and the dossier
@@ -13,19 +13,21 @@ Arguments: $ARGUMENTS
 - `--branch NAME` (optional, default `main`) — branch within the proof repo
 - `--project-url URL` (required) — ChatGPT project URL for the EP member
 - `--cdp-url URL` or `--port N` (optional) — CDP for EP via existing Chrome
-- `--skip-member NAME` (optional, repeatable) — skip codex1 / codex2 / opus / extended_pro
+- `--skip-member NAME` (optional, repeatable) — skip codex / gemini / opus / extended_pro
 
 ## How council differs from the regular searcher
 
 The regular Strategy Searcher (`03_searcher_soft.md`) runs alone on Extended
 Pro — fast, single-prior, structured. The council runs four members in
-parallel against the **same packet**, preserving three independent memos
+parallel against the **same packet**, preserving four independent memos
 (no merger), then hands them all to the regular searcher for pure selection
-+ ranking. The diversity comes from:
++ ranking. The diversity comes from running four distinct model architectures:
 
-- Two Codex thinking-high samples — same model, ephemeral sessions, natural
-  sampling variance (verified live 2026-05-27: meaningfully different proof
-  routes across two calls; one of three routes diverged on machinery).
+- One Codex (GPT-5.5 thinking-high) — ephemeral session, structured route
+  generation.
+- One Gemini (Gemini 3 Pro) — a different pretraining/RLHF lineage, broadening
+  the architecture spread (replaces the former second Codex sample, whose
+  same-model variance was bonus diversity, not load-bearing).
 - One Claude Opus — different RLHF priors, often surfaces creative
   cross-domain leaps.
 - One Extended Pro — deep single-thread reasoning, structurally rigorous.
@@ -62,15 +64,15 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
    OUT="{proof_repo}/runs/<run>/branches/{branch}/council/attempt-{N}"
    PROMPT="{MATHPIPEPROVER}/prompts/soft/03b_council_member_soft.md"
 
-   # Codex sample 1 — ephemeral, natural variance
+   # Codex — ephemeral GPT-5.5 thinking-high
    scripts/council/dispatch_codex.sh --packet-dir "$PACKET" --prompt "$PROMPT" \
-     --out "$OUT/codex_memo_1.md" &
-   CODEX1_PID=$!
+     --out "$OUT/codex_memo.md" &
+   CODEX_PID=$!
 
-   # Codex sample 2 — second ephemeral run
-   scripts/council/dispatch_codex.sh --packet-dir "$PACKET" --prompt "$PROMPT" \
-     --out "$OUT/codex_memo_2.md" &
-   CODEX2_PID=$!
+   # Gemini — Gemini 3 Pro (different architecture)
+   scripts/council/dispatch_gemini.sh --packet-dir "$PACKET" --prompt "$PROMPT" \
+     --out "$OUT/gemini_memo.md" &
+   GEMINI_PID=$!
 
    # Opus — fast (~1-3 min)
    scripts/council/dispatch_opus.sh --packet-dir "$PACKET" --prompt "$PROMPT" \
@@ -85,8 +87,8 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
    ```
 
    Track each PID + start time. The orchestrator does NOT need to block
-   waiting — fire all four, then poll their output files. Codex and Opus
-   should finish well before EP.
+   waiting — fire all four, then poll their output files. Codex, Gemini, and
+   Opus should finish well before EP.
 
 4. **Heartbeat / partial-completion handling.** EP can fail (network, model
    refusal, etc.). If 3/4 members complete and EP is still running after 30 min, the orchestrator may proceed with the 3 memos rather than block
@@ -101,9 +103,9 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
      "started_at": "ISO8601",
      "completed_at": "ISO8601",
      "members": {
-       "codex_1": { "memo": "codex_memo_1.md", "exit": 0, "duration_s": 240 },
-       "codex_2": { "memo": "codex_memo_2.md", "exit": 0, "duration_s": 280 },
-       "opus":    { "memo": "opus_memo.md",    "exit": 0, "duration_s": 95  },
+       "codex":   { "memo": "codex_memo.md",  "exit": 0, "duration_s": 240 },
+       "gemini":  { "memo": "gemini_memo.md", "exit": 0, "duration_s": 180 },
+       "opus":    { "memo": "opus_memo.md",   "exit": 0, "duration_s": 95  },
        "extended_pro": { "memo": "extended_pro_memo.md", "exit": 0, "duration_s": 3600 }
      },
      "skipped": [],
@@ -120,7 +122,7 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
    /submit-role \
      --project-url "$PROJECT_URL" \
      --prompt-file "{MATHPIPEPROVER}/prompts/soft/03_searcher_soft.md" \
-     --context "$OUT/codex_memo_1.md,$OUT/codex_memo_2.md,$OUT/opus_memo.md,$OUT/extended_pro_memo.md" \
+     --context "$OUT/codex_memo.md,$OUT/gemini_memo.md,$OUT/opus_memo.md,$OUT/extended_pro_memo.md" \
      --response-file "{proof_repo}/runs/<run>/branches/{branch}/searcher_response_council.md"
    ```
 
@@ -129,10 +131,16 @@ searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
 - Council is opt-in. Do NOT invoke on attempt 1 unless the user explicitly
   asks. The regular searcher is sufficient when the dossier is empty.
 - If Extended Pro is unavailable (network, account state, no project URL),
-  fall back to 3-member council (skip via `--skip-member extended_pro`).
+  fall back to a 3-member council (skip via `--skip-member extended_pro`).
   Document the skip in council_log.json.
-- If Codex CLI fails repeatedly, fall back to 1-Codex (skip `--skip-member
-  codex_2`). The intra-Codex variance is bonus diversity, not load-bearing.
+- The four members degrade independently — any member whose CLI is missing or
+  failing can be dropped with `--skip-member <name>` and the council proceeds
+  with the rest. In particular, **if the Gemini CLI is not installed**
+  (`gemini` not on PATH) or not yet authenticated, skip it with
+  `--skip-member gemini`; the council then runs as 1 Codex + 1 Opus + 1
+  Extended Pro. Installing + authenticating the Gemini CLI restores the full
+  four-architecture spread — see the dependency note in
+  `docs/soft_scaffolding.md`. Record any skip in council_log.json.
 
 ## What council does NOT do
 

@@ -6,11 +6,12 @@
 # template's {context_bundle} placeholder, invokes Codex thinking
 # x-high non-interactively, and writes the resulting memo to disk.
 #
-# Designed to be one of three peer adapters under scripts/council/:
+# One of four peer adapters under scripts/council/:
 #   dispatch_codex.sh         — this script (GPT-5.5 thinking high via Codex CLI)
-#   dispatch_opus.sh          — to be added (Claude Opus via CC Agent)
-#   dispatch_extended_pro.sh  — to be added (ChatGPT Extended Pro via browser)
-# All three honor the same --packet-dir / --prompt / --out contract so the
+#   dispatch_gemini.sh        — Gemini 3 Pro via Gemini CLI
+#   dispatch_opus.sh          — Claude Opus via CC Agent
+#   dispatch_extended_pro.sh  — ChatGPT Extended Pro via browser
+# All four honor the same --packet-dir / --prompt / --out contract so the
 # /search-council skill can fan them out uniformly.
 #
 # Usage:

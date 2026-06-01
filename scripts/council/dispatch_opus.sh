@@ -6,8 +6,8 @@
 # {context_bundle} placeholder, invokes `claude --print --model opus`
 # non-interactively, and writes the resulting memo to disk.
 #
-# Sibling of dispatch_codex.sh and dispatch_extended_pro.sh — all three
-# share the same CLI so /search-council can fan them out uniformly.
+# Sibling of dispatch_codex.sh, dispatch_gemini.sh and dispatch_extended_pro.sh
+# — all four share the same CLI so /search-council can fan them out uniformly.
 #
 # Usage:
 #   ./dispatch_opus.sh \

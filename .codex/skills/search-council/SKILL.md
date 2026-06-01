@@ -1,6 +1,6 @@
 ---
 name: search-council
-description: Fan out a 4-member council (2 Codex thinking-high + 1 Claude Opus + 1 ChatGPT Extended Pro) on a stalled re-attack. Preserves all four independent memos; hands off to the regular Strategy Searcher for pure selection. Opt-in (attempt ≥2), ~3× the cost of a single search.
+description: Fan out a 4-member council (1 Codex thinking-high + 1 Gemini 3 Pro + 1 Claude Opus + 1 ChatGPT Extended Pro) on a stalled re-attack. Preserves all four independent memos; hands off to the regular Strategy Searcher for pure selection. Opt-in (attempt ≥2), ~3× the cost of a single search.
 ---
 
 # search-council
@@ -16,21 +16,26 @@ flagged scope narrowing. Don't invoke on attempt 1 (the regular searcher is
 sufficient when the dossier is empty).
 
 Mechanics: the skill fans out four adapters in parallel from
-`scripts/council/`:
+`scripts/council/`, one per model architecture:
 
-- `dispatch_codex.sh` × 2 (ephemeral sessions; natural sampling variance,
-  verified live 2026-05-27: meaningfully different proof routes across two
-  calls)
+- `dispatch_codex.sh` × 1 (Codex GPT-5.5 thinking-high, ephemeral session)
+- `dispatch_gemini.sh` × 1 (Gemini 3 Pro; different pretraining/RLHF lineage —
+  requires the `gemini` CLI on PATH, see below)
 - `dispatch_opus.sh` × 1 (different RLHF priors, surfaces cross-domain leaps)
 - `dispatch_extended_pro.sh` × 1 (slowest member, 8-20 min — determines
   council wall-clock)
 
 All four adapters honor the same `--packet-dir / --prompt / --out` contract.
-Each member writes an immutable memo to
+Each member writes an immutable memo (`codex_memo.md`, `gemini_memo.md`,
+`opus_memo.md`, `extended_pro_memo.md`) to
 `{proof_repo}/runs/<run>/branches/<branch>/council/attempt-<N>/`. Memos are
 NEVER merged — they hand off as-is to the regular `/submit-role` searcher,
 which runs in selection mode (pick 2-4 routes across all four memos, rank,
 recommend).
+
+If the Gemini CLI is not installed/authenticated, drop that member with
+`--skip-member gemini`; the council proceeds with the remaining three. Install
+with `npm install -g @google/gemini-cli` and authenticate once via `gemini`.
 
 The council-member prompt is at
 `prompts/soft/03b_council_member_soft.md`. Each member is asked for 2-3

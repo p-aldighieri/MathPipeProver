@@ -14,7 +14,7 @@ follow the same procedure.
 | `set-model-extended` | Verify or set the ChatGPT composer to the Extended Pro target before any analytical submission. |
 | `inspect-chat` | One-shot read-only status check of a live ChatGPT chat (generating? assistant turn count? last text length?). |
 | `recover-chat` | Harvest a completed ChatGPT chat's last assistant message into a response file when the original submit died before capturing the response. |
-| `search-council` | Opt-in on re-attempt ≥2. Fan out 2 Codex + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. ~3× the cost of a single search. |
+| `search-council` | Opt-in on re-attempt ≥2. Fan out 1 Codex + 1 Gemini + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. ~3× the cost of a single search. Gemini member needs the `gemini` CLI (`npm i -g @google/gemini-cli` + auth); skip via `--skip-member gemini` if absent. |
 | `set-referee-targets` | Create or update `{PROOF_REPO}/referee_targets.yaml` — the per-proof registry of target journals + clearance bars that the `paper_referee` role consults. Optional (referee falls back to a generic publishability check without it). Template at `prompts/fragments/referee_targets_template.yaml`. |
 
 ### How To Use Skills

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # scripts/council/dispatch_extended_pro.sh — Run the ChatGPT Extended Pro council member.
 #
-# Mirrors dispatch_codex.sh / dispatch_opus.sh's core contract (--packet-dir /
-# --prompt / --out) and adds the browser-specific args (--project-url,
-# optional --cdp-url / --port). Builds the combined prompt the same way,
-# then submits via the validated lib-backed browser flow.
+# Mirrors dispatch_codex.sh / dispatch_gemini.sh / dispatch_opus.sh's core
+# contract (--packet-dir / --prompt / --out) and adds the browser-specific
+# args (--project-url, optional --cdp-url / --port). Builds the combined
+# prompt the same way, then submits via the validated lib-backed browser flow.
 #
 # Wall-clock: typically the slowest council member (8–20 min). The
-# /search-council skill fans this out in parallel with Codex (5–8 min) and
-# Opus (1–3 min), so wall-clock = max(members) ≈ EP's time.
+# /search-council skill fans this out in parallel with Codex (5–8 min),
+# Gemini (2–5 min) and Opus (1–3 min), so wall-clock = max(members) ≈ EP's time.
 #
 # Usage:
 #   ./dispatch_extended_pro.sh \

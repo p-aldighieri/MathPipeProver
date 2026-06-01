@@ -35,7 +35,7 @@ Available via `.claude/commands/`:
 | `/set-sources` | Add/remove durable files in a ChatGPT project's Sources tab. |
 | `/inspect-chat` | Read-only check of a live chat's generation status. |
 | `/recover-chat` | Extract a completed response from a chat URL and save to file. |
-| `/search-council` | **Re-attack only** (attempt ≥2). Fan out 2 Codex + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. Opt-in, ~3× the cost of a single search. Adapters at `scripts/council/dispatch_{codex,opus,extended_pro}.sh`. |
+| `/search-council` | **Re-attack only** (attempt ≥2). Fan out 1 Codex + 1 Gemini + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. Opt-in, ~3× the cost of a single search. Adapters at `scripts/council/dispatch_{codex,gemini,opus,extended_pro}.sh`. The Gemini member needs the `gemini` CLI (`npm i -g @google/gemini-cli`, then authenticate once); without it, drop that member via `--skip-member gemini`. |
 | `/set-referee-targets` | Create or update `{PROOF_REPO}/referee_targets.yaml` — the per-proof registry of target journals + clearance bars that the `paper_referee` role consults. Optional (referee falls back to a generic publishability check without it). Template at `prompts/fragments/referee_targets_template.yaml`. |
 | `/heartbeat` | Start an orchestrator-pace loop (`/loop <interval>`) that wakes the orchestrator periodically and advances the pipeline. Useful for unattended runs. |
 
