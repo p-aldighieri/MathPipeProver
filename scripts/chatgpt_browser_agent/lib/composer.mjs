@@ -17,6 +17,15 @@
  *       Find the composer, click it, fill with `text`. Returns the locator
  *       so the caller can pass it to clickSend() without re-querying.
  *
+ *   clearComposerText(page) -> locator
+ *       Clear visible composer draft text.
+ *
+ *   clearStoredComposerDrafts(page) -> string[]
+ *       Remove ChatGPT draft/composer keys from localStorage/sessionStorage.
+ *
+ *   composerTextLength(page) -> number
+ *       Read the visible composer draft length for sanity checks.
+ *
  *   clickSend(page, composer) -> boolean
  *       Click Send via a fallback chain: role-name button → testid button →
  *       form.requestSubmit() → composer.press('Enter'). Returns true if
@@ -75,6 +84,64 @@ export async function getComposer(page) {
   throw new Error('Timed out waiting for the ChatGPT composer.');
 }
 
+export async function composerTextLength(page) {
+  return await page.evaluate((selectors) => {
+    const visible = (element) => {
+      const style = window.getComputedStyle(element);
+      return style.visibility !== 'hidden' && style.display !== 'none' && element.getClientRects().length > 0;
+    };
+    for (const selector of selectors) {
+      for (const element of document.querySelectorAll(selector)) {
+        if (!visible(element)) continue;
+        if ('value' in element) return (element.value || '').length;
+        return (element.innerText || element.textContent || '').length;
+      }
+    }
+    return -1;
+  }, COMPOSER_CANDIDATE_SELECTORS);
+}
+
+export async function clearComposerText(page) {
+  const composer = await getComposer(page);
+  await composer.click();
+  await new Promise(r => setTimeout(r, 300));
+  await composer.fill('');
+  await new Promise(r => setTimeout(r, 300));
+  return composer;
+}
+
+export async function clearStoredComposerDrafts(page) {
+  return await page.evaluate(() => {
+    const draftPattern = /draft|composer|prosemirror|prompt|unsent|textarea/i;
+    const removed = [];
+    for (const storageName of ['localStorage', 'sessionStorage']) {
+      let storage;
+      try {
+        storage = window[storageName];
+      } catch {
+        continue;
+      }
+      for (const key of Object.keys(storage)) {
+        if (!draftPattern.test(key)) continue;
+        storage.removeItem(key);
+        removed.push(`${storageName}:${key}`);
+      }
+    }
+    return removed;
+  });
+}
+
+export async function assertComposerLength(page, expectedLength, { minRatio = 0.9, maxRatio = 1.15 } = {}) {
+  const actualLength = await composerTextLength(page);
+  if (actualLength < 0) {
+    throw new Error('Could not read the ChatGPT composer length.');
+  }
+  if (actualLength < expectedLength * minRatio || actualLength > expectedLength * maxRatio) {
+    throw new Error(`Composer length mismatch: got ${actualLength}, expected about ${expectedLength}.`);
+  }
+  return actualLength;
+}
+
 /**
  * Find composer, click it (focus), fill it with `text`. Returns the
  * locator so the caller can chain clickSend(page, composer) without
@@ -84,11 +151,13 @@ export async function getComposer(page) {
  * resets its focus state immediately after click; fill-on-unfocused
  * leads to silent no-ops on some UI revisions.
  */
-export async function fillComposer(page, text) {
+export async function fillComposer(page, text, opts = {}) {
+  const { verify = false } = opts;
   const composer = await getComposer(page);
   await composer.click();
   await new Promise(r => setTimeout(r, 500));
   await composer.fill(text);
+  if (verify) await assertComposerLength(page, text.length);
   return composer;
 }
 

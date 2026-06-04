@@ -37,6 +37,13 @@ parallel against the **same packet**, preserving four independent memos
 Each member is asked for 2-3 routes (not 2-4) to avoid overcrowding the
 searcher with ~12+ routes. ~8-12 routes total is the sweet spot.
 
+## Windows shell note
+
+The council adapters are Bash scripts. On Windows, make sure `bash` resolves
+to Git Bash, not the WindowsApps/WSL launcher. If needed, put
+`C:\Program Files\Git\bin` before `C:\Users\<you>\AppData\Local\Microsoft\WindowsApps`
+in PATH, or invoke Git Bash explicitly as `C:\Program Files\Git\bin\bash.exe`.
+
 ## Steps
 
 1. **Locate packet sources** in the proof repo. Expected at

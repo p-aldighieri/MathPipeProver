@@ -34,20 +34,36 @@ and will produce a much weaker result. Submitting an analytical role with
    correct mode at submit time, but the pre-check catches obvious problems
    (composer not loaded, login lapsed, etc.) before you commit to a role.
 
-3. **Submit the prompt:**
+3. **Submit the prompt with the canonical browser agent:**
 
    **Extended Pro (default):**
    ```bash
-   node cdp_submit.mjs --project-url URL --port PORT PROMPT_FILE
+   C:/repos/MathPipeProver/scripts/chatgpt_browser_agent.sh submit \
+     --project-url URL \
+     --cdp-url http://127.0.0.1:PORT \
+     --page new \
+     --clear-draft safe \
+     --request-file PROMPT_FILE \
+     --response-file RESPONSE_FILE
    ```
 
    **Deep Research (literature role only):**
    ```bash
-   node cdp_submit.mjs --project-url URL --port PORT --deep-research PROMPT_FILE
+   C:/repos/MathPipeProver/scripts/chatgpt_browser_agent.sh submit \
+     --project-url URL \
+     --cdp-url http://127.0.0.1:PORT \
+     --page new \
+     --clear-draft safe \
+     --deep-research \
+     --request-file PROMPT_FILE \
+     --response-file RESPONSE_FILE
    ```
 
-   The script navigates to the project (starts a fresh chat), enforces the
-   chosen mode, fills the prompt, and sends.
+   The script opens a fresh project tab, clears stale visible drafts and
+   attachments, enforces the chosen mode, submits, waits for the response, and
+   writes the response file. Use `--return-after-submit --chat-url-file PATH`
+   only when you intentionally want to leave the job running server-side and
+   recover it later.
 
 4. **Record the chat URL** from the script output for status checks and recovery.
 

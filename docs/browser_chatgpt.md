@@ -93,11 +93,21 @@ scripts/chatgpt_browser_agent.sh prepare \
 scripts/chatgpt_browser_agent.sh submit \
   --cdp-url "http://127.0.0.1:9222" \
   --project-url "https://chatgpt.com/g/g-p-XXXX/project" \
+  --page new \
+  --clear-draft safe \
   --request-file "runs/<run_id>/branches/main/external_agent/formalizer_request.md" \
   --attach-file "runs/<run_id>/branches/main/context/breakdown.md" \
   --attach-file "runs/<run_id>/branches/main/external_agent/prover_response.md" \
   --response-file "runs/<run_id>/branches/main/external_agent/formalizer_response.md"
 ```
+
+`submit` opens a fresh project tab by default (`--page new`) so it does not
+take over a sibling ChatGPT run. Use `--page reuse` only when you intentionally
+want to drive the first existing tab. The default draft cleanup
+(`--clear-draft safe`) removes visible composer text and stale attachments
+before filling the request. Use `--clear-draft storage` only when ChatGPT keeps
+resurrecting a saved draft; it clears draft-like local/session storage keys and
+reloads the project before model selection.
 
 Use `--attach-file` only for branch-local support files that should travel with the current chat but should not be promoted to project-wide sources.
 
@@ -109,6 +119,11 @@ The script writes a JSON session log next to the response file by default:
 - `formalizer_response_session.json`
 
 If the response file is still missing after a long wait but you have the chat URL from the submit command, treat that as a recovery candidate first. Inspect or recover the existing chat before deciding the role must be resubmitted from scratch — use `/inspect-chat` for a one-shot status read and `/recover-chat` to harvest the chat content into a response file.
+
+For long jobs you want to leave running server-side, pass
+`--return-after-submit --chat-url-file PATH`. The script submits, records the
+chat URL, writes the session log, and returns without waiting for the assistant
+reply. Recover that chat later instead of resubmitting.
 
 ## Context policy for long proofs
 

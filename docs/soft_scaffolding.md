@@ -135,6 +135,12 @@ The failure mode this guards against is the orchestrator quietly calling it a da
 
    **Council dependency note.** Each member is a separate CLI and degrades independently — drop any unavailable one with `--skip-member <codex|gemini|opus|extended_pro>` and the council runs with the rest. The Gemini member specifically needs the Gemini CLI on PATH: install with `npm install -g @google/gemini-cli` and authenticate once by running `gemini` (Google OAuth) or by exporting `GEMINI_API_KEY`. If the `gemini` CLI is not installed/authenticated, invoke the council with `--skip-member gemini`; it then runs as 1 Codex + 1 Opus + 1 Extended Pro. Installing + authenticating Gemini restores the full four-architecture spread. The adapter does **not** pin a model version — it passes no model flag, so it always uses the Gemini CLI's built-in latest-Pro default (a live pointer to the newest Pro; currently `gemini-3.1-pro-preview`). Pin a specific version only if needed via `dispatch_gemini.sh --model NAME`.
 
+   **Windows shell note.** The council adapters are Bash scripts. On Windows,
+   make sure `bash` resolves to Git Bash, not the WindowsApps/WSL launcher.
+   If needed, put `C:\Program Files\Git\bin` before
+   `C:\Users\<you>\AppData\Local\Microsoft\WindowsApps` in PATH, or invoke
+   Git Bash explicitly as `C:\Program Files\Git\bin\bash.exe`.
+
 **What carries across a re-attack (the invariants):**
 
 - the **original objective / claim** — fixed. We re-attack the *same* target, never a narrowed one; a moving objective would defeat the gatekeeper's reason for existing.

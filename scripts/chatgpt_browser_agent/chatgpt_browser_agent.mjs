@@ -5,7 +5,10 @@ import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
 import { ensureExtendedPro, ensureDeepResearch, BASE_MODEL_LABEL, EFFORT_LABEL, EFFORT_LABEL_DR } from "./lib/model_pill.mjs";
-import { getComposer, fillComposer, clickSend, isGenerating } from "./lib/composer.mjs";
+import {
+  fillComposer, clickSend, isGenerating,
+  clearComposerText, clearStoredComposerDrafts, composerTextLength,
+} from "./lib/composer.mjs";
 import { openBrowser } from "./lib/browser.mjs";
 import { ensureChatReady } from "./lib/auth.mjs";
 import {
@@ -48,7 +51,16 @@ Options:
   --response-file PATH         Response markdown file to write back for resume.
   --attach-file PATH           Extra chat attachment to upload with the request. Repeatable.
   --chat-url URL              Existing chat URL to reopen for recovery.
+  --chat-url-file PATH         Optional file to write the submitted chat URL.
   --log-json PATH              Optional JSON session log path.
+  --page new|reuse             Submit in a fresh tab or reuse the first tab, default: new.
+  --clear-draft safe|storage|off
+                               Draft cleanup before submit, default: safe.
+                               safe clears visible text and attachments.
+                               storage also removes ChatGPT draft storage keys
+                               and reloads before model selection.
+  --return-after-submit        Submit and write chat URL/log, then return without
+                               waiting for the assistant response.
   --deep-research              Submit via ChatGPT Deep Research mode instead of
                                Extended Pro. Used by the literature role. DR
                                jobs run 5-30 min (Extended Pro: 8-20 min).
@@ -81,7 +93,11 @@ function parseArgs(argv) {
     responseFile: "",
     attachFiles: [],
     chatUrl: "",
+    chatUrlFile: "",
     logJson: "",
+    pageMode: "new",
+    clearDraft: "safe",
+    returnAfterSubmit: false,
     deepResearch: false,
   };
 
@@ -122,8 +138,22 @@ function parseArgs(argv) {
       args.attachFiles.push(rest.shift() || "");
     } else if (token === "--chat-url") {
       args.chatUrl = rest.shift() || "";
+    } else if (token === "--chat-url-file") {
+      args.chatUrlFile = rest.shift() || "";
     } else if (token === "--log-json") {
       args.logJson = rest.shift() || "";
+    } else if (token === "--page") {
+      args.pageMode = rest.shift() || "new";
+      if (!["new", "reuse"].includes(args.pageMode)) {
+        throw new Error("--page must be 'new' or 'reuse'.");
+      }
+    } else if (token === "--clear-draft") {
+      args.clearDraft = rest.shift() || "safe";
+      if (!["safe", "storage", "off"].includes(args.clearDraft)) {
+        throw new Error("--clear-draft must be 'safe', 'storage', or 'off'.");
+      }
+    } else if (token === "--return-after-submit") {
+      args.returnAfterSubmit = true;
     } else if (token === "--deep-research") {
       args.deepResearch = true;
     } else {
@@ -139,6 +169,11 @@ function parseArgs(argv) {
 // The lib's openBrowser takes named params; adapt at the callsite below.
 
 async function openProject(page, projectUrl, waitForLoginSeconds) {
+  await page.goto(projectUrl, { waitUntil: "domcontentloaded" });
+  await ensureChatReady(page, waitForLoginSeconds);
+}
+
+async function reloadProject(page, projectUrl, waitForLoginSeconds) {
   await page.goto(projectUrl, { waitUntil: "domcontentloaded" });
   await ensureChatReady(page, waitForLoginSeconds);
 }
@@ -201,7 +236,7 @@ async function submitPrompt(page, requestText) {
   // may have left us on the Sources tab), submit via lib primitives, then
   // wait for the conversation route to appear.
   await openChatsTab(page);
-  const composer = await fillComposer(page, requestText);
+  const composer = await fillComposer(page, requestText, { verify: true });
 
   const currentUrl = page.url();
   await clickSend(page, composer);
@@ -213,6 +248,11 @@ async function submitPrompt(page, requestText) {
     // conversation route appears. If needed, a later poll will still observe
     // the new assistant turn.
   }
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (/\/c\/[0-9a-f-]{8,}/i.test(page.url())) break;
+    await page.waitForTimeout(2000);
+  }
+  return page.url();
 }
 
 function buildAttachmentPrompt(requestFile, attachFiles) {
@@ -240,6 +280,35 @@ const _waitStable = (page, pollSeconds, maxWaitSeconds, onPoll = null) =>
 async function writeJsonLog(logPath, payload) {
   await fs.mkdir(path.dirname(logPath), { recursive: true });
   await fs.writeFile(logPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+async function writeTextFileIfSet(filePath, text) {
+  if (!filePath) return;
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, `${text}\n`, "utf8");
+}
+
+async function prepareComposerForSubmit(page, args) {
+  let removedDraftKeys = [];
+  let clearedTextLength = null;
+
+  if (args.clearDraft === "storage") {
+    removedDraftKeys = await clearStoredComposerDrafts(page);
+    if (removedDraftKeys.length > 0) {
+      await reloadProject(page, args.projectUrl, args.waitForLoginSeconds);
+    }
+  }
+
+  if (args.clearDraft !== "off") {
+    await clearComposerAttachments(page);
+    await clearComposerText(page);
+    clearedTextLength = await composerTextLength(page);
+    if (clearedTextLength > 2) {
+      throw new Error(`Composer still contains ${clearedTextLength} characters after draft cleanup.`);
+    }
+  }
+
+  return { removedDraftKeys, clearedTextLength };
 }
 
 async function runPrepare(page, args) {
@@ -337,17 +406,48 @@ async function runSubmit(page, args) {
   const effortLabel = args.deepResearch ? EFFORT_LABEL_DR : EFFORT_LABEL;
 
   await openProject(page, args.projectUrl, args.waitForLoginSeconds);
+  const draftCleanup = await prepareComposerForSubmit(page, args);
   if (args.deepResearch) {
     await ensureDeepResearch(page);
   } else {
     await ensureExtendedPro(page);
   }
-  await clearComposerAttachments(page);
   await attachFileToComposer(page, args.requestFile);
   for (const attachmentPath of args.attachFiles) {
     await attachFileToComposer(page, attachmentPath);
   }
-  await submitPrompt(page, submissionPrompt);
+  const chatUrl = await submitPrompt(page, submissionPrompt);
+  await writeTextFileIfSet(args.chatUrlFile, chatUrl);
+
+  if (args.returnAfterSubmit) {
+    await writeJsonLog(logPath, {
+      command: "submit",
+      status: "submitted",
+      project_url: args.projectUrl,
+      chat_url: chatUrl,
+      request_file: path.resolve(args.requestFile),
+      response_file: path.resolve(args.responseFile),
+      base_model: BASE_MODEL_LABEL,
+      effort_mode: effortLabel,
+      submission_method: "file_attachment",
+      page_mode: args.pageMode,
+      clear_draft: args.clearDraft,
+      draft_cleanup: draftCleanup,
+      chat_url_file: args.chatUrlFile ? path.resolve(args.chatUrlFile) : "",
+      attachment_files: args.attachFiles.map((item) => path.resolve(item)),
+      submission_prompt: submissionPrompt,
+      submitted_at: submittedAt,
+      request_chars: requestText.length,
+    });
+    console.log(JSON.stringify({
+      command: "submit",
+      status: "submitted",
+      chat_url: chatUrl,
+      chat_url_file: args.chatUrlFile || "",
+      response_file: path.resolve(args.responseFile),
+    }));
+    return;
+  }
 
   const stableText = await _waitStable(page, args.pollSeconds, args.maxWaitSeconds);
   const responseText = await extractAssistantResponse(page, stableText);
@@ -357,12 +457,16 @@ async function runSubmit(page, args) {
   await writeJsonLog(logPath, {
     command: "submit",
     project_url: args.projectUrl,
-    chat_url: page.url(),
+    chat_url: chatUrl,
     request_file: path.resolve(args.requestFile),
     response_file: path.resolve(args.responseFile),
     base_model: BASE_MODEL_LABEL,
     effort_mode: effortLabel,
     submission_method: "file_attachment",
+    page_mode: args.pageMode,
+    clear_draft: args.clearDraft,
+    draft_cleanup: draftCleanup,
+    chat_url_file: args.chatUrlFile ? path.resolve(args.chatUrlFile) : "",
     attachment_files: args.attachFiles.map((item) => path.resolve(item)),
     submission_prompt: submissionPrompt,
     add_sources: args.addSources.map((item) => path.resolve(item)),
@@ -396,7 +500,9 @@ async function main() {
     browserChannel: args.browserChannel,
     headless: args.headless,
   });
-  const page = runtime.context.pages()[0] || await runtime.context.newPage();
+  const page = args.command === "submit" && args.pageMode === "new"
+    ? await runtime.context.newPage()
+    : runtime.context.pages()[0] || await runtime.context.newPage();
 
   try {
     if (args.command === "prepare") {

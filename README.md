@@ -19,6 +19,8 @@ External CLIs for the `/search-council` re-attack skill (each council member is 
 
 If you do not have the Gemini CLI installed/authenticated, the council still works — invoke it with `--skip-member gemini` and it falls back to 1 Codex + 1 Opus + 1 Extended Pro. Installing + authenticating Gemini restores the full four-architecture diversity that makes the council worth its cost.
 
+Windows note: the council adapters are Bash scripts. If `bash` resolves to the WindowsApps/WSL launcher, council members may appear to hang before the CLI runs. Put `C:\Program Files\Git\bin` before `C:\Users\<you>\AppData\Local\Microsoft\WindowsApps` in PATH, or invoke Git Bash explicitly as `C:\Program Files\Git\bin\bash.exe`.
+
 ## Starting a new proof project
 
 The fastest path to a fresh orchestrator session is `INIT.md` at the repo root. Copy it into a new Claude Code (or Codex) session, fill in the five mustache slugs (`{{PROOF_REPO}}`, `{{TARGET_FILE}}`, `{{CHATGPT_PROJECT_URL}}`, `{{CDP_PORT}}`, `{{TASK_BRIEF}}`), and the orchestrator will run an 8-step bootstrap before touching the pipeline. `INIT.md` is the per-session ignition; `CLAUDE.md` is the always-loaded reference.
