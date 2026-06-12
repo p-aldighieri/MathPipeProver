@@ -146,6 +146,8 @@ DR DOM is more stable than the model-picker DOM has been historically, but if Ch
 
 All CDP helpers require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
 
+**Tab hygiene (2026-06-12):** entry scripts close the tabs they create. `cdp_submit.mjs` closes its tab right after the chat URL is captured (generation continues server-side; pass `--keep-tab` to watch it live). `wait_chat_done.mjs` closes its page on done/timeout (`--keep-tab` to opt out); a page it merely *found* already on the chat is left alone. `cdp_inspect_chat.mjs` / `cdp_dump_chat.mjs` open a dedicated page and close it on exit — they must never navigate an existing tab, which could be a poller's pinned chat tab. Steady state per project Chrome: one project tab plus one tab per *currently-polled* chat.
+
 ## Chrome CDP Port Management
 
 Each proof project must run in its **own Chrome instance** on a **unique port** to avoid interfering with other sessions. Never attach to or reuse a Chrome window belonging to another project.

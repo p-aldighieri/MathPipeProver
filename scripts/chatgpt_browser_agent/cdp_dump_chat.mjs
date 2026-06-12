@@ -25,8 +25,9 @@ if (!chatUrl) { console.error('Need --chat-url'); process.exit(1); }
 
 try {
   const { context, close } = await attachCDP({ port });
-  let page = context.pages().find(p => p.url().includes('chatgpt.com')) || context.pages()[0];
-  await page.bringToFront();
+  // Tab hygiene: use a dedicated page and close it on exit. Never navigate an
+  // existing tab — it may be a poller's pinned chat tab (wait_chat_done).
+  const page = await context.newPage();
   await page.goto(chatUrl, { waitUntil: 'domcontentloaded' });
   await new Promise(r => setTimeout(r, 6000));
   try {
@@ -43,6 +44,7 @@ try {
   );
   console.log(`Wrote ${messages.length} messages to ${outPath}`);
   messages.forEach((m, i) => console.log(`[${i}] ${m.role} len=${m.text.length} id=${m.id}`));
+  try { await page.close(); } catch { /* tab already gone */ }
   await close();
 } catch (e) {
   console.error('ERROR:', e.message);

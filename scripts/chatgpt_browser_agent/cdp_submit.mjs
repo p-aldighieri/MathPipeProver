@@ -49,6 +49,7 @@ let clearDraft = 'safe';
 let chatUrlFile = '';
 let dryRun = false;
 let deepResearch = false;
+let keepTab = false;
 
 for (let index = 0; index < rawArgs.length; index += 1) {
   const token = rawArgs[index];
@@ -70,6 +71,7 @@ for (let index = 0; index < rawArgs.length; index += 1) {
   if (token === '--chat-url-file' && rawArgs[index + 1]) { chatUrlFile = rawArgs[++index]; continue; }
   if (token === '--dry-run') { dryRun = true; continue; }
   if (token === '--deep-research') { deepResearch = true; continue; }
+  if (token === '--keep-tab') { keepTab = true; continue; }
   if (token === '--check-effort') { continue; }
   if (token === '--help' || token === '-h') {
     console.log(usage());
@@ -129,11 +131,19 @@ try {
   const att = await attachCDP({ port });
   close = att.close;
   const context = att.context;
-  const page = pageMode === 'new'
-    ? await context.newPage()
+  const reusable = pageMode === 'new'
+    ? null
     : context.pages().find((candidate) => candidate.url().includes('chatgpt.com')) ||
-      context.pages()[0] ||
-      await context.newPage();
+      context.pages()[0] || null;
+  const page = reusable || await context.newPage();
+  // Tab hygiene: close the tab we created once the chat URL is captured —
+  // generation continues server-side, and the poller opens its own page.
+  // --keep-tab opts out; reused tabs are never closed.
+  const createdPage = !reusable;
+  const disposeTab = async () => {
+    if (keepTab || !createdPage) return;
+    try { await page.close(); } catch { /* tab already gone */ }
+  };
 
   await page.goto(projectUrl, { waitUntil: 'domcontentloaded', timeout });
   await ensureChatReady(page, 300);
@@ -159,6 +169,7 @@ try {
   if (dryRun) {
     console.log('DRY RUN: prompt filled but NOT sent; clearing draft.');
     await composer.fill('');
+    await disposeTab();
     await close();
     process.exit(0);
   }
@@ -175,6 +186,7 @@ try {
     console.log('NOTE: Deep Research jobs run 5-30 min. Use wait_chat_done.mjs for polling.');
   }
 
+  await disposeTab();
   await close();
 } catch (error) {
   console.error('ERROR:', error.message);
