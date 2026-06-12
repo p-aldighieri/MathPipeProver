@@ -30,11 +30,29 @@ const filePaths = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--project-url' && args[i + 1]) { projectUrl = args[++i]; continue; }
   if (args[i] === '--port' && args[i + 1]) { port = parseInt(args[++i], 10); continue; }
+  if (args[i].startsWith('--')) {
+    // Unknown flags must hard-fail BEFORE any browser action: a mistyped flag
+    // that falls through to filePaths would otherwise remove a live source and
+    // then die on the re-add (observed 2026-06-12 with a stray "--file").
+    console.error(`ERROR: unknown flag ${args[i]}`);
+    console.error('Usage: cdp_refresh_sources.mjs --project-url <URL> [--port <PORT>] <file1> [<file2> ...]');
+    process.exit(2);
+  }
   filePaths.push(args[i]);
 }
 if (!projectUrl || filePaths.length === 0) {
   console.error('Usage: cdp_refresh_sources.mjs --project-url <URL> [--port <PORT>] <file1> [<file2> ...]');
   process.exit(2);
+}
+// Pre-flight: every file must exist before we touch the project, because the
+// refresh cycle removes the old source first — failing midway strands the
+// project without that source.
+const { statSync } = await import('fs');
+for (const fp of filePaths) {
+  try { statSync(fp); } catch {
+    console.error(`ERROR: file not found: ${fp} (aborting before any source removal)`);
+    process.exit(2);
+  }
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
