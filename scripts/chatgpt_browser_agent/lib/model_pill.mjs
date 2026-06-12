@@ -22,6 +22,14 @@
  * one of those two labels the state is correct AND the (now-absent) GPT
  * submenu must NOT be probed — hovering it hangs for 30s. Accept and skip.
  *
+ * On 2026-06-12 the picker became an "Intelligence" menu with levels
+ * "Instant | Medium | High | Extra High | Pro Extended" plus a separate
+ * "GPT-5.5 >" model submenu row at the bottom (do NOT probe the submenu).
+ * The composer pill reads the current level text (e.g. "Extra High").
+ * The Extended Pro target in this UI is the "Pro Extended" level; after
+ * selection the pill reads "Pro Extended". Rows are still
+ * [role="menuitemradio"]; matching stays label-prefix-based.
+ *
  * ## Public API
  *
  *   readPill(page) -> string
@@ -41,7 +49,7 @@
  */
 
 export const PILL_SELECTOR = 'button.__composer-pill[aria-haspopup="menu"]';
-export const EXTENDED_PRO_LABELS = ['Extended Pro', 'Pro'];
+export const EXTENDED_PRO_LABELS = ['Extended Pro', 'Pro', 'Pro Extended'];
 
 // These two constants are the strings emitted into the session-log JSON
 // (`base_model`, `effort_mode` fields). Stability matters more than precision:
@@ -53,7 +61,9 @@ export const EFFORT_LABEL = 'Extended Pro';
 // Used by both cdp_submit.mjs and chatgpt_browser_agent.mjs.
 export const EFFORT_LABEL_DR = 'Deep Research';
 
-const DESIRED_REASONING = 'Pro';
+// Acceptable target rows in preference order. "Pro Extended" is the
+// 2026-06-12 "Intelligence" UI's top lane; "Pro" is the pre-06-12 label.
+const DESIRED_REASONING_LABELS = ['Pro Extended', 'Pro'];
 
 /**
  * Read the composer pill text with retries.
@@ -293,22 +303,27 @@ export async function ensureExtendedPro(page) {
   // Read current selection to confirm what needs changing.
   const currentReasoning = await readCurrentReasoning(page).catch(() => null);
 
-  if (currentReasoning !== DESIRED_REASONING) {
+  if (!DESIRED_REASONING_LABELS.includes(currentReasoning)) {
     try {
       await openMenu(page);
-      const clicked = await page.evaluate((target) => {
-        for (const r of document.querySelectorAll('[role="menuitemradio"]')) {
-          const label = (r.innerText || '').split(/[\n|]/)[0].trim();
-          if (label === target) { r.click(); return true; }
+      const clicked = await page.evaluate((targets) => {
+        // menuitem fallback covers UI drift; exact label match keeps the
+        // "GPT-5.5 >" model-submenu row from ever being clicked.
+        const rows = document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]');
+        for (const target of targets) {
+          for (const r of rows) {
+            const label = (r.innerText || '').split(/[\n|]/)[0].trim();
+            if (label === target) { r.click(); return target; }
+          }
         }
-        return false;
-      }, DESIRED_REASONING);
-      if (!clicked) throw new Error(`Reasoning radio "${DESIRED_REASONING}" not found in pill menu`);
+        return null;
+      }, DESIRED_REASONING_LABELS);
+      if (!clicked) throw new Error(`No reasoning radio matching ${JSON.stringify(DESIRED_REASONING_LABELS)} found in pill menu`);
       await new Promise(r => setTimeout(r, 600));
       await closeMenu(page);
     } catch (e) {
       await closeMenu(page).catch(() => {});
-      throw new Error(`Failed to set reasoning to ${DESIRED_REASONING}: ${e.message}`);
+      throw new Error(`Failed to set reasoning to ${DESIRED_REASONING_LABELS[0]}: ${e.message}`);
     }
   }
 

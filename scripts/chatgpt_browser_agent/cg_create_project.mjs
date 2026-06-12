@@ -4,9 +4,11 @@
  *
  * Usage: node cg_create_project.mjs --port 9228 --name "Project Name" [--shot path.png]
  *
- * Flow (verified 2026-05-25 UI): sidebar "New project" -> fill projectName ->
- * gear "Project settings" -> select "Project-only" memory radio -> VERIFY checked
- * (memory setting is IMMUTABLE after creation, so abort if not confirmed) -> Create project.
+ * Flow (verified 2026-05-25 UI; entry point re-verified 2026-06-12): go to
+ * /projects -> "New project" (icon-only button, aria-label; text fallback for
+ * the pre-06-12 UI) -> fill projectName -> gear "Project settings" -> select
+ * "Project-only" memory radio -> VERIFY checked (memory setting is IMMUTABLE
+ * after creation, so abort if not confirmed) -> Create project.
  * Prints "PROJECT_URL: <url>" on success.
  */
 import { chromium } from 'playwright';
@@ -25,10 +27,14 @@ try {
   const ctx = browser.contexts()[0];
   let page = ctx.pages().find(p => p.url().includes('chatgpt.com')) || ctx.pages()[0];
   await page.bringToFront();
-  await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded' });
-  await sleep(3500);
+  await page.goto('https://chatgpt.com/projects', { waitUntil: 'domcontentloaded' });
+  await sleep(4000);
 
-  await page.getByText('New project', { exact: true }).first().click();
+  // 2026-06-12 UI: "New project" is an icon-only button (aria-label only).
+  // Older UI used a visible-text sidebar entry — keep it as a fallback.
+  const newProjBtn = page.locator('button[aria-label="New project"]');
+  if ((await newProjBtn.count()) > 0) await newProjBtn.first().click();
+  else await page.getByText('New project', { exact: true }).first().click();
   await sleep(1800);
 
   const nameInput = page.locator('input[name="projectName"]');

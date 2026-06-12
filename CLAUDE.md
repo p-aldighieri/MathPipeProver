@@ -166,12 +166,18 @@ Each proof project must run in its **own Chrome instance** on a **unique port** 
 - **Inherit authentication** — to avoid re-login, copy cookies from an existing authenticated profile:
   ```bash
   # Copy auth files from an existing profile
+  cp SOURCE_PROFILE/"Local State" TARGET_PROFILE/   # cookie-encryption key — REQUIRED
   cp -r SOURCE_PROFILE/Default/Network/Cookies TARGET_PROFILE/Default/Network/
   cp -r SOURCE_PROFILE/Default/"Local Storage" TARGET_PROFILE/Default/
   cp -r SOURCE_PROFILE/Default/IndexedDB TARGET_PROFILE/Default/
   cp -r SOURCE_PROFILE/Default/"Session Storage" TARGET_PROFILE/Default/
   ```
   Then launch Chrome with the new profile. The ChatGPT session will be pre-authenticated.
+  **The profile-root `Local State` file is load-bearing** (verified 2026-06-12): Chrome
+  encrypts `Cookies` with the `os_crypt` key stored there. Copying `Default/` alone yields
+  a logged-out session because the new profile generates a fresh key and cannot decrypt
+  the copied cookies. Copy `Local State` BEFORE the first launch of the new profile (or
+  kill Chrome, copy both `Local State` + `Cookies`, relaunch).
 - **Never kill other projects' Chrome processes** — always identify by port/PID before stopping.
 - **Record port assignments** in the run's session info and in the memory system.
 
@@ -179,10 +185,10 @@ Each proof project must run in its **own Chrome instance** on a **unique port** 
 
 The browser scripts enforce the current **Extended Pro target**:
 
-1. **Reasoning:** `Pro`
+1. **Reasoning / Intelligence:** `Pro Extended` (the top lane of the 2026-06-12 "Intelligence" picker; pre-06-12 UIs called it `Pro`)
 2. **Model:** `5.5`
 
-The composer pill may read simply **"Pro"** when this target is set. "Thinking + Heavy", `High`, `Medium`, or any non-Pro reasoning mode is a weaker lane. Always verify before submitting.
+The composer pill reads **"Pro Extended"** when this target is set (older UIs: "Extended Pro" or "Pro"). "Thinking + Heavy", `Extra High`, `High`, `Medium`, or any other lane is weaker. Always verify before submitting.
 
 ## Key Documentation
 
