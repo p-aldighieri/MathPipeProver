@@ -78,7 +78,6 @@ Entry-point `.mjs` scripts are thin shims over lib:
 | `cdp_remove_source_v2.mjs` | Remove durable project sources (lib handles confirmation dialogs). |
 | `cdp_refresh_sources.mjs` | Remove → sleep → re-add cycle to bust ChatGPT's per-chat source cache. |
 | `cdp_submit.mjs` | Lower-level single prompt submitter; supports `--deep-research`. |
-| `cdp_submit_trustpill.mjs` | Diagnostic submitter that refuses on non-Pro pill instead of trying to fix. Functionally close to redundant — kept as a strict-check variant. |
 | `cdp_submit_batch.mjs` | Sequential parallel-prompt dispatcher (post-refactor: now actually works; the pre-refactor version spawned a nonexistent target). |
 | `wait_chat_done.mjs` | Chat-ID-pinned poller/dumper for a known chat URL (uses lib's hardened poll). `--deep-research` keeps it waiting through DR's stop-button-less research phase. |
 | `harvest_deep_research.mjs` | Harvest a **Deep Research** chat whose report is in a canvas/artifact. `--repost-now` (after research is confirmed done) reposts the packet inline, then captures it. See "Model modes" → DR harvest. |
@@ -87,7 +86,7 @@ Entry-point `.mjs` scripts are thin shims over lib:
 | `cg_create_project.mjs` | Project creation/provisioning helper, not part of the normal role loop. |
 | `provision_inits.mjs` | Bulk INIT provisioning helper for prepared project folders, not part of the normal role loop. |
 
-Treat `_*.mjs`, `cdp_inspect_actions_menu.mjs`, and one-off diagnostic files as diagnostics, not standard workflow commands.
+Treat `_*.mjs` and one-off diagnostic files as diagnostics, not standard workflow commands; do not commit them unless they are promoted into the documented workflow.
 
 **Maintenance rule:** when ChatGPT's DOM changes again, fix it in the relevant `lib/*.mjs` file only. Do not duplicate DOM logic in entry-point scripts.
 
