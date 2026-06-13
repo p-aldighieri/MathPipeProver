@@ -67,6 +67,11 @@ Options:
                                Applies to 'submit' only; ignored by other
                                subcommands. NOTE: DR DOM selector is a stub
                                pending live-inspect wiring.
+  --keep-tab                   Do not close the tab this command opened. By
+                               default submit (--page new), recover, and inspect
+                               open a dedicated tab and close it on exit
+                               (generation continues server-side); pass this to
+                               keep it open for live viewing.
   --help                       Show this help.
 
 Environment:
@@ -156,6 +161,8 @@ function parseArgs(argv) {
       args.returnAfterSubmit = true;
     } else if (token === "--deep-research") {
       args.deepResearch = true;
+    } else if (token === "--keep-tab") {
+      args.keepTab = true;
     } else {
       throw new Error(`Unknown argument: ${token}`);
     }
@@ -500,9 +507,26 @@ async function main() {
     browserChannel: args.browserChannel,
     headless: args.headless,
   });
-  const page = args.command === "submit" && args.pageMode === "new"
-    ? await runtime.context.newPage()
-    : runtime.context.pages()[0] || await runtime.context.newPage();
+  // Tab hygiene (2026-06-12): recover/inspect navigate to a specific chat URL
+  // and must NEVER hijack an existing tab — that tab could be a live poller's
+  // pinned chat (wait_chat_done) or the project tab. Give them a dedicated page.
+  // `submit --page new` also gets a fresh page (generation continues server-side
+  // after we close it). `prepare` and `submit --page reuse` intentionally reuse
+  // the existing project tab. We close only pages we created, and honor
+  // --keep-tab. This mirrors the standalone cdp_submit/cdp_inspect/cdp_dump.
+  const needsDedicatedPage =
+    args.command === "recover" ||
+    args.command === "inspect" ||
+    (args.command === "submit" && args.pageMode === "new");
+  let page, createdPage;
+  if (needsDedicatedPage) {
+    page = await runtime.context.newPage();
+    createdPage = true;
+  } else {
+    const existing = runtime.context.pages()[0];
+    if (existing) { page = existing; createdPage = false; }
+    else { page = await runtime.context.newPage(); createdPage = true; }
+  }
 
   try {
     if (args.command === "prepare") {
@@ -515,6 +539,9 @@ async function main() {
       await runInspect(page, args);
     }
   } finally {
+    if (createdPage && !args.keepTab) {
+      try { await page.close(); } catch { /* tab already gone */ }
+    }
     await runtime.close();
   }
 }
