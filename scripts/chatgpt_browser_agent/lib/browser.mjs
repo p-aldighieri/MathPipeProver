@@ -53,19 +53,43 @@ function expandHome(inputPath) {
  * disconnects (does NOT shut down the underlying Chrome — the user's
  * existing session keeps running).
  */
-export async function attachCDP({ port, url } = {}) {
+export async function attachCDP({ port, url, attempts, timeoutMs } = {}) {
   const cdpUrl = url || `http://localhost:${port ?? 9222}`;
-  const browser = await chromium.connectOverCDP(cdpUrl);
-  const context = browser.contexts()[0];
-  if (!context) {
-    await browser.close();
-    throw new Error(`No browser context was available at ${cdpUrl}.`);
+  // connectOverCDP can stall on browser-target enumeration when an existing
+  // page target's renderer is momentarily busy (e.g. a heavy tab the user is
+  // actively using, or a chat mid-generation). The default has no per-call
+  // timeout, so one busy moment hangs ~30s and then fails the whole run.
+  // A bounded timeout + a few retries with backoff rides out that transient
+  // stall: the blocking page is usually idle again within a few seconds.
+  const maxAttempts = Number.isInteger(attempts) ? attempts : Number(process.env.MPP_CDP_ATTEMPTS || 4);
+  const perAttemptMs = Number.isInteger(timeoutMs) ? timeoutMs : Number(process.env.MPP_CDP_TIMEOUT_MS || 20000);
+  let lastErr;
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const browser = await chromium.connectOverCDP(cdpUrl, { timeout: perAttemptMs });
+      const context = browser.contexts()[0];
+      if (!context) {
+        await browser.close();
+        throw new Error(`No browser context was available at ${cdpUrl}.`);
+      }
+      return {
+        browser,
+        context,
+        close: async () => { await browser.close(); },
+      };
+    } catch (error) {
+      lastErr = error;
+      if (i < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
   }
-  return {
-    browser,
-    context,
-    close: async () => { await browser.close(); },
-  };
+  const detail = (lastErr && lastErr.message) ? String(lastErr.message).split('\n')[0] : String(lastErr);
+  throw new Error(
+    `attachCDP: could not connect to ${cdpUrl} after ${maxAttempts} attempts (last: ${detail}). ` +
+    `A busy or hung page target can block CDP target enumeration even while the /json HTTP endpoint still responds; ` +
+    `retry, or close the orphaned tab (NEVER a tab the user is actively viewing).`
+  );
 }
 
 /**
