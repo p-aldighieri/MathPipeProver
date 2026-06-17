@@ -120,6 +120,26 @@ Verdicts:
 
 After the gatekeeper, the smart orchestrator reads the verdict + scope delta + strategies and decides the next move. When the result falls short of the original objective (`OBJECTIVE_NARROWED`/`OBJECTIVE_MISSED`), the default is to **re-attack, not to stop** — see *Attempts and the Default Re-Attack Loop* below. Typical follow-ups, in rough order of preference: re-rank routes via the searcher with the attempt dossier in hand; decompose a proposed strategy into lemmas via breakdown; check prior art via the literature role; re-read the formalization via the formalizer if the original question itself was misframed; run one more prover-reviewer cycle only if the residual gap is genuinely small. Stopping to record/publish is appropriate only when the objective is met, disproved, or genuinely distinct strategies are exhausted. The gatekeeper does not loop back automatically.
 
+## Optional Post-Gatekeeper Simplification Pipeline
+
+Once a result is locked — consolidated, reviewed, and gatekeeper-cleared `OBJECTIVE_MET` — an **optional** simplification pass can look for a cleaner proof of the *same* results. Its motto is "as simple as possible, but not simpler": first-pass proofs (especially ones that grew through prover → reviewer → patch cycles) often carry more machinery than the theorem needs, and there is frequently a shorter route. The stage is opt-in and **never runs on a moving target** — only after the objective is met, because simplifying a still-changing proof is wasted work.
+
+It mirrors the main pipeline with the objective swapped from *prove* to *simplify, preserving the theorem exactly*, changing only at the margin:
+
+| Stage | Template | Role |
+|---|---|---|
+| Block breakdown | `09_simplify_breakdown_soft.md` | Decompose the locked proof into self-contained blocks + a dependency DAG + per-block interfaces; rank simplification candidates. The DAG identifies blocks with no shared interface, which can be simplified concurrently. |
+| Strategy search | `0a_simplify_search_soft.md` | Per block, propose distinct simplification routes (shorter argument / lemma-merge / hypothesis-weakening / cite-replaces-derivation / alternative route). Council-compatible on hard blocks; routes within a block can run in parallel. |
+| Simplifier | `0b_simplifier_soft.md` | Execute a route → a simpler proof of the same block export + a change manifesto (what was cut, theorem-unchanged attestation, interface-preserved flag). The prover analog. |
+| Correctness reviewer | `06_reviewer_soft.md` (reused) | Is the simplified block correct and does it prove the same statement with no smuggled weakening? |
+| Comparison reviewer | `0c_simplify_compare_soft.md` | The one genuinely new role: is it strictly *simpler* AND of the *same strength* (same export, generality, constants, scope, interface)? Emits a `simplify_control` block. |
+| Consolidator | `07_consolidator_soft.md` (reused) | Reassemble adopted block-simplifications and re-check the seams — a block simplified in isolation must still mesh with its dependents. |
+| Gatekeeper | `08_gatekeeper_soft.md` (reused) | Scope check on the simplified whole: still `OBJECTIVE_MET`, nothing narrowed. |
+
+**Adoption gate.** A block's simplification is adopted only if the correctness reviewer passes AND the comparison reviewer returns `strictly_simpler: yes` and `same_strength: yes` AND its interface is preserved (or a flagged interface change survives consolidation). Otherwise the original block is kept. After per-block adoption, a global consolidate + gatekeeper must clear before the simplified proof replaces the original. Parallelism runs on two axes — blocks × routes — exactly like the prover's branch fan-out, made safe by the breakdown's dependency DAG.
+
+**Discipline.** Protecting the original from a weakening rewrite is a success of this stage, not a failure; "already minimal" is a perfectly good outcome. Never adopt a simplification that buys brevity with lost generality, rigor, or interpretability. As with the rest of the analytical pipeline, all simplification roles run on Extended Pro; subagents stay out (the only standard exception remains Lean).
+
 ## Attempts and the Default Re-Attack Loop
 
 An **attempt** is one full push of the pipeline — `searcher → breakdown → prover → reviewer → consolidator → gatekeeper` — together with the route-branches that push fans out into. This is a larger unit than an engine route-*branch*: one attempt usually contains several branches, one per candidate route.

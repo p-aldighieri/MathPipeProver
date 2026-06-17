@@ -34,7 +34,10 @@ follow the same procedure.
 - Formal analytical proof roles must go through ChatGPT Extended Pro via
   the browser-backed `external_agent` workflow. Do not use subagents for
   formalizer / searcher / breakdown / prover / reviewer / consolidator /
-  gatekeeper / referee work.
+  gatekeeper / referee work — including the optional post-gatekeeper
+  simplification roles (simplify-breakdown / simplify-search / simplifier /
+  simplify-compare, templates `prompts/soft/09_simplify_breakdown`,
+  `0a_simplify_search`, `0b_simplifier`, `0c_simplify_compare`).
 - Subagents are allowed only for a specifically requested coding/simulation
   problem, or inside the Lean formalization workflow for Lean / Mathlib /
   AXLE code-checking and proof-engineering loops.
