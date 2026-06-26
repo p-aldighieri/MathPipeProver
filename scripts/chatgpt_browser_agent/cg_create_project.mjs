@@ -28,23 +28,53 @@ try {
   let page = ctx.pages().find(p => p.url().includes('chatgpt.com')) || ctx.pages()[0];
   await page.bringToFront();
   await page.goto('https://chatgpt.com/projects', { waitUntil: 'domcontentloaded' });
-  await sleep(4000);
+  await sleep(6000);
 
-  // 2026-06-12 UI: "New project" is an icon-only button (aria-label only).
-  // Older UI used a visible-text sidebar entry — keep it as a fallback.
-  const newProjBtn = page.locator('button[aria-label="New project"]');
-  if ((await newProjBtn.count()) > 0) await newProjBtn.first().click();
-  else await page.getByText('New project', { exact: true }).first().click();
-  await sleep(1800);
+  // Robust helpers. The popover open/close used to be a single blind click + fixed
+  // sleep, which races against slow popover rendering: re-clicking the gear while the
+  // popover is mid-open TOGGLES it shut. These helpers click once then POLL, and only
+  // re-click after a full poll window with nothing rendered.
+  const countRadios = async () => page.evaluate(() => document.querySelectorAll('[role="menuitemradio"]').length);
+  const clickLabel = async (label) => page.evaluate((l) => {
+    const b = [...document.querySelectorAll('button')].find(x => (x.getAttribute('aria-label') || '') === l);
+    if (b) { b.click(); return true; } return false;
+  }, label);
+  const openGear = async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if ((await countRadios()) > 0) return true;
+      await clickLabel('Project settings');
+      for (let t = 0; t < 16; t++) { await sleep(300); if ((await countRadios()) > 0) return true; }
+    }
+    return (await countRadios()) > 0;
+  };
+  const closePopover = async () => {
+    for (let attempt = 0; attempt < 5 && (await countRadios()) > 0; attempt++) {
+      await page.keyboard.press('Escape');
+      for (let t = 0; t < 6; t++) { await sleep(250); if ((await countRadios()) === 0) return true; }
+    }
+    return (await countRadios()) === 0;
+  };
 
+  // 2026-06-12 UI: "New project" is an icon-only button (aria-label only). It may
+  // live in a sidebar Playwright deems "not visible", so click via JS and poll for
+  // the dialog. Older UI used a visible-text sidebar entry — keep it as a fallback.
   const nameInput = page.locator('input[name="projectName"]');
+  let opened = false;
+  for (let i = 0; i < 8 && !opened; i++) {
+    if (!(await clickLabel('New project'))) {
+      try { await page.getByText('New project', { exact: true }).first().click({ timeout: 2000 }); } catch {}
+    }
+    await sleep(1500);
+    if ((await nameInput.count()) > 0) opened = true;
+  }
+  if (!opened) { console.error('ABORT: could not open New project dialog.'); process.exit(5); }
+
   await nameInput.waitFor({ timeout: 8000 });
   await nameInput.fill(name);
   await sleep(400);
 
   // Open the "Project settings" gear (the memory menu)
-  await page.locator('button[aria-label="Project settings"]').click();
-  await sleep(1200);
+  if (!(await openGear())) { console.error('ABORT: could not open Project settings popover.'); process.exit(6); }
 
   // Click the "Project-only" memory radio
   const clicked = await page.evaluate(() => {
@@ -57,11 +87,7 @@ try {
   await sleep(800);
 
   // Selecting the radio CLOSES the popover. Re-open the gear to verify the choice stuck.
-  const countRadios = async () => page.evaluate(() => document.querySelectorAll('[role="menuitemradio"]').length);
-  if (await countRadios() === 0) {
-    await page.locator('button[aria-label="Project settings"]').click();
-    await sleep(1100);
-  }
+  if (!(await openGear())) { console.error('ABORT: could not reopen gear to verify memory setting.'); process.exit(7); }
   const state = await page.evaluate(() => {
     const rs = [...document.querySelectorAll('[role="menuitemradio"]')];
     const get = (re) => { const r = rs.find(x => re.test(x.innerText || '')); return r ? r.getAttribute('aria-checked') : 'absent'; };
@@ -74,11 +100,8 @@ try {
     process.exit(3);
   }
 
-  // Close the memory popover by toggling the gear (clicking the name field is blocked by the overlay)
-  await page.locator('button[aria-label="Project settings"]').click();
-  await sleep(700);
-  if (await countRadios() !== 0) { await page.keyboard.press('Escape'); await sleep(500); }
-  if (await countRadios() !== 0) { console.error('ABORT: could not close memory popover before Create.'); process.exit(4); }
+  // Close the memory popover before clicking Create (overlay blocks the Create button).
+  if (!(await closePopover())) { console.error('ABORT: could not close memory popover before Create.'); process.exit(4); }
 
   // Create
   await page.getByRole('button', { name: 'Create project' }).click();
