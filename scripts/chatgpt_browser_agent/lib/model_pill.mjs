@@ -141,29 +141,30 @@ async function readCurrentReasoning(page) {
  * would use a weaker model.
  */
 /**
- * Deep Research mode — DOM verified live 2026-05-26 on chatgpt.com.
+ * Deep Research mode — DOM re-verified live 2026-06-26 on chatgpt.com
+ * (the 2026-05-26 UI it was originally written against has since drifted).
  *
- * ## How ChatGPT exposes DR (current UI)
+ * ## How ChatGPT exposes DR (current UI, 2026-06)
  *
  *   - DR is toggled from the composer "+" button menu (the same button
- *     whose aria-label is "Add files and more"). Inside the popup is a
- *     `[role="menuitemradio"]` whose innerText is exactly "Deep research".
- *     Clicking it turns DR on.
+ *     whose aria-label is "Add files and more"). The menu rows are now bare
+ *     `<div>`s inside a `.popover` (grouped under role="group" sections) —
+ *     there is NO `[role="menuitemradio"]` anymore. Find the row by its text
+ *     "Deep research" and click it with a REAL Playwright click (a raw JS
+ *     `.click()` on the bare div does not reliably fire React's handler).
  *
- *   - When DR is active, the composer toolbar shows a chip button with
- *     `aria-label="Deep research, click to remove"` and innerText
- *     "Deep research". Clicking that chip toggles DR off.
+ *   - When DR is active, the active tool renders as an inline accent-coloured
+ *     CHIP at the start of the ProseMirror composer:
+ *     `<span class="...text-token-text-accent...">Deep research</span>` living
+ *     inside `[role="textbox"].ProseMirror`. The old toolbar chip button with
+ *     `aria-label="Deep research, click to remove"` is GONE. `isDeepResearchActive`
+ *     detects the inline accent chip (with a legacy fallback to the old button).
+ *     To turn DR off, re-click the "Deep research" row in the "+" menu (toggle).
  *
- *   - Note: the menuitemradio's `aria-checked` attribute is unreliable —
- *     ChatGPT renders the visual check + highlight but leaves
- *     `aria-checked="false"`. Do NOT use aria-checked for state detection.
- *     The chip is the authoritative signal.
- *
- *   - The composer pill reads "Pro" (NOT "Extended Pro") while DR is
- *     active. The pill alone cannot distinguish DR mode from plain Pro
- *     reasoning; this is why `ensureExtendedPro` must explicitly toggle
- *     DR off if active (chip detection) before its existing fast-path
- *     check kicks in.
+ *   - The composer pill now STAYS "Pro Extended" while DR is active (it no
+ *     longer drops to "Pro"). So the pill cannot distinguish DR from plain
+ *     Extended Pro; `ensureExtendedPro` must still explicitly disable DR (via
+ *     the inline-chip detection) before trusting its pill fast-path.
  *
  *   - The "+" button itself does NOT respond to JS `.click()` — it needs
  *     a real input event. Playwright's `locator.click()` dispatches the
@@ -192,6 +193,22 @@ const DR_MENUITEM_TEXT_PATTERN = /^\s*Deep research\s*$/i;
  */
 export async function isDeepResearchActive(page) {
   return await page.evaluate(() => {
+    // 2026-06 UI: an active composer tool (Deep research) renders as an inline
+    // accent-coloured chip at the START of the ProseMirror composer, e.g.
+    // <span class="...text-token-text-accent...">Deep research</span>. The old
+    // aria-label="Deep research, click to remove" button no longer exists, and
+    // the composer pill stays "Pro Extended" (it no longer drops to "Pro").
+    const editor = document.querySelector(
+      '[role="textbox"].ProseMirror, .ProseMirror[contenteditable="true"], #prompt-textarea'
+    );
+    if (editor) {
+      const chip = [...editor.querySelectorAll('span, a, button')].some((el) =>
+        /^\s*Deep research\s*$/i.test(el.textContent || '') &&
+        /text-token-text-accent/.test((el.className || '').toString())
+      );
+      if (chip) return true;
+    }
+    // Legacy fallback: the old removable chip button.
     return [...document.querySelectorAll('button')].some((b) => {
       const al = (b.getAttribute('aria-label') || '').toLowerCase();
       return al.includes('deep research') && al.includes('click to remove');
@@ -227,7 +244,10 @@ export async function isDeepResearchWorking(page) {
  * No-op if DR isn't currently active. Internal helper.
  */
 async function disableDeepResearch(page) {
-  const clicked = await page.evaluate(() => {
+  if (!(await isDeepResearchActive(page))) return;
+
+  // Legacy fast path: the old removable-chip button, if this UI still has it.
+  const legacyClicked = await page.evaluate(() => {
     const chip = [...document.querySelectorAll('button')].find((b) => {
       const al = (b.getAttribute('aria-label') || '').toLowerCase();
       return al.includes('deep research') && al.includes('click to remove');
@@ -236,7 +256,25 @@ async function disableDeepResearch(page) {
     chip.click();
     return true;
   });
-  if (clicked) await new Promise((r) => setTimeout(r, 500));
+  if (legacyClicked) {
+    await new Promise((r) => setTimeout(r, 500));
+    if (!(await isDeepResearchActive(page))) return;
+  }
+
+  // 2026-06 UI: toggle DR off by re-clicking the "Deep research" row in the
+  // composer "+" menu (the active tool is a toggle, and the inline chip carries
+  // no standalone remove button).
+  const addBtn = page.getByRole('button', { name: 'Add files and more', exact: true }).first();
+  if ((await addBtn.count()) > 0) {
+    await addBtn.click();
+    const drRow = page.getByText(DR_MENUITEM_TEXT_PATTERN).first();
+    try {
+      await drRow.waitFor({ state: 'visible', timeout: 4000 });
+      await drRow.click({ timeout: 3000 });
+    } catch { /* fall through to Escape */ }
+    await page.keyboard.press('Escape').catch(() => {});
+    await new Promise((r) => setTimeout(r, 500));
+  }
 }
 
 /**
@@ -257,27 +295,26 @@ export async function ensureDeepResearch(page) {
   }
   await addBtn.click();
 
-  // Wait for the menu to populate (any menuitemradio appears).
+  // Wait for the menu to populate. As of the 2026-06 composer UI the "+" menu
+  // rows are bare <div>s inside a `.popover` (role="group" sections) — there is
+  // NO [role="menuitemradio"] anymore, so the old role-based wait timed out even
+  // though the menu was open. Wait for the "Deep research" row text instead.
+  const drRow = page.getByText(DR_MENUITEM_TEXT_PATTERN).first();
   try {
-    await page.locator('[role="menuitemradio"]').first().waitFor({ state: 'visible', timeout: 5000 });
+    await drRow.waitFor({ state: 'visible', timeout: 6000 });
   } catch {
     await page.keyboard.press('Escape').catch(() => {});
-    throw new Error('Composer "+" menu did not open within 5s after click.');
+    throw new Error('Composer "+" menu did not open within 6s after click (no "Deep research" row).');
   }
 
-  const clicked = await page.evaluate((pattern) => {
-    const re = new RegExp(pattern.source, pattern.flags);
-    const dr = [...document.querySelectorAll('[role="menuitemradio"]')].find((el) =>
-      re.test((el.innerText || '').trim())
-    );
-    if (!dr) return false;
-    dr.click();
-    return true;
-  }, { source: DR_MENUITEM_TEXT_PATTERN.source, flags: DR_MENUITEM_TEXT_PATTERN.flags });
-
-  if (!clicked) {
+  // Click the row via a real Playwright click so React's delegated handler fires
+  // (a raw JS .click() on the bare <div> is unreliable). The anchored regex keeps
+  // us off the ancestor group div whose text concatenates several row labels.
+  try {
+    await drRow.click({ timeout: 3000 });
+  } catch {
     await page.keyboard.press('Escape').catch(() => {});
-    throw new Error('"Deep research" option not found in composer "+" menu.');
+    throw new Error('"Deep research" option found but could not be clicked in composer "+" menu.');
   }
   await new Promise((r) => setTimeout(r, 800));
 
