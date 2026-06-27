@@ -48,9 +48,19 @@ try {
     return (await countRadios()) > 0;
   };
   const closePopover = async () => {
-    for (let attempt = 0; attempt < 5 && (await countRadios()) > 0; attempt++) {
-      await page.keyboard.press('Escape');
-      for (let t = 0; t < 6; t++) { await sleep(250); if ((await countRadios()) === 0) return true; }
+    // Close the gear/memory popover WITHOUT pressing Escape. A stray Escape landing after
+    // the popover has already closed bubbles up to the parent "Create project" dialog and
+    // dismisses it — which is exactly what made the later Create-project click time out for
+    // the full 30s. Prefer toggling the gear shut, with a neutral in-modal click as fallback.
+    for (let attempt = 0; attempt < 4 && (await countRadios()) > 0; attempt++) {
+      await clickLabel('Project settings');
+      for (let t = 0; t < 8; t++) { await sleep(200); if ((await countRadios()) === 0) return true; }
+      await page.evaluate(() => {
+        const lbl = [...document.querySelectorAll('label, h1, h2')]
+          .find(e => /Project name|Create project/i.test(e.textContent || ''));
+        if (lbl) lbl.click();
+      });
+      for (let t = 0; t < 8; t++) { await sleep(200); if ((await countRadios()) === 0) return true; }
     }
     return (await countRadios()) === 0;
   };
@@ -103,8 +113,21 @@ try {
   // Close the memory popover before clicking Create (overlay blocks the Create button).
   if (!(await closePopover())) { console.error('ABORT: could not close memory popover before Create.'); process.exit(4); }
 
-  // Create
-  await page.getByRole('button', { name: 'Create project' }).click();
+  // Create — poll for the enabled "Create project" button and click via the DOM. The old
+  // getByRole(...).click() used the 30s default timeout, so a modal that had been dismissed
+  // (e.g. by a stray Escape) silently burned the whole timeout before throwing. This fails
+  // fast/loud and tolerates the button living in a portal sibling of [role="dialog"].
+  let created = false;
+  for (let t = 0; t < 20 && !created; t++) {
+    created = await page.evaluate(() => {
+      const b = [...document.querySelectorAll('button')]
+        .find(x => /^create project$/i.test((x.textContent || '').trim()) && !x.disabled && x.offsetParent !== null);
+      if (b) { b.click(); return true; }
+      return false;
+    });
+    if (!created) await sleep(400);
+  }
+  if (!created) { console.error('ABORT: "Create project" button not found/enabled — modal may have been dismissed.'); process.exit(8); }
   await sleep(5500);
   const url = page.url();
   console.log('PROJECT_URL:', url);
