@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# scripts/council/dispatch_opus.sh — Run the Claude Opus council member.
+# scripts/council/dispatch_opus.sh — Run the Claude (Fable 5) council member.
+# (Filename kept for back-compat; model updated 2026-07-13 from Opus to Fable 5.)
 #
 # Mirrors dispatch_codex.sh's contract: takes the same --packet-dir /
 # --prompt / --out args, interpolates the packet into the template's
-# {context_bundle} placeholder, invokes `claude --print --model opus`
+# {context_bundle} placeholder, invokes `claude --print --model claude-fable-5`
 # non-interactively, and writes the resulting memo to disk.
 #
 # Sibling of dispatch_codex.sh, dispatch_gemini.sh and dispatch_extended_pro.sh
@@ -82,7 +83,7 @@ echo
 
 # Invoke Opus non-interactively. --no-session-persistence so the council
 # call doesn't pollute interactive session history.
-if claude --print --model opus --no-session-persistence \
+if claude --print --model claude-fable-5 --no-session-persistence \
      < "$PROMPT_FILE" > "$OUTPUT_FILE" 2> "$LOG_FILE"; then
   if [[ ! -s "$OUTPUT_FILE" ]]; then
     echo "ERROR: claude returned empty output; see $LOG_FILE" >&2

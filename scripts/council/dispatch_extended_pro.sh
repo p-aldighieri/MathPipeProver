@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# scripts/council/dispatch_extended_pro.sh — Run the ChatGPT Extended Pro council member.
+# scripts/council/dispatch_extended_pro.sh — Run the ChatGPT Sol Pro council member
+# (GPT-5.6 Sol, Pro lane; legacy filename kept). Submits via the lib-backed browser
+# flow, which enforces the Sol Pro target (see CLAUDE.md §Model Configuration).
 #
 # Mirrors dispatch_codex.sh / dispatch_gemini.sh / dispatch_opus.sh's core
 # contract (--packet-dir / --prompt / --out) and adds the browser-specific
