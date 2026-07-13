@@ -97,7 +97,7 @@ Two model modes are wired through the browser scripts:
 
 | Mode | Used for | Wall-clock | How to invoke |
 |---|---|---|---|
-| **Extended Pro** | All analytical roles (formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper) and the Lean roles. The pipeline default. | 8–20 min | Default. No flag. |
+| **Sol Pro** (legacy name "Extended Pro") | All analytical roles (formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper) and the Lean roles. The pipeline default. | 8–20 min | Default. No flag. |
 | **Deep Research** | Literature role only (`02_literature_soft.md`). Web-browsing + multi-source synthesis with citations. | 5–30 min (occasionally 45) | Pass `--deep-research` to `chatgpt_browser_agent.sh submit` or `cdp_submit.mjs`. |
 
 The `/submit-role` skill picks the right flag based on the prompt file. If you invoke the browser scripts manually, the rule is: literature ⇒ DR; everything else ⇒ Extended Pro.
@@ -186,12 +186,14 @@ Each proof project must run in its **own Chrome instance** on a **unique port** 
 
 ## Model Configuration — CRITICAL
 
-The browser scripts enforce the current **Extended Pro target**:
+The browser scripts enforce the current **Sol Pro target** (a.k.a. **GPT 5.6 Sol Pro**; UI verified live 2026-07-13):
 
-1. **Reasoning / Intelligence:** `Pro Extended` (the top lane of the 2026-06-12 "Intelligence" picker; pre-06-12 UIs called it `Pro`)
-2. **Model:** `5.5`
+1. **Reasoning / Intelligence:** `Pro` (the top lane of the "Intelligence" picker)
+2. **Model:** `GPT-5.6 Sol` (shown on the picker's bottom model-submenu row; read-only — never probe/hover the submenu, it hangs)
 
-The composer pill reads **"Pro Extended"** when this target is set (older UIs: "Extended Pro" or "Pro"). "Thinking + Heavy", `Extra High`, `High`, `Medium`, or any other lane is weaker. Always verify before submitting.
+The composer pill reads **"Pro"** when this target is set. `Extra High`, `High`, `Medium`, `Instant`, or any other lane is weaker (`Instant` additionally runs the older GPT-5.5). Always verify before submitting.
+
+**Terminology note:** "Extended Pro" was the pre-2026-07 name of this target (`Pro Extended` lane on GPT-5.5) and no longer exists in the ChatGPT UI. Docs, prompt templates, function names (`ensureExtendedPro`), and slash commands (`/set-model-extended`) keep the legacy name — wherever you see "Extended Pro", read "the Sol Pro target" (Pro lane on GPT-5.6 Sol). `lib/model_pill.mjs` warns if the picker's base-model row stops reading GPT-5.6 Sol (set `MPP_STRICT_BASE_MODEL=1` to make that fatal).
 
 ## Key Documentation
 

@@ -91,6 +91,8 @@ export async function latestAssistantText(page) {
     let tail = body.slice(start + marker.length).trim();
     for (const stopMarker of [
       '\n\nExtended Pro',
+      '\n\nPro Extended',
+      '\n\nSol Pro',
       '\n\nChatGPT can make mistakes.',
       '\n\nAdd files and more',
       '\n\nStart Voice',
@@ -98,6 +100,11 @@ export async function latestAssistantText(page) {
       const stop = tail.indexOf(stopMarker);
       if (stop !== -1) tail = tail.slice(0, stop).trim();
     }
+    // 2026-07 UI: the composer pill reads just "Pro". A substring stop
+    // marker for it would false-match content like "Proof." or
+    // "Proposition 2" after a blank line, so only strip "Pro" when it is
+    // the exact final line of the scrape.
+    tail = tail.replace(/\n\nPro$/, '').trim();
     return tail;
   });
 }

@@ -1,5 +1,6 @@
 /**
- * lib/model_pill.mjs — Composer model-pill detection and Extended Pro enforcement.
+ * lib/model_pill.mjs — Composer model-pill detection and Sol Pro enforcement
+ * (GPT-5.6 Sol, Pro intelligence lane — formerly "Extended Pro").
  *
  * Single source of truth for everything related to reading and setting the
  * ChatGPT composer's model+effort state. Both `cdp_submit.mjs` (the thin
@@ -26,9 +27,22 @@
  * "Instant | Medium | High | Extra High | Pro Extended" plus a separate
  * "GPT-5.5 >" model submenu row at the bottom (do NOT probe the submenu).
  * The composer pill reads the current level text (e.g. "Extra High").
- * The Extended Pro target in this UI is the "Pro Extended" level; after
- * selection the pill reads "Pro Extended". Rows are still
- * [role="menuitemradio"]; matching stays label-prefix-based.
+ *
+ * ## Current target: GPT 5.6 Sol Pro (UI verified live 2026-07-13)
+ *
+ * ChatGPT's flagship is now **GPT-5.6 Sol** and "Extended Pro" no longer
+ * exists. The Intelligence picker levels are
+ * "Instant | Medium | High | Extra High | Pro" with a "GPT-5.6 Sol"
+ * model submenu row at the bottom (do NOT probe/click the submenu row —
+ * hovering the model submenu has historically hung for ~30s). The
+ * "Instant" row carries a "5.5" badge (Instant runs the older model);
+ * every other lane runs the selected GPT-5.6 Sol.
+ *
+ * The pipeline target ("Sol Pro") is the **Pro** level on GPT-5.6 Sol;
+ * after selection the composer pill reads "Pro". Rows are still
+ * [role="menuitemradio"]; matching stays label-prefix-based. Legacy
+ * labels "Pro Extended"/"Extended Pro" are kept as accepted pill states
+ * for back-compat with any A/B'd or stale UI.
  *
  * ## Public API
  *
@@ -37,10 +51,12 @@
  *       pill never resolves. Never throws.
  *
  *   ensureExtendedPro(page) -> void
- *       Idempotent enforcement. Returns silently if the pill already reads
- *       Extended Pro/Pro. Otherwise opens the menu, selects Pro reasoning,
- *       and re-verifies. Throws if the pill cannot be brought to the target
- *       state — callers should treat this as a hard "refuse to submit" gate.
+ *       Idempotent enforcement of the Sol Pro target (function keeps its
+ *       legacy name so callers don't churn). Returns silently if the pill
+ *       already reads Pro (or a legacy Pro variant). Otherwise opens the
+ *       menu, selects the Pro lane, and re-verifies. Throws if the pill
+ *       cannot be brought to the target state — callers should treat this
+ *       as a hard "refuse to submit" gate.
  *
  *   PILL_SELECTOR, EXTENDED_PRO_LABELS, BASE_MODEL_LABEL, EFFORT_LABEL
  *       Exported constants. BASE_MODEL_LABEL/EFFORT_LABEL feed the
@@ -49,21 +65,29 @@
  */
 
 export const PILL_SELECTOR = 'button.__composer-pill[aria-haspopup="menu"]';
-export const EXTENDED_PRO_LABELS = ['Extended Pro', 'Pro', 'Pro Extended'];
+// Accepted pill states for the Sol Pro target. "Pro" is the current
+// (2026-07) label; the other two are legacy labels kept for back-compat.
+export const EXTENDED_PRO_LABELS = ['Pro', 'Pro Extended', 'Extended Pro'];
 
 // These two constants are the strings emitted into the session-log JSON
-// (`base_model`, `effort_mode` fields). Stability matters more than precision:
-// keep "Pro" + "Extended Pro" even if the UI label drifts, unless you are
-// coordinating a schema change.
-export const BASE_MODEL_LABEL = 'Pro';
-export const EFFORT_LABEL = 'Extended Pro';
+// (`base_model`, `effort_mode` fields). Updated 2026-07-13 for the
+// GPT-5.6 Sol UI; downstream consumers treat them as informational.
+export const BASE_MODEL_LABEL = 'GPT-5.6 Sol';
+export const EFFORT_LABEL = 'Sol Pro';
 // Heartbeat/log effort_mode value when the wrapper is told `--deep-research`.
 // Used by both cdp_submit.mjs and chatgpt_browser_agent.mjs.
 export const EFFORT_LABEL_DR = 'Deep Research';
 
-// Acceptable target rows in preference order. "Pro Extended" is the
-// 2026-06-12 "Intelligence" UI's top lane; "Pro" is the pre-06-12 label.
-const DESIRED_REASONING_LABELS = ['Pro Extended', 'Pro'];
+// Acceptable target rows in preference order. "Pro" is the 2026-07
+// "Intelligence" UI's top lane (GPT-5.6 Sol era); "Pro Extended" was the
+// 2026-06-12 label, kept as fallback.
+const DESIRED_REASONING_LABELS = ['Pro', 'Pro Extended'];
+
+// Expected base-model text on the picker's bottom model-submenu row.
+// Checked read-only (never clicked/hovered). If the row text stops
+// matching, ensureExtendedPro logs a loud warning; set
+// MPP_STRICT_BASE_MODEL=1 to make the mismatch fatal.
+const EXPECTED_MODEL_ROW = /5\.6|sol/i;
 
 /**
  * Read the composer pill text with retries.
@@ -111,32 +135,43 @@ async function openMenu(page) {
 }
 
 /**
- * Read the currently-checked reasoning radio label (e.g. "Pro", "High").
- * Best-effort; returns null if no menuitemradio is checked or the menu
- * cannot be opened.
+ * Read the picker's current state: the checked reasoning radio label
+ * (e.g. "Pro", "High") and the bottom model-submenu row text (e.g.
+ * "GPT-5.6 Sol"). The model row is read from innerText only — NEVER
+ * clicked or hovered (probing the submenu hangs ~30s). Best-effort;
+ * fields are null if not found or the menu cannot be opened.
  */
-async function readCurrentReasoning(page) {
+async function readMenuState(page) {
   await openMenu(page);
-  const reasoning = await page.evaluate(() => {
+  const state = await page.evaluate(() => {
+    let reasoning = null;
     for (const r of document.querySelectorAll('[role="menuitemradio"]')) {
       if (r.getAttribute('aria-checked') === 'true') {
         const t = (r.innerText || '').trim();
         // Text shape: "Pro\n5+ min" or "Pro | • Extended"; first segment is the label.
-        return t.split(/[\n|]/)[0].trim();
+        reasoning = t.split(/[\n|]/)[0].trim();
+        break;
       }
     }
-    return null;
+    // The model submenu is the [role="menuitem"] row (radios are the
+    // reasoning lanes). Current UI has exactly one, reading "GPT-5.6 Sol".
+    let modelRow = null;
+    for (const m of document.querySelectorAll('[role="menuitem"]')) {
+      const t = (m.innerText || '').trim();
+      if (/^GPT/i.test(t)) { modelRow = t.split(/\n/)[0].trim(); break; }
+    }
+    return { reasoning, modelRow };
   });
   await closeMenu(page);
-  return reasoning;
+  return state;
 }
 
 /**
- * Idempotent: ensure the composer pill reads Extended Pro / Pro.
+ * Idempotent: ensure the composer pill reads Pro (Sol Pro target).
  *
- * Fast path: if `readPill` already returns Extended Pro/Pro, return.
- * Otherwise open the menu, click the Pro reasoning radio, close, and
- * re-verify via the pill. Throws if the final pill state is not OK —
+ * Fast path: if `readPill` already returns Pro (or a legacy Pro variant),
+ * return. Otherwise open the menu, click the Pro reasoning radio, close,
+ * and re-verify via the pill. Throws if the final pill state is not OK —
  * the caller MUST refuse to submit on throw, since silently proceeding
  * would use a weaker model.
  */
@@ -161,9 +196,10 @@ async function readCurrentReasoning(page) {
  *     detects the inline accent chip (with a legacy fallback to the old button).
  *     To turn DR off, re-click the "Deep research" row in the "+" menu (toggle).
  *
- *   - The composer pill now STAYS "Pro Extended" while DR is active (it no
- *     longer drops to "Pro"). So the pill cannot distinguish DR from plain
- *     Extended Pro; `ensureExtendedPro` must still explicitly disable DR (via
+ *   - The composer pill STAYS on the intelligence-lane label while DR is
+ *     active ("Pro Extended" in the 2026-06 UI; "Pro" in the 2026-07
+ *     GPT-5.6 Sol UI). So the pill cannot distinguish DR from plain Sol
+ *     Pro; `ensureExtendedPro` must still explicitly disable DR (via
  *     the inline-chip detection) before trusting its pill fast-path.
  *
  *   - The "+" button itself does NOT respond to JS `.click()` — it needs
@@ -240,8 +276,16 @@ export async function isDeepResearchWorking(page) {
 }
 
 /**
- * Click the "Deep research, click to remove" chip to turn DR off.
- * No-op if DR isn't currently active. Internal helper.
+ * Turn Deep Research off. No-op if DR isn't currently active.
+ * Internal helper — callers must re-verify via isDeepResearchActive.
+ *
+ * 2026-07 UI (verified live 2026-07-13): the DR chip is a ProseMirror
+ * atom node at the start of the composer. Clicking the chip, its svg, or
+ * re-clicking the "Deep research" row in the "+" menu all do NOTHING.
+ * The only working removal is keyboard deletion inside the editor.
+ * Safe in the submit flow because mode enforcement always runs BEFORE
+ * the prompt is filled; any pre-existing composer text is captured and
+ * re-typed as a belt-and-braces safety.
  */
 async function disableDeepResearch(page) {
   if (!(await isDeepResearchActive(page))) return;
@@ -261,19 +305,39 @@ async function disableDeepResearch(page) {
     if (!(await isDeepResearchActive(page))) return;
   }
 
-  // 2026-06 UI: toggle DR off by re-clicking the "Deep research" row in the
-  // composer "+" menu (the active tool is a toggle, and the inline chip carries
-  // no standalone remove button).
-  const addBtn = page.getByRole('button', { name: 'Add files and more', exact: true }).first();
-  if ((await addBtn.count()) > 0) {
-    await addBtn.click();
-    const drRow = page.getByText(DR_MENUITEM_TEXT_PATTERN).first();
-    try {
-      await drRow.waitFor({ state: 'visible', timeout: 4000 });
-      await drRow.click({ timeout: 3000 });
-    } catch { /* fall through to Escape */ }
-    await page.keyboard.press('Escape').catch(() => {});
-    await new Promise((r) => setTimeout(r, 500));
+  const editor = page.locator(
+    '[role="textbox"].ProseMirror, .ProseMirror[contenteditable="true"], #prompt-textarea'
+  ).first();
+  if ((await editor.count()) === 0) return;
+
+  // Capture any non-chip composer text so we can restore it if we have to
+  // nuke the whole composer. (Normally empty: enforcement precedes fill.)
+  const preText = await page.evaluate(() => {
+    const ed = document.querySelector(
+      '[role="textbox"].ProseMirror, .ProseMirror[contenteditable="true"], #prompt-textarea'
+    );
+    if (!ed) return '';
+    const clone = ed.cloneNode(true);
+    for (const el of clone.querySelectorAll('span')) {
+      if (/text-token-text-accent/.test((el.className || '').toString())) el.remove();
+    }
+    return (clone.innerText || '').trim();
+  });
+
+  await editor.click();
+
+  // Targeted: cursor to start (chip is the first node), forward-delete it.
+  await page.keyboard.press('Control+Home').catch(() => {});
+  await page.keyboard.press('Delete').catch(() => {});
+  await new Promise((r) => setTimeout(r, 500));
+  if (!(await isDeepResearchActive(page))) return;
+
+  // Fallback: select-all + backspace (nukes the composer), then restore text.
+  await page.keyboard.press('Control+a').catch(() => {});
+  await page.keyboard.press('Backspace').catch(() => {});
+  await new Promise((r) => setTimeout(r, 500));
+  if (preText && !(await isDeepResearchActive(page))) {
+    await page.keyboard.insertText(preText).catch(() => {});
   }
 }
 
@@ -329,16 +393,33 @@ export async function ensureDeepResearch(page) {
 export async function ensureExtendedPro(page) {
   // DR also shows pill "Pro" — chip is the only discriminator. If DR is
   // active, toggle it off before the pill fast-path; otherwise we'd
-  // silently submit a DR job when the caller wanted Extended Pro.
+  // silently submit a DR job when the caller wanted Sol Pro. This must be
+  // a hard gate: on the 2026-07 UI several plausible removal paths are
+  // silent no-ops, so re-verify and throw rather than trust the attempt.
   if (await isDeepResearchActive(page)) {
     await disableDeepResearch(page);
+    if (await isDeepResearchActive(page)) {
+      throw new Error(
+        'Deep Research is active on the composer and could not be turned off. ' +
+        'Refusing to proceed (the prompt would submit as a DR job, not Sol Pro). ' +
+        'Remove the "Deep research" chip manually and retry.'
+      );
+    }
   }
 
   let pillText = await readPill(page);
   if (isPillOk(pillText)) return;
 
-  // Read current selection to confirm what needs changing.
-  const currentReasoning = await readCurrentReasoning(page).catch(() => null);
+  // Read current selection to confirm what needs changing, and check the
+  // base-model row (read-only) while the menu is open.
+  const menuState = await readMenuState(page).catch(() => ({ reasoning: null, modelRow: null }));
+  const currentReasoning = menuState.reasoning;
+  if (menuState.modelRow && !EXPECTED_MODEL_ROW.test(menuState.modelRow)) {
+    const msg = `Model picker's base-model row reads "${menuState.modelRow}", expected GPT-5.6 Sol. ` +
+      `ChatGPT may have changed/downgraded the default model — verify manually.`;
+    if (process.env.MPP_STRICT_BASE_MODEL === '1') throw new Error(msg);
+    console.error(`WARNING: ${msg}`);
+  }
 
   if (!DESIRED_REASONING_LABELS.includes(currentReasoning)) {
     try {
@@ -368,9 +449,9 @@ export async function ensureExtendedPro(page) {
   pillText = await readPill(page);
   if (!isPillOk(pillText)) {
     throw new Error(
-      `Composer pill is "${pillText}" after fix attempt, not "Extended Pro"/"Pro". ` +
+      `Composer pill is "${pillText}" after fix attempt, not "Pro" (Sol Pro target). ` +
       `Refusing to proceed (would silently use a weaker model). ` +
-      `Set Extended Pro manually in the composer and retry.`
+      `Set the Pro intelligence lane manually in the composer and retry.`
     );
   }
 }

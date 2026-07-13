@@ -1,8 +1,8 @@
-Set the ChatGPT browser session to the **Extended Pro target**.
+Set the ChatGPT browser session to the **Sol Pro target** (a.k.a. GPT 5.6 Sol Pro; legacy name "Extended Pro").
 
 Target:
-1. **Reasoning:** `Pro`
-2. **Model:** `5.5`
+1. **Reasoning / Intelligence:** `Pro` (top lane of the Intelligence picker)
+2. **Model:** `GPT-5.6 Sol` (the picker's bottom model-submenu row — read-only, never probe/hover it)
 
 ## Steps
 
@@ -13,10 +13,10 @@ Target:
    ```
    Replace PORT with the CDP port for the current session (check memory/session info).
 
-2. If the script succeeds (exit 0), Extended Pro is confirmed.
+2. If the script succeeds (exit 0), Sol Pro is confirmed (pill reads "Pro").
 
-3. If the script fails, manually fix via Playwright CDP: open the composer model/reasoning pill, select reasoning `Pro`, select model `5.5`, and verify the pill is a Pro variant.
+3. If the script fails, manually fix via Playwright CDP: open the composer model/reasoning pill, select the `Pro` intelligence lane, and verify the pill reads "Pro". Check (read-only) that the bottom model row shows `GPT-5.6 Sol`.
 
 4. Report the final state.
 
-**CRITICAL**: `Thinking + Heavy`, `High`, `Medium`, or any non-Pro reasoning mode is NOT the Extended Pro target. Always verify before submitting.
+**CRITICAL**: `Extra High`, `High`, `Medium`, `Instant`, or any non-Pro lane is NOT the Sol Pro target (`Instant` additionally runs the older GPT-5.5). Always verify before submitting. The enforcement lib warns if the base-model row stops reading GPT-5.6 Sol; set `MPP_STRICT_BASE_MODEL=1` to make that fatal.

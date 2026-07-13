@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * cdp_set_model_pro.mjs — verify/set ChatGPT composer to Extended Pro.
+ * cdp_set_model_pro.mjs — verify/set ChatGPT composer to Sol Pro
+ * (GPT-5.6 Sol, Pro intelligence lane — formerly "Extended Pro").
  *
  * Thin shim over lib/model_pill.mjs (the single source of truth for pill
- * detection and Extended Pro enforcement). This file used to carry its
+ * detection and Sol Pro enforcement). This file used to carry its
  * own copy of the pill logic; after the 2026-05-21 / 2026-05-25 DOM
  * changes that copy went stale (it tried to read a GPT-version submenu
  * that no longer exists, and always reported failure on --check-only).
@@ -13,12 +14,11 @@
  *
  * Flags:
  *   --port <PORT>    CDP debug port (default 9222).
- *   --check-only     Exit 0 if pill already reads "Extended Pro"/"Pro";
+ *   --check-only     Exit 0 if pill already reads "Pro" (or legacy variant);
  *                    exit 1 otherwise. No edits.
- *   --extended       Back-compat no-op (Pro IS Extended Pro in the
- *                    current UI; the separate effort submenu is gone).
+ *   --extended       Back-compat no-op (kept so old callers do not break).
  *
- * Exit codes: 0 — Extended Pro confirmed; 1 — error or wrong selection.
+ * Exit codes: 0 — Sol Pro confirmed; 1 — error or wrong selection.
  */
 
 import { attachCDP } from './lib/browser.mjs';
@@ -53,18 +53,18 @@ try {
   console.log('Current pill:', initialPill);
 
   if (EXTENDED_PRO_LABELS.includes(initialPill)) {
-    console.log('MODEL: Extended Pro / Pro (already active)');
+    console.log('MODEL: Sol Pro (already active)');
     await close();
     process.exit(0);
   }
 
   if (checkOnly) {
-    console.log(`MODEL: NOT Extended Pro (current pill: "${initialPill}")`);
+    console.log(`MODEL: NOT Sol Pro (current pill: "${initialPill}")`);
     await close();
     process.exit(1);
   }
 
-  console.log(`Setting pill to Extended Pro (current: "${initialPill}")`);
+  console.log(`Setting pill to Sol Pro (current: "${initialPill}")`);
   try {
     await ensureExtendedPro(page);
   } catch (e) {
@@ -76,11 +76,11 @@ try {
   const finalPill = await readPill(page);
   console.log('Final pill:', finalPill);
   if (EXTENDED_PRO_LABELS.includes(finalPill)) {
-    console.log('MODEL: Extended Pro / Pro (confirmed)');
+    console.log('MODEL: Sol Pro (confirmed)');
     await close();
     process.exit(0);
   }
-  console.error(`ERROR: pill is "${finalPill}" after fix, not Extended Pro / Pro.`);
+  console.error(`ERROR: pill is "${finalPill}" after fix, not Pro (Sol Pro target).`);
   await close();
   process.exit(1);
 } catch (e) {
