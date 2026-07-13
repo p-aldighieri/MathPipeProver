@@ -270,6 +270,38 @@ export async function addSource(page, filePath, opts = {}) {
 }
 
 async function clickSourceActionsByName(page, sourceName) {
+  // 2026-07 UI: the "Source actions" kebab only MOUNTS while its row is
+  // hovered (verified live 2026-07-13 — without hover the button does not
+  // exist in the DOM at all). Hover the row with a real Playwright hover,
+  // then real-click the revealed button (JS .click() is unreliable on
+  // React-mounted controls).
+  const row = page.locator('button', { hasText: sourceName }).first();
+  if ((await locatorCount(row)) > 0) {
+    await row.hover().catch(() => {});
+    await page.waitForTimeout(600);
+    // After hover the kebab is mounted but fails Playwright's actionability
+    // wait (it sizes/animates with the hover state); a JS click opens the
+    // menu reliably. CRITICAL: multiple rows' kebabs can be mounted at once,
+    // and DOM order need not match visual order — a page-wide querySelector
+    // once deleted the WRONG source (2026-07-13). Anchor the search to the
+    // ancestor chain of the hovered row's name node.
+    const jsClicked = await page.evaluate((name) => {
+      for (const node of document.querySelectorAll('*')) {
+        if ((node.textContent || '').trim() !== name) continue;
+        let current = node;
+        for (let depth = 0; depth < 8 && current; depth += 1) {
+          const button = current.querySelector('button[aria-label="Source actions"]');
+          if (button) { button.click(); return true; }
+          current = current.parentElement;
+        }
+      }
+      return false;
+    }, sourceName);
+    if (jsClicked) return;
+  }
+
+  // Legacy fallback (pre-2026-07 UI: kebab always mounted): JS-click inside
+  // the row's ancestor chain.
   const clicked = await page.evaluate((name) => {
     const nodes = [...document.querySelectorAll('*')];
     for (const node of nodes) {
@@ -301,10 +333,11 @@ export async function removeSource(page, sourceName) {
   await clickSourceActionsByName(page, sourceName);
   await page.waitForTimeout(400);
   try {
-    await page.getByRole('menuitem', { name: 'Remove', exact: true }).click({ timeout: 8000 });
+    // 2026-07 UI renamed the row-menu action "Remove" -> "Delete"; accept both.
+    await page.getByRole('menuitem', { name: /^(Remove|Delete)$/ }).first().click({ timeout: 8000 });
   } catch (error) {
     await page.keyboard.press('Escape').catch(() => {});
-    throw new Error(`No Remove menuitem found for '${sourceName}': ${error.message}`);
+    throw new Error(`No Remove/Delete menuitem found for '${sourceName}': ${error.message}`);
   }
   await page.waitForTimeout(500);
 
