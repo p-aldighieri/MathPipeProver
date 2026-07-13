@@ -68,7 +68,16 @@ try {
     try { await page.close(); } catch { /* tab already gone */ }
   };
 
-  await page.goto(chatUrl, { waitUntil: 'domcontentloaded' });
+  // Initial navigation with one retry: chat pages intermittently exceed the
+  // 30s goto timeout (observed 2026-07-13); one transient miss shouldn't fail
+  // the whole poll run.
+  try {
+    await page.goto(chatUrl, { waitUntil: 'domcontentloaded' });
+  } catch (e) {
+    console.log(`[nav retry] initial goto failed (${String(e.message).split('\n')[0]}); retrying once`);
+    await new Promise(r => setTimeout(r, 5000));
+    await page.goto(chatUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  }
   await new Promise(r => setTimeout(r, 4000));
   if (!page.url().includes(chatId)) {
     console.error(`Navigation drifted off target chat ${chatId}; current URL: ${page.url()}`);
@@ -92,7 +101,8 @@ try {
       chatUrl,
       renavigateEveryNPolls: 5,
       deepResearch,
-      onPoll: ({ chatUrl: u, currentTextLength, generating }) => {
+      onPoll: ({ chatUrl: u, currentTextLength, generating, note }) => {
+        if (note) { console.log(`[poll note] ${note}`); return; }
         pollIdx += 1;
         const elapsedMin = Math.round((Date.now() - startMs) / 60000);
         console.log(`[poll ${pollIdx} @ ${elapsedMin}min] generating=${generating} lastLen=${currentTextLength}`);

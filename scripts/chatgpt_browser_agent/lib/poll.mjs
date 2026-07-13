@@ -309,10 +309,19 @@ export async function waitForStableAssistantReply(page, opts) {
   while (Date.now() < deadline) {
     pollIdx += 1;
 
-    // Optional periodic re-navigation to keep page state fresh.
+    // Optional periodic re-navigation to keep page state fresh. A transient
+    // goto timeout must NOT kill the poll (observed repeatedly 2026-07-13:
+    // ChatGPT chat pages intermittently exceed 30s on reload, especially with
+    // concurrent pollers on one Chrome; generation continues server-side).
+    // On failure, skip this cycle's refresh — the existing DOM still polls,
+    // and the next scheduled re-navigation retries.
     if (renavigateEveryNPolls && pollIdx > 1 && pollIdx % renavigateEveryNPolls === 0) {
-      await page.goto(chatUrl, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(3000);
+      try {
+        await page.goto(chatUrl, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(3000);
+      } catch (e) {
+        if (onPoll) onPoll({ note: `re-navigation failed (${String(e.message).split('\n')[0]}); retrying next cycle` });
+      }
     }
 
     // URL drift detection (only when chatIdPin set).
