@@ -329,12 +329,26 @@ export async function waitForStableAssistantReply(page, opts) {
       throw new Error(`Navigation drifted off target chat ${chatIdPin}; current URL: ${page.url()}`);
     }
 
-    const currentText = await latestAssistantText(page);
-    // DR's research phase shows no stop button (isGenerating blind), so OR in
-    // the DR-working signal when polling a Deep Research chat.
-    const generating = (await isGenerating(page))
-      || (deepResearch && await isDeepResearchWorking(page));
-    const readyToCopy = requireCopyButton ? await assistantTurnHasCopyButton(page) : true;
+    // A late-completing navigation (e.g. after a goto timeout above) can
+    // destroy the execution context mid-evaluate. Treat that as a skipped
+    // cycle, not a fatal error (observed 2026-07-13).
+    let currentText, generating, readyToCopy;
+    try {
+      currentText = await latestAssistantText(page);
+      // DR's research phase shows no stop button (isGenerating blind), so OR in
+      // the DR-working signal when polling a Deep Research chat.
+      generating = (await isGenerating(page))
+        || (deepResearch && await isDeepResearchWorking(page));
+      readyToCopy = requireCopyButton ? await assistantTurnHasCopyButton(page) : true;
+    } catch (e) {
+      const msg = String(e.message).split('\n')[0];
+      if (/context was destroyed|navigation/i.test(msg)) {
+        if (onPoll) onPoll({ note: `poll cycle skipped (${msg})` });
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      throw e;
+    }
 
     if (currentText && currentText === lastText) unchangedCycles += 1;
     else unchangedCycles = 0;
