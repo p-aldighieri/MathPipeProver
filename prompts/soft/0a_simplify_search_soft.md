@@ -13,6 +13,8 @@ Propose 2-4 genuinely distinct **simplification routes** for the target block.
 - **If council memos are present** (`codex_memo.md`, `gemini_memo.md`, `opus_memo.md`, `extended_pro_memo.md` from `/search-council` on a hard block), treat them as your primary route source: select, merge, and rank rather than generate; cite which memo each route came from; note convergence/divergence as signal.
 - Be honest: if the block is already minimal, say so and recommend NO simplification rather than manufacturing a lateral rewrite that is merely different.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

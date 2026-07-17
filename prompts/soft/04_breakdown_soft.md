@@ -8,6 +8,8 @@ Turn the selected route into a proof-sized plan that a prover can attack without
 - Isolate the central obstruction honestly.
 - If reviewer context already exposed a structural defect, redesign the plan around that defect instead of renaming the same broken route.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

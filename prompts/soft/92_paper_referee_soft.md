@@ -8,6 +8,8 @@ Referee the manuscript for mathematical correctness and theorem-level honesty.
 - Distinguish writing issues from proof issues.
 - If you suspect a false statement, prefer a concrete counterexample over vague doubt.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

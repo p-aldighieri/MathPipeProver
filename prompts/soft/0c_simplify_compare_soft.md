@@ -11,6 +11,8 @@ Compare the original and simplified proofs on two independent axes, and only rec
 
 If the candidate is simpler but weaker → REJECT (keep original). If same-strength but not actually simpler → REJECT (no gain). Adopt only when both hold.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

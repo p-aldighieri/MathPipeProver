@@ -8,6 +8,8 @@ Turn the selected route into a proof-sized plan that a prover can attack.
 - Isolate the central obstruction honestly.
 - Keep the plan editable when prover or reviewer feedback exposes a structural defect.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

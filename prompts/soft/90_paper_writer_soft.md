@@ -23,6 +23,10 @@ Turn the verified theorem packet into a manuscript draft or revision.
   general-interest journals want broad relevance; specialist journals
   reward technical depth.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
+{{include:../fragments/author_facing_hygiene.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

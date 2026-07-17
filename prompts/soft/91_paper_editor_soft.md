@@ -19,6 +19,10 @@ before sending the paper out for refereeing.
   signposted proof structure, redundant or missing related-work
   citations, section ordering that buries the main result.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
+{{include:../fragments/author_facing_hygiene.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

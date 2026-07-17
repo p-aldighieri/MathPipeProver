@@ -16,6 +16,8 @@ Audit the current proof attempt for mathematical correctness, completeness, and 
 - `PATCH_BIG`: The route may still live, but the structure needs repair.
 - `REDO`: The local route is fundamentally broken or pointed at the wrong target.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

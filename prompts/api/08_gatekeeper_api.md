@@ -32,6 +32,8 @@ This role exists for two reasons:
 - `OBJECTIVE_NARROWED`: the result is a real theorem but answers a strictly weaker question than originally asked.
 - `OBJECTIVE_MISSED`: the result does not answer the original question at all.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

@@ -22,6 +22,8 @@ If `referee_targets.yaml` is absent, fall back to a generic publishability
 check ("would this clear the bar at a top journal in this field?") and note
 the fallback in your verdict.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

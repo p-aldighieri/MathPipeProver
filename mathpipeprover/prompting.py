@@ -103,6 +103,13 @@ ROLE_CONTEXT_PRIORITY: dict[str, dict[str, list[str]]] = {
             "*/context/breakdown.md",
         ],
     },
+    "plain_reader_gate": {
+        "full": [
+            "claim.md",
+            "*/context/final_report.md",
+        ],
+        "secondary": [],
+    },
 }
 
 

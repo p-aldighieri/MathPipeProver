@@ -14,6 +14,8 @@ Execute the assigned simplification route on the target block and produce a comp
 - The same block export, proved more simply (fewer/shorter lemmas, weaker or fewer hypotheses, less machinery, or more transparent), with the interface intact.
 - OR an honest negative: the route does not simplify, or cannot reach the full export — keep the original.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

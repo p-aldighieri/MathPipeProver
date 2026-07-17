@@ -17,6 +17,10 @@ Turn the verified theorem packet into a manuscript draft or revision.
 - If target journals are listed in `referee_targets.yaml`, frame the
   contribution for that audience.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
+{{include:../fragments/author_facing_hygiene.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

@@ -69,6 +69,8 @@ say so rather than skipping silently.
      etc.) of this or closely related results? Relevant for the optional
      Lean post-processing pipeline.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 ## Output Format
 
 Use this schema exactly. The Strategy Searcher (role 03) parses it.

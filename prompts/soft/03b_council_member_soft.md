@@ -44,6 +44,8 @@ justify why with reference to the dossier's specific obstructions.
   re-propose them**; for each new route, say briefly how it dodges the
   central obstruction that closed prior routes.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 ## Output
 
 Use this schema. The downstream Strategy Searcher (`03_searcher_soft.md`)

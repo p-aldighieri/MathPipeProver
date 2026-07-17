@@ -11,6 +11,8 @@ Propose 2-4 genuinely distinct proof routes for the orchestrator to consider.
 - If the literature strongly suggests the claim is already known or false, say so instead of pretending all routes are equally live.
 - Rank the routes by present usefulness to the orchestrator.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

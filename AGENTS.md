@@ -41,6 +41,17 @@ follow the same procedure.
 - Subagents are allowed only for a specifically requested coding/simulation
   problem, or inside the Lean formalization workflow for Lean / Mathlib /
   AXLE code-checking and proof-engineering loops.
+- Write every role request in the source paper's own vocabulary (no paper?
+  standard field terminology; prefer plain descriptive expressions over
+  coined names) — requests seed responses, and model coinages that requests
+  repeat become locked-in run dialect. Maintain `{PROOF_REPO}/glossary.md`
+  from responses' `## New Terms` blocks
+  (see `prompts/fragments/vocabulary_anchoring.md`).
+- Author-facing deliverables are never orchestrator-drafted: use the
+  paper-writer role (with `prompts/fragments/author_facing_hygiene.md`),
+  keep every internal-artifact reference out of the shipped document, and
+  gate the release with `prompts/soft/93_plain_reader_gate_soft.md` in a
+  fresh chat (paper + deliverable only; release requires `RELEASE_CLEAN`).
 - For browser-backed MathPipeProver work, prefer attaching to the already-
   running visible Chrome session over CDP via `MPP_CHATGPT_CDP_URL` or
   `--cdp-url`.

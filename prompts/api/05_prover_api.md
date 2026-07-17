@@ -16,6 +16,8 @@ Advance the mathematics, not the cosmetics.
 - The claim is TRUE under extra assumptions, with the mildest justified assumptions you can certify and a proof.
 - The right conclusion is an impossibility result, with a proof.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

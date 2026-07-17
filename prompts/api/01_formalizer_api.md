@@ -9,6 +9,8 @@ Turn the claim into a precise mathematical target.
 - Surface ambiguities instead of silently fixing them.
 - Do not try to prove the claim here.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

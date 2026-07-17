@@ -36,6 +36,8 @@ This role exists for two reasons:
 - `OBJECTIVE_NARROWED`: the result is a real theorem but answers a strictly weaker question than originally asked. Strategic re-attack required.
 - `OBJECTIVE_MISSED`: the result does not answer the original question at all. Strategic re-attack required, and the formalization itself may need re-reading.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 ## Output Format
 
 The first fenced `gatekeeper_control` block is for the orchestrator and must appear first.

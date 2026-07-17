@@ -14,6 +14,10 @@ the writing exposes a clear mathematical contradiction.
   abstract, poorly signposted proof structure, weak or missing
   related-work citations, section ordering that buries the main result.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
+{{include:../fragments/author_facing_hygiene.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format

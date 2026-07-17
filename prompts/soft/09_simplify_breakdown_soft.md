@@ -12,6 +12,8 @@ Decompose the locked, verified proof into **self-contained blocks that can be si
 - Flag which blocks are the **best simplification candidates** — typically the ones that grew through patching, carry heavy machinery, or have hypotheses that look stronger than the conclusion needs. Do NOT propose the simplifications here; just rank where the payoff is.
 - Do not alter any statement. You are partitioning a finished proof, not re-proving it.
 
+{{include:../fragments/vocabulary_anchoring.md}}
+
 {{include:../fragments/output_contract.md}}
 
 ## Output Format
