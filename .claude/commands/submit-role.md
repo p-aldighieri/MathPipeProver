@@ -66,6 +66,11 @@ after the prompt is filled and refuse to send on a mismatch.
    chat fails (3), or on timeout (2). Its exit re-invokes the orchestrator; read
    RESPONSE_FILE and decide the next role.
 
+   For a run that must stay clean of other material in the account, audit the
+   chat before using the answer:
+   `node scripts/chatgpt_browser_agent/cdp_audit_chat_sources.mjs --port PORT --chat-url CHAT_URL --allow "input1.md,input2.pdf"`
+   (exit 5 = it opened files outside the inputs; see CLAUDE.md "Source isolation").
+
 6. **Deep Research.** In the 2026-09 UI the research runs inside a sandboxed
    widget and the chat DOM never changes when it finishes, so the watcher cannot
    see completion. Check the widget with a screenshot after ~10 min (it shows

@@ -85,6 +85,7 @@ Entry-point `.mjs` scripts are thin shims over lib:
 | `wait_chat_done.mjs` | The chat watcher: waits on a known chat URL until the model finishes, writes the answer (markdown, TeX math), and exits with a status code the orchestrator branches on (see "Waiting on a submission" above). Run it as a background job. `--deep-research` keeps it waiting through DR's stop-button-less research phase. |
 | `harvest_deep_research.mjs` | Harvest a **Deep Research** chat whose report is in a canvas/artifact. `--repost-now` (after research is confirmed done) reposts the packet inline, then captures it. See "Model modes" → DR harvest. |
 | `cdp_inspect_chat.mjs` | Read-only live chat inspection. |
+| `cdp_audit_chat_sources.mjs` | After a role finishes: list the tool calls and the account-library files the chat searched or opened; `--allow` the run's inputs and it exits 5 on any other read. See "Source isolation" below. |
 | `cdp_dump_chat.mjs` | Dump every message (user + assistant) of a chat. |
 | `cg_create_project.mjs` | Project creation/provisioning helper, not part of the normal role loop. |
 | `provision_inits.mjs` | Bulk INIT provisioning helper for prepared project folders, not part of the normal role loop. |
@@ -156,6 +157,8 @@ If ChatGPT changes the DR DOM again, update `lib/model_pill.mjs` only.
   because the canvas UI is virtualized (`--auto-wait` exists but is best-effort/experimental).
 - Caveat: the repost is a faithful model reproduction, not the byte-identical canvas. For
   citation-critical packets, spot-check against the open canvas document.
+
+**Source isolation (verified 2026-09-21).** Pro chats inside a project can call an account-wide file tool (`/files/list`, `/files/search`, `/files/read`) that reaches every file ever uploaded to the account — other projects' sources, old attachments, pasted notes. Nothing in the chat UI shows this. In the Robust Trust Reset run a searcher opened two notes from earlier attempts and framed its routes against them, while it failed to find two freshly added project sources by search. So: (1) attach every input a role needs rather than relying on project sources alone; (2) when a run must be clean, say in the request that only the attached files, the paper and citable published work may be used — no file library, earlier chats, memories or connected apps; (3) after each role run `cdp_audit_chat_sources.mjs --allow "<inputs>"` and treat exit 5 as contamination (mark the answer, do not pass it downstream, rerun).
 
 All CDP helpers require Chrome running with `--remote-debugging-port=PORT` and Playwright installed in `scripts/chatgpt_browser_agent/node_modules/`.
 
