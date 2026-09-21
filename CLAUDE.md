@@ -119,10 +119,15 @@ If ChatGPT changes the DR DOM again, update `lib/model_pill.mjs` only.
   `isGenerating` reads `false` the whole time it works. `cdp_submit.mjs` therefore
   prints `Generating: NO` right after a DR submit — that is expected, not a failure.
   In the 2026-09 UI the chat first answers with a one-line acknowledgement ("Deep
-  research has started working on the request.") and the job then runs on its own.
-  Watch it with `wait_chat_done.mjs --deep-research --min-stable-length 3000` so the
-  acknowledgement is never mistaken for the report; the watcher exits `4` when the
-  "Research completed" card appears without an inline report.
+  research has started working on the request.") and the job then runs inside a
+  sandboxed widget (`iframe[title="internal://deep-research"]`, nested frames on
+  `*.web-sandbox.oaiusercontent.com`). The plan checklist, the "Research completed in
+  Nm · K citations · S searches" line and the report itself all render **inside the
+  widget**; the chat DOM does not change when research finishes, so no DOM watcher can
+  see completion. Confirm completion with a screenshot of the widget (or wait out the
+  typical 5–30 min), then harvest with `harvest_deep_research.mjs --repost-now`
+  (validated 2026-09-21: 9-min job, 24 citations). `wait_chat_done.mjs --deep-research`
+  still covers the older inline/canvas flows.
 - **A heavy DR job delivers its report as a canvas / artifact "document"** (collapsed card
   titled by the report's first heading, with download + expand icons, e.g.
   *"Research completed in 19m · 12 citations · 131 searches"*), **not** as chat text. While

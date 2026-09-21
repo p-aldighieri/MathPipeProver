@@ -23,17 +23,21 @@
  *   1  transport/auth/URL-drift error (nothing written)
  *   2  timeout (whatever is visible is written to --out, marked partial)
  *   3  the chat itself failed: error banner, stopped response, or rate limit
- *   4  (--deep-research) research finished but the report is a canvas card,
- *      not chat text — harvest with harvest_deep_research.mjs --repost-now
+ *   4  (--deep-research) research finished but the chat shows only a short
+ *      message; the report sits in the research widget/canvas — harvest with
+ *      harvest_deep_research.mjs --repost-now
  *
  * Output is deliberately quiet — one line per state change plus a final
  * DONE/TIMEOUT/CHAT_ERROR line — so a background job's captured stdout
  * stays small. --verbose prints every poll.
  *
- * --deep-research: DR's research phase shows no stop button, so a DR chat is
- * treated as still working while DR is active with no answer yet (via
- * isDeepResearchWorking). Heavy DR reports land in a canvas that is not in
- * the chat DOM; harvest those with harvest_deep_research.mjs --repost-now.
+ * --deep-research: DR's research phase shows no stop button. In the 2026-09
+ * UI the chat first shows a one-line acknowledgement ("Deep research has
+ * started working on the request.") and the research runs inside a
+ * sandboxed widget this script cannot read; the acknowledgement counts as
+ * still working, and anything that settles after it counts as finished.
+ * Pass --min-stable-length ~3000 so a short summary is reported as exit 4
+ * (harvest needed) rather than written as the report.
  *
  * Tab hygiene: the watcher opens its own tab on the chat and closes it on
  * every exit path (generation is server-side; closing never kills a job).
@@ -81,6 +85,10 @@ const disposeTab = async () => {
   try { await page.close(); } catch { /* tab already gone */ }
 };
 const finish = async (code) => { await disposeTab(); await close(); process.exit(code); };
+// A stopped watcher (task kill, Ctrl-C) still closes the tab it opened.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => { finish(130); });
+}
 
 async function goToChat() {
   try {
@@ -199,11 +207,29 @@ try {
       const text = await readAnswer();
       stableCycles = (text && text === lastText) ? stableCycles + 1 : 0;
       lastText = text || lastText;
+      // 2026-09 Deep Research first posts a one-line acknowledgement and then
+      // researches inside a sandboxed widget whose frames are not readable
+      // here. Treat the acknowledgement as "still working"; anything the chat
+      // shows after it (a new or longer message, settled for two polls) means
+      // the research finished.
+      const drAcknowledgement = deepResearch && text.length < 400 &&
+        /deep research has started|started working on (the|your) request/i.test(text);
+      if (drAcknowledgement) {
+        await sleep(pollSecs * 1000);
+        continue;
+      }
       const ready = state.hasCopyButton || deepResearch;
-      if (stableCycles >= 1 && ready && lastText.length >= minStableLength) {
+      const settled = stableCycles >= (deepResearch ? 2 : 1);
+      if (settled && ready && lastText.length >= minStableLength) {
         fs.writeFileSync(outPath, `${lastText}\n`, 'utf-8');
         console.log(`DONE after ${elapsed()}: wrote ${lastText.length} chars to ${outPath}`);
         await finish(0);
+      }
+      if (settled && deepResearch) {
+        console.log(`DR_REPORT_IN_CANVAS after ${elapsed()}: research finished but the chat shows only ` +
+          `${lastText.length} chars (${JSON.stringify(lastText.slice(0, 200))}); the report is in the ` +
+          'research widget. Harvest with harvest_deep_research.mjs --repost-now.');
+        await finish(4);
       }
       // Answer visible but not yet settled: re-check sooner than a full poll.
       await sleep(Math.min(pollSecs, 15) * 1000);

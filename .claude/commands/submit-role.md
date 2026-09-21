@@ -62,13 +62,14 @@ after the prompt is filled and refuse to send on a mismatch.
    node scripts/chatgpt_browser_agent/wait_chat_done.mjs --port PORT \
      --chat-url CHAT_URL --out RESPONSE_FILE
    ```
-   For Deep Research add `--deep-research --min-stable-length 3000`. The watcher
-   exits when the answer is complete and written (exit 0), when the chat fails
-   (3), on timeout (2), or when a DR report landed in a canvas (4). Its exit
-   re-invokes the orchestrator; read RESPONSE_FILE and decide the next role.
+   The watcher exits when the answer is complete and written (exit 0), when the
+   chat fails (3), or on timeout (2). Its exit re-invokes the orchestrator; read
+   RESPONSE_FILE and decide the next role.
 
-6. **Deep Research canvas (exit 4).** Heavy DR jobs return the report in a
-   canvas that is not in the chat DOM. Harvest with
+6. **Deep Research.** In the 2026-09 UI the research runs inside a sandboxed
+   widget and the chat DOM never changes when it finishes, so the watcher cannot
+   see completion. Check the widget with a screenshot after ~10 min (it shows
+   "Research completed in Nm · K citations"), then harvest with
    `node scripts/chatgpt_browser_agent/harvest_deep_research.mjs --port PORT --chat-url CHAT_URL --out RESPONSE_FILE --repost-now`
    (see CLAUDE.md "Model modes" → DR harvest).
 
