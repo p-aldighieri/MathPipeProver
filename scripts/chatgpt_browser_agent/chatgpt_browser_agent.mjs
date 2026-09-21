@@ -19,6 +19,7 @@ import {
   addSource, removeSource,
 } from "./lib/sources.mjs";
 import { attachFile, clearComposerAttachments } from "./lib/attachments.mjs";
+import { respectSubmitGap, recordSubmit } from "./lib/throttle.mjs";
 import {
   latestAssistantText, assistantTurnHasCopyButton, isInterimAssistantText,
   extractAssistantResponse, waitForStableAssistantReply,
@@ -417,6 +418,9 @@ async function runSubmit(page, args) {
   const logPath = args.logJson || args.responseFile.replace(/\.md$/i, "_session.json");
   const effortLabel = args.deepResearch ? EFFORT_LABEL_DR : EFFORT_LABEL;
 
+  // Pacing: bursts of submissions trigger ChatGPT's "requests too quickly".
+  const pacingKey = args.cdpUrl || args.profileDir;
+  await respectSubmitGap(pacingKey);
   await openProject(page, args.projectUrl, args.waitForLoginSeconds);
   const draftCleanup = await prepareComposerForSubmit(page, args);
   if (args.deepResearch) {
@@ -429,6 +433,7 @@ async function runSubmit(page, args) {
     await attachFileToComposer(page, attachmentPath);
   }
   const chatUrl = await submitPrompt(page, submissionPrompt, { deepResearch: args.deepResearch });
+  recordSubmit(pacingKey);
   await writeTextFileIfSet(args.chatUrlFile, chatUrl);
 
   if (args.returnAfterSubmit) {

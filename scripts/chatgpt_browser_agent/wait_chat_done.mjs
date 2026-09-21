@@ -8,7 +8,7 @@
  *
  * Usage:
  *   node wait_chat_done.mjs --chat-url URL --out PATH [--port PORT]
- *     [--poll-secs N] [--max-mins N] [--min-stable-length N]
+ *     [--poll-secs N (default 90)] [--max-mins N] [--min-stable-length N]
  *     [--deep-research] [--keep-tab] [--verbose]
  *
  * Done means: no stop button, the last turn is an assistant turn with a
@@ -25,7 +25,7 @@
  *   3  the chat itself failed: error banner, stopped response, or rate limit
  *   4  (--deep-research) research finished but the chat shows only a short
  *      message; the report sits in the research widget/canvas — harvest with
- *      harvest_deep_research.mjs --repost-now
+ *      harvest_deep_research.mjs --widget-copy
  *
  * Output is deliberately quiet — one line per state change plus a final
  * DONE/TIMEOUT/CHAT_ERROR line — so a background job's captured stdout
@@ -49,7 +49,7 @@ import { extractChatId, latestAssistantText, chatTurnState, assistantMarkdown } 
 import { isDeepResearchWorking } from './lib/model_pill.mjs';
 
 const args = process.argv.slice(2);
-let chatUrl = '', port = 9222, outPath = '', pollSecs = 45, maxMins = 180, minStableLength = 200;
+let chatUrl = '', port = 9222, outPath = '', pollSecs = 90, maxMins = 180, minStableLength = 200;
 let deepResearch = false, keepTab = false, verbose = false;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--chat-url') chatUrl = args[++i];
@@ -73,7 +73,11 @@ if (!chatId) {
 const startMs = Date.now();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const elapsed = () => `${Math.round((Date.now() - startMs) / 60000)}min`;
-const RENAVIGATE_EVERY = 6;   // polls; refreshes a background tab's stale DOM
+// Polls between page reloads (~18 min at the default 90 s). Reloads are the
+// watcher's only network cost; ChatGPT rate-limits bursts of them.
+const RENAVIGATE_EVERY = 12;
+// ±15% jitter so concurrent watchers never reload in lockstep.
+const jittered = (ms) => Math.round(ms * (0.85 + 0.3 * Math.random()));
 const ERROR_CONFIRMATIONS = 2; // consecutive polls showing an error banner
 
 let close = async () => {};
@@ -215,7 +219,7 @@ try {
       const drAcknowledgement = deepResearch && text.length < 400 &&
         /deep research has started|started working on (the|your) request/i.test(text);
       if (drAcknowledgement) {
-        await sleep(pollSecs * 1000);
+        await sleep(jittered(pollSecs * 1000));
         continue;
       }
       const ready = state.hasCopyButton || deepResearch;
@@ -232,11 +236,11 @@ try {
         await finish(4);
       }
       // Answer visible but not yet settled: re-check sooner than a full poll.
-      await sleep(Math.min(pollSecs, 15) * 1000);
+      await sleep(jittered(Math.min(pollSecs, 20) * 1000));
       continue;
     }
     stableCycles = 0;
-    await sleep(pollSecs * 1000);
+    await sleep(jittered(pollSecs * 1000));
   }
 
   const tail = await readAnswer().catch(() => '');

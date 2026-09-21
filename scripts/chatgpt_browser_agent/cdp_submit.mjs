@@ -20,6 +20,7 @@ import {
   clearComposerText, clearStoredComposerDrafts, composerTextLength,
 } from './lib/composer.mjs';
 import { clearComposerAttachments } from './lib/attachments.mjs';
+import { respectSubmitGap, recordSubmit } from './lib/throttle.mjs';
 
 function usage() {
   return `Usage: node cdp_submit.mjs --project-url URL [--port PORT] [options] PROMPT_FILE
@@ -145,6 +146,7 @@ try {
     try { await page.close(); } catch { /* tab already gone */ }
   };
 
+  if (!dryRun) await respectSubmitGap(port);
   await page.goto(projectUrl, { waitUntil: 'domcontentloaded', timeout });
   await ensureChatReady(page, 300);
   await page.waitForTimeout(3000);
@@ -178,6 +180,7 @@ try {
   console.log('Mode re-verified after fill');
 
   const sent = await clickSend(page, composer);
+  recordSubmit(port);
   console.log(sent ? 'SENT' : 'WARNING: send fallback chain exhausted');
 
   const chatUrl = await waitForChatUrl(page);
