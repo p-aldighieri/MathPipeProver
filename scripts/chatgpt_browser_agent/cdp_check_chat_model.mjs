@@ -6,6 +6,8 @@
  * Usage: node cdp_check_chat_model.mjs <chatUrl> [port]
  *   port defaults to 9222.
  */
+import os from 'node:os';
+import path from 'node:path';
 import { attachCDP } from './lib/browser.mjs';
 import { PILL_SELECTOR } from './lib/model_pill.mjs';
 const [,, chatUrl, portArg] = process.argv;
@@ -28,16 +30,17 @@ const state = await page.evaluate((pillSelector) => {
       out.thoughtCount += 1;
       out.modelHints.push(t.slice(0, 200));
     }
-    if (/GPT[- ]?5\.4/i.test(t) || /extended pro/i.test(t) || /thinking.*heavy/i.test(t) || /standard pro/i.test(t)) {
+    if (/GPT[- ]?\d+(\.\d+)?/i.test(t) || /pro thinking/i.test(t) || /worked for/i.test(t)) {
       out.modelHints.push(t.slice(0, 200));
     }
   }
   out.assistantCount = document.querySelectorAll('[data-message-author-role="assistant"]').length;
   const pillBtn = document.querySelector(pillSelector);
-  out.composerPill = pillBtn ? (pillBtn.textContent || '').trim() : null;
+  out.composerPill = pillBtn ? (pillBtn.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean).join(' ') : null;
   return out;
 }, PILL_SELECTOR);
 console.log(JSON.stringify(state, null, 2));
-await page.screenshot({ path: 'C:/tmp/chat_model_check.png', fullPage: false });
-console.log('Screenshot: C:/tmp/chat_model_check.png');
+const shot = path.join(os.tmpdir(), 'chat_model_check.png');
+await page.screenshot({ path: shot, fullPage: false });
+console.log(`Screenshot: ${shot}`);
 await close();

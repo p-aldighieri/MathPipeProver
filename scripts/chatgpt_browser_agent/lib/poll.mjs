@@ -37,6 +37,9 @@
  * ## Public API
  *
  *   latestAssistantText(page) -> string
+ *   chatTurnState(page) -> { generating, lastRole, messageCount, textLength,
+ *                            hasCopyButton, statusText, errorText }
+ *   assistantMarkdown(page) -> string   (KaTeX-aware DOM → markdown)
  *   dumpAllMessages(page) -> Array<{role, id, text}>
  *   assistantTurnHasCopyButton(page) -> boolean
  *   isInterimAssistantText(text) -> boolean
@@ -110,6 +113,198 @@ export async function latestAssistantText(page) {
 }
 
 /**
+ * Snapshot of the chat's last turn, for completion/error detection.
+ *
+ * 2026-09 DOM: each turn is `<section data-testid="conversation-turn-N"
+ * data-turn="user|assistant">`. While GPT-6 Pro thinks, the assistant turn
+ * holds only a status line ("Pro thinking") and NO
+ * `[data-message-author-role="assistant"]` node; the composer shows
+ * `[data-testid="stop-button"]` ("Stop answering"). A finished answer has
+ * message node(s) plus the turn's copy button.
+ *
+ * Returns { generating, lastRole, messageCount, textLength, hasCopyButton,
+ *           statusText, errorText }.
+ * `errorText` is non-empty when the last assistant turn shows a failure
+ * banner (generation error, stopped response, rate limit) instead of an
+ * answer.
+ */
+export async function chatTurnState(page) {
+  return await page.evaluate(() => {
+    const stop = !!document.querySelector('[data-testid="stop-button"]') ||
+      [...document.querySelectorAll('button')].some((b) =>
+        /stop (answering|streaming|generating|response)/i.test(b.getAttribute('aria-label') || ''));
+    const turns = [...document.querySelectorAll(
+      'section[data-testid^="conversation-turn-"], article[data-testid^="conversation-turn-"]')];
+    const last = turns[turns.length - 1] || null;
+    const lastRole = last ? (last.getAttribute('data-turn') ||
+      (last.querySelector('[data-message-author-role="assistant"]') ? 'assistant' : 'user')) : null;
+    const messages = last ? [...last.querySelectorAll('[data-message-author-role="assistant"]')] : [];
+    const text = messages.map((m) => (m.innerText || '').trim()).join('\n').trim();
+    const hasCopyButton = !!(last && last.querySelector('[data-testid="copy-turn-action-button"]'));
+    const turnText = last ? (last.innerText || '').trim() : '';
+    const errorPattern = /something went wrong|an error occurred|error (while )?generating|network error|message stream|you stopped this response|response (was )?stopped|too many requests|reached (the|your) (limit|usage)|usage (cap|limit)/i;
+    let errorText = '';
+    if (lastRole === 'assistant' && !stop && !text && errorPattern.test(turnText)) {
+      errorText = turnText.slice(0, 300);
+    }
+    return {
+      generating: stop,
+      lastRole,
+      messageCount: messages.length,
+      textLength: text.length,
+      hasCopyButton,
+      statusText: text ? '' : turnText.slice(0, 120),
+      errorText,
+      // Deep Research delivers heavy reports as a canvas card ("Research
+      // completed in 19m · 12 citations · …") whose body is not in the chat DOM.
+      researchCompleted: /research completed in/i.test(turnText),
+    };
+  });
+}
+
+/**
+ * Markdown of the last assistant turn, rebuilt from the rendered DOM.
+ *
+ * innerText mangles rendered math (KaTeX emits both MathML and glyph spans)
+ * and drops markdown structure, and the copy button's clipboard path is
+ * racy/unreliable under CDP. This walks the rendered message instead:
+ * KaTeX nodes are replaced by their TeX source (the MathML
+ * `annotation[encoding="application/x-tex"]`), as `$…$` inline and `$$…$$`
+ * display; headings, lists, emphasis, code, quotes, tables and rules are
+ * re-emitted as markdown. Returns '' when the turn has no message node.
+ */
+export async function assistantMarkdown(page) {
+  return await page.evaluate(() => {
+    const turns = [...document.querySelectorAll(
+      'section[data-testid^="conversation-turn-"], article[data-testid^="conversation-turn-"]')];
+    let messages = [];
+    for (let i = turns.length - 1; i >= 0 && messages.length === 0; i--) {
+      messages = [...turns[i].querySelectorAll('[data-message-author-role="assistant"]')];
+    }
+    if (messages.length === 0) {
+      const all = [...document.querySelectorAll('[data-message-author-role="assistant"]')];
+      if (all.length) messages = [all[all.length - 1]];
+    }
+    if (messages.length === 0) return '';
+
+    // 2026-09 UI: math renders as <span role="math" data-math-source="TeX">
+    // wrapping KaTeX HTML with NO MathML annotation; display math wrappers
+    // carry style="display: block". Older UIs exposed the TeX only in the
+    // KaTeX MathML annotation.
+    const texOf = (el) => {
+      const src = el.closest('[data-math-source]');
+      if (src) return src.getAttribute('data-math-source').trim();
+      const ann = el.querySelector('annotation[encoding="application/x-tex"]');
+      return ann ? ann.textContent.trim() : (el.textContent || '').trim();
+    };
+    const isDisplayMath = (el) => el.style.display === 'block' || !!el.querySelector('.katex-display');
+    const SKIP = new Set(['BUTTON', 'SVG', 'svg', 'STYLE', 'SCRIPT', 'NOSCRIPT', 'TEMPLATE']);
+
+    const inline = (node) => {
+      let out = '';
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) { out += child.textContent; continue; }
+        if (child.nodeType !== Node.ELEMENT_NODE) continue;
+        const el = child;
+        if (SKIP.has(el.tagName)) continue;
+        if (el.hasAttribute('data-math-source')) {
+          const tex = el.getAttribute('data-math-source').trim();
+          out += isDisplayMath(el) ? `\n$$\n${tex}\n$$\n` : `$${tex}$`;
+          continue;
+        }
+        const cls = (el.className && el.className.toString) ? el.className.toString() : '';
+        if (/\bkatex-display\b/.test(cls)) { out += `\n$$\n${texOf(el)}\n$$\n`; continue; }
+        if (/\bkatex\b/.test(cls)) { out += `$${texOf(el)}$`; continue; }
+        switch (el.tagName) {
+          case 'STRONG': case 'B': out += `**${inline(el)}**`; break;
+          case 'EM': case 'I': out += `*${inline(el)}*`; break;
+          case 'CODE': out += '`' + el.textContent + '`'; break;
+          case 'BR': out += '\n'; break;
+          case 'A': {
+            const href = el.getAttribute('href') || '';
+            const label = inline(el);
+            out += href && !href.startsWith('#') && label !== href ? `[${label}](${href})` : label;
+            break;
+          }
+          default: out += inline(el);
+        }
+      }
+      return out;
+    };
+
+    const block = (node, depth = 0) => {
+      const parts = [];
+      for (const child of node.childNodes) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const t = child.textContent;
+          if (t.trim()) parts.push(t.trim());
+          continue;
+        }
+        if (child.nodeType !== Node.ELEMENT_NODE) continue;
+        const el = child;
+        if (SKIP.has(el.tagName)) continue;
+        if (el.hasAttribute('data-math-source')) {
+          const tex = el.getAttribute('data-math-source').trim();
+          parts.push(isDisplayMath(el) ? `$$\n${tex}\n$$` : `$${tex}$`);
+          continue;
+        }
+        const cls = (el.className && el.className.toString) ? el.className.toString() : '';
+        if (/\bkatex-display\b/.test(cls)) { parts.push(`$$\n${texOf(el)}\n$$`); continue; }
+        const tag = el.tagName;
+        if (/^H[1-6]$/.test(tag)) { parts.push(`${'#'.repeat(Number(tag[1]))} ${inline(el).trim()}`); continue; }
+        if (tag === 'P') { parts.push(inline(el).trim()); continue; }
+        if (tag === 'HR') { parts.push('---'); continue; }
+        if (tag === 'PRE') {
+          const code = el.querySelector('code');
+          const lang = ((code && code.className) || '').toString().match(/language-([\w+-]+)/);
+          const body = (code || el).textContent.replace(/\n$/, '');
+          parts.push('```' + (lang ? lang[1] : '') + '\n' + body + '\n```');
+          continue;
+        }
+        if (tag === 'BLOCKQUOTE') {
+          parts.push(block(el, depth).split('\n').map((l) => (l ? `> ${l}` : '>')).join('\n'));
+          continue;
+        }
+        if (tag === 'UL' || tag === 'OL') {
+          let n = Number(el.getAttribute('start') || 1);
+          const items = [];
+          for (const li of el.children) {
+            if (li.tagName !== 'LI') continue;
+            const marker = tag === 'OL' ? `${n++}.` : '-';
+            const body = block(li, depth + 1).trim();
+            const pad = ' '.repeat(marker.length + 1);
+            const lines = body.split('\n');
+            items.push(`${marker} ${lines[0]}` + lines.slice(1).map((l) => (l ? `\n${pad}${l}` : '\n')).join(''));
+          }
+          parts.push(items.join('\n'));
+          continue;
+        }
+        if (tag === 'TABLE') {
+          const rows = [...el.querySelectorAll('tr')].map((tr) =>
+            [...tr.children].map((c) => inline(c).trim().replace(/\|/g, '\\|').replace(/\n+/g, ' ')));
+          if (rows.length) {
+            const width = Math.max(...rows.map((r) => r.length));
+            const line = (r) => `| ${[...r, ...Array(width - r.length).fill('')].join(' | ')} |`;
+            parts.push([line(rows[0]), `| ${Array(width).fill('---').join(' | ')} |`, ...rows.slice(1).map(line)].join('\n'));
+          }
+          continue;
+        }
+        if (tag === 'LI') { parts.push(block(el, depth)); continue; }
+        // Generic container (div/span/section): recurse if it holds blocks,
+        // otherwise treat as inline text.
+        const hasBlocks = el.querySelector('p,h1,h2,h3,h4,h5,h6,ul,ol,pre,blockquote,table,hr,.katex-display');
+        const s = hasBlocks ? block(el, depth) : inline(el).trim();
+        if (s) parts.push(s);
+      }
+      return parts.join('\n\n');
+    };
+
+    return messages.map((m) => block(m.querySelector('.markdown') || m)).join('\n\n')
+      .replace(/\n{3,}/g, '\n\n').trim();
+  });
+}
+
+/**
  * Dump every message (user + assistant) in the current chat as
  * structured objects. Used by cdp_dump_chat.mjs for full transcript
  * export.
@@ -128,8 +323,12 @@ export async function dumpAllMessages(page) {
 /** True iff the latest assistant turn shows the copy-message button. */
 export async function assistantTurnHasCopyButton(page) {
   return await page.evaluate(() => {
-    const articles = [...document.querySelectorAll('article[data-testid^="conversation-turn-"]')];
+    // Turns are <section data-turn="assistant"> since 2026-09 (<article> +
+    // "ChatGPT said:" before).
+    const articles = [...document.querySelectorAll(
+      'section[data-testid^="conversation-turn-"], article[data-testid^="conversation-turn-"]')];
     const assistantArticle = [...articles].reverse().find((article) =>
+      article.getAttribute('data-turn') === 'assistant' ||
       /^ChatGPT said:/i.test((article.innerText || '').trim())
     );
     if (!assistantArticle) {
@@ -156,6 +355,7 @@ export function isInterimAssistantText(text) {
     normalized.includes('reading documents') ||
     normalized.includes('searching the web') ||
     normalized.includes('thinking') ||
+    normalized.includes('finalizing') ||
     normalized.includes('analyzing')
   );
 }
@@ -192,21 +392,27 @@ function restoreClipboardText(text) {
 }
 
 /**
- * Get the clean markdown text of the latest assistant turn by clicking
- * its copy-button and reading the clipboard.
+ * Get the clean markdown text of the latest assistant turn.
  *
- * Preserves formatting (bold, lists, code blocks) that innerText loses.
- * Falls back to the passed-in fallback (or DOM scrape) on macOS-non-
- * Darwin, copy-button missing, or short/empty clipboard.
+ * Order: assistantMarkdown (DOM rebuild with TeX math) → copy-button +
+ * clipboard (macOS only) → the passed-in fallback / innerText scrape.
  */
 export async function extractAssistantResponse(page, fallbackOverride = '') {
+  // Prefer the deterministic DOM rebuild (keeps markdown structure and TeX
+  // math, no clipboard side effects). The clipboard path below is kept only
+  // for turns the rebuild cannot read: a stale clipboard of similar length
+  // would otherwise pass its length check and be accepted as the answer.
+  const domMarkdown = (await assistantMarkdown(page).catch(() => '')).trim();
+  if (domMarkdown) return domMarkdown;
   const fallbackText = (fallbackOverride || await latestAssistantText(page)).trim();
   const previousClipboard = readClipboardText();
 
   try {
     const copied = await page.evaluate(() => {
-      const articles = [...document.querySelectorAll('article[data-testid^="conversation-turn-"]')];
+      const articles = [...document.querySelectorAll(
+        'section[data-testid^="conversation-turn-"], article[data-testid^="conversation-turn-"]')];
       const assistantArticle = [...articles].reverse().find((article) =>
+        article.getAttribute('data-turn') === 'assistant' ||
         /^ChatGPT said:/i.test((article.innerText || '').trim())
       );
       if (!assistantArticle) {

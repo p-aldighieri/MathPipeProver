@@ -40,9 +40,9 @@ Available via `.claude/commands/`:
 | `/recover-chat` | Extract a completed response from a chat URL and save to file. |
 | `/search-council` | **Re-attack only** (attempt ≥2). Fan out 1 Codex + 1 Gemini + 1 Opus + 1 Extended Pro on the same packet, preserve all four memos, hand off to the regular Strategy Searcher for pure selection. Opt-in, ~3× the cost of a single search. Adapters at `scripts/council/dispatch_{codex,gemini,opus,extended_pro}.sh`. The Gemini member needs the `gemini` CLI (`npm i -g @google/gemini-cli`, then authenticate once); without it, drop that member via `--skip-member gemini`. |
 | `/set-referee-targets` | Create or update `{PROOF_REPO}/referee_targets.yaml` — the per-proof registry of target journals + clearance bars that the `paper_referee` role consults. Optional (referee falls back to a generic publishability check without it). Template at `prompts/fragments/referee_targets_template.yaml`. |
-| `/heartbeat` | Start an orchestrator-pace loop (`/loop <interval>`) that wakes the orchestrator periodically and advances the pipeline. Useful for unattended runs. |
+| `/heartbeat` | Fallback orchestrator-pace loop (`/loop <interval>`) that wakes the orchestrator periodically. Prefer the chat watcher below; keep the loop as a long-interval safety net for very long unattended runs. |
 
-For long-running submissions, use `/inspect-chat` for one-shot status checks and `/recover-chat` to harvest a completed chat. For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and advances the pipeline on its own.
+**Waiting on a submission — the chat watcher (preferred).** Submit with `--return-after-submit`, then run `scripts/chatgpt_browser_agent/wait_chat_done.mjs --chat-url URL --out RESPONSE_FILE --port PORT` as a **background job** (Claude Code: Bash with `run_in_background: true`). The watcher exits the moment the model finishes, writes the answer as markdown with math restored to TeX, and the process exit re-invokes the orchestrator — no fixed-interval polling, no latency between the answer landing and the next role. Exit codes: `0` answer written; `1` transport/auth error; `2` timeout (partial written); `3` the chat failed (error banner, stopped response, rate limit); `4` (`--deep-research`) research finished but the report is a canvas card — harvest with `harvest_deep_research.mjs --repost-now`. Run one watcher per in-flight chat. `/inspect-chat` remains the one-shot status read and `/recover-chat` the manual harvest.
 
 ## CDP Browser Scripts
 
@@ -62,12 +62,12 @@ DOM logic lives in `scripts/chatgpt_browser_agent/lib/`:
 | Module | Purpose |
 |--------|---------|
 | `lib/model_pill.mjs` | Composer pill reading + Extended Pro / Deep Research enforcement. Single source of truth for model state. |
-| `lib/composer.mjs` | Composer textarea detection (multi-candidate), send-button fallback chain, isGenerating. |
+| `lib/composer.mjs` | Composer textarea detection (multi-candidate), chip-preserving fill (`append`), send-button fallback chain, isGenerating. |
 | `lib/browser.mjs` | CDP attach (`attachCDP`) and persistent Chrome launch (`launchPersistent`). |
 | `lib/auth.mjs` | Login readiness wait + single-account chooser auto-pick. |
 | `lib/sources.mjs` | Durable Sources tab: list / add / remove with confirmation-dialog handling. |
 | `lib/attachments.mjs` | Per-prompt composer attachments. |
-| `lib/poll.mjs` | Assistant-text reading, stability polling, clipboard-based clean extraction. |
+| `lib/poll.mjs` | Assistant-text reading, last-turn state (`chatTurnState`: generating / error / answer), DOM→markdown extraction with TeX math (`assistantMarkdown`), stability polling, clipboard extraction. |
 
 Entry-point `.mjs` scripts are thin shims over lib:
 
@@ -82,7 +82,7 @@ Entry-point `.mjs` scripts are thin shims over lib:
 | `cdp_refresh_sources.mjs` | Remove → sleep → re-add cycle to bust ChatGPT's per-chat source cache. |
 | `cdp_submit.mjs` | Lower-level single prompt submitter; supports `--deep-research`. |
 | `cdp_submit_batch.mjs` | Sequential parallel-prompt dispatcher (post-refactor: now actually works; the pre-refactor version spawned a nonexistent target). |
-| `wait_chat_done.mjs` | Chat-ID-pinned poller/dumper for a known chat URL (uses lib's hardened poll). `--deep-research` keeps it waiting through DR's stop-button-less research phase. |
+| `wait_chat_done.mjs` | The chat watcher: waits on a known chat URL until the model finishes, writes the answer (markdown, TeX math), and exits with a status code the orchestrator branches on (see "Waiting on a submission" above). Run it as a background job. `--deep-research` keeps it waiting through DR's stop-button-less research phase. |
 | `harvest_deep_research.mjs` | Harvest a **Deep Research** chat whose report is in a canvas/artifact. `--repost-now` (after research is confirmed done) reposts the packet inline, then captures it. See "Model modes" → DR harvest. |
 | `cdp_inspect_chat.mjs` | Read-only live chat inspection. |
 | `cdp_dump_chat.mjs` | Dump every message (user + assistant) of a chat. |
@@ -99,18 +99,18 @@ Two model modes are wired through the browser scripts:
 
 | Mode | Used for | Wall-clock | How to invoke |
 |---|---|---|---|
-| **Sol Pro** (legacy name "Extended Pro") | All analytical roles (formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper) and the Lean roles. The pipeline default. | 8–20 min | Default. No flag. |
+| **GPT-6 Pro** (legacy names "Sol Pro", "Extended Pro") | All analytical roles (formalizer, searcher, breakdown, prover, reviewer, consolidator, gatekeeper) and the Lean roles. The pipeline default. | 4–20+ min | Default. No flag. |
 | **Deep Research** | Literature role only (`02_literature_soft.md`). Web-browsing + multi-source synthesis with citations. | 5–30 min (occasionally 45) | Pass `--deep-research` to `chatgpt_browser_agent.sh submit` or `cdp_submit.mjs`. |
 
 The `/submit-role` skill picks the right flag based on the prompt file. If you invoke the browser scripts manually, the rule is: literature ⇒ DR; everything else ⇒ Extended Pro.
 
-DR jobs do **not** use the same pill enforcement as Extended Pro. The `ensureDeepResearch` function in `lib/model_pill.mjs` handles the DR-specific composer toggle, verified live against `chatgpt.com` on 2026-05-26:
+DR jobs do **not** use the same pill enforcement as the Pro target. The `ensureDeepResearch` function in `lib/model_pill.mjs` handles the DR-specific composer toggle (re-verified live 2026-09-21):
 
-- DR is toggled via `[role="menuitemradio"]` (text "Deep research") inside the composer "+" button menu.
-- Active state is detected via the composer chip with `aria-label="Deep research, click to remove"` (the menuitemradio's `aria-checked` lies — don't trust it).
-- The pill reads "Pro" (not "Extended Pro") while DR is active. `ensureExtendedPro` therefore explicitly toggles DR off via the chip before its pill-based fast path; otherwise a DR-active session would silently pass for "Extended Pro" and submit on the wrong mode.
+- DR is toggled from the composer "+" menu row "Deep research" ("Get a detailed report"); the rows are bare divs, so the lib clicks the row text with a real Playwright click.
+- Active state is an inline, accent-coloured chip at the start of the ProseMirror composer (a `data-inline-selection-pill` atom). The pill keeps reading "6 Pro" while DR is active, so `ensureExtendedPro` explicitly removes the chip before its pill fast path.
+- **Filling the composer must not replace its contents in DR mode**: `fill()` (select-all + replace) deletes the chip, and on 2026-09-21 a literature submission silently ran as a plain Pro chat that way. DR prompts are therefore inserted after the chip (`fillComposer(..., { append: true })`), and every submit path calls `assertModeBeforeSend` after filling — DR chip present for DR, pill on the Pro target and no chip otherwise — and refuses to send on mismatch.
 
-DR DOM is more stable than the model-picker DOM has been historically, but if ChatGPT changes it again, update `lib/model_pill.mjs` only.
+If ChatGPT changes the DR DOM again, update `lib/model_pill.mjs` only.
 
 **Harvesting a DR chat is different from Extended Pro** (investigated + solved live
 2026-05-27; heavy DR reports need the canvas → inline-repost flow described below):
@@ -118,9 +118,11 @@ DR DOM is more stable than the model-picker DOM has been historically, but if Ch
 - DR's research phase shows a plan/activity UI and **no stop button**, so
   `isGenerating` reads `false` the whole time it works. `cdp_submit.mjs` therefore
   prints `Generating: NO` right after a DR submit — that is expected, not a failure.
-  `isDeepResearchWorking` (lib/model_pill.mjs) is the substitute "still working"
-  signal, and `wait_chat_done.mjs --deep-research` ORs it into the generating check
-  so the poller does not declare "done" during research.
+  In the 2026-09 UI the chat first answers with a one-line acknowledgement ("Deep
+  research has started working on the request.") and the job then runs on its own.
+  Watch it with `wait_chat_done.mjs --deep-research --min-stable-length 3000` so the
+  acknowledgement is never mistaken for the report; the watcher exits `4` when the
+  "Research completed" card appears without an inline report.
 - **A heavy DR job delivers its report as a canvas / artifact "document"** (collapsed card
   titled by the report's first heading, with download + expand icons, e.g.
   *"Research completed in 19m · 12 citations · 131 searches"*), **not** as chat text. While
@@ -157,15 +159,21 @@ Each proof project must run in its **own Chrome instance** on a **unique port** 
 
 **Launching a new session:**
 ```bash
+# Windows (Git Bash)
 "/c/Program Files/Google/Chrome/Application/chrome.exe" \
   --remote-debugging-port=PORT \
   --user-data-dir="$HOME/.mathpipeprover/chrome-PROJECT-profile" \
   --no-first-run --no-default-browser-check \
   "https://chatgpt.com/" &
+
+# macOS (detaches cleanly from the shell)
+open -na "Google Chrome" --args --remote-debugging-port=PORT \
+  --user-data-dir="$HOME/.mathpipeprover/chrome-PROJECT-profile" \
+  --no-first-run --no-default-browser-check "https://chatgpt.com/"
 ```
 
 **Rules:**
-- **Check existing ports first** — `netstat -ano | grep LISTEN | grep 922` to see what's in use.
+- **Check existing ports first** — `netstat -ano | grep LISTEN | grep 922` (Windows) or `lsof -nP -iTCP -sTCP:LISTEN | grep 92` (macOS) to see what's in use.
 - **One port per project** — never share ports across proof projects.
 - **Separate profile directories** — each project gets its own `--user-data-dir` under `~/.mathpipeprover/`.
 - **Inherit authentication** — to avoid re-login, copy cookies from an existing authenticated profile:
@@ -188,14 +196,14 @@ Each proof project must run in its **own Chrome instance** on a **unique port** 
 
 ## Model Configuration — CRITICAL
 
-The browser scripts enforce the current **Sol Pro target** (a.k.a. **GPT 5.6 Sol Pro**; UI verified live 2026-07-13):
+The browser scripts enforce the current **Pro target: GPT-6 Pro** (UI verified live 2026-09-21):
 
-1. **Reasoning / Intelligence:** `Pro` (the top lane of the "Intelligence" picker)
-2. **Model:** `GPT-5.6 Sol` (shown on the picker's bottom model-submenu row; read-only — never probe/hover the submenu, it hangs)
+1. **Model family:** the `Latest` radio (currently GPT-6). The radios (`Latest`, `GPT-5.6 Sol`, `GPT-5.5`) sit in the picker's advanced view, reached through the `Select model` header row.
+2. **Power:** the top step of the 5-step `Power` slider, labelled `Pro` ("Pro, 5 of 5").
 
-The composer pill reads **"Pro"** when this target is set. `Extra High`, `High`, `Medium`, `Instant`, or any other lane is weaker (`Instant` additionally runs the older GPT-5.5). Always verify before submitting.
+The composer pill then reads **"6 Pro"** (a family token plus the power level; `5.6 Pro`, `6 Extra High`, a bare `Extra High`, etc. are all wrong). The gate in `lib/model_pill.mjs` accepts a `Pro` tier on a family version ≥ 6, so a future `6.1 Pro` or `7 Pro` passes while a silent fall-back to 5.x is refused; override with `MPP_MODEL_FAMILY` (radio label) and `MPP_MIN_MODEL_VERSION`. Every submit path re-checks the pill right before sending. Verify with `node cdp_set_model_pro.mjs --port PORT --check-only`.
 
-**Terminology note:** "Extended Pro" was the pre-2026-07 name of this target (`Pro Extended` lane on GPT-5.5) and no longer exists in the ChatGPT UI. Docs, prompt templates, function names (`ensureExtendedPro`), and slash commands (`/set-model-extended`) keep the legacy name — wherever you see "Extended Pro", read "the Sol Pro target" (Pro lane on GPT-5.6 Sol). `lib/model_pill.mjs` warns if the picker's base-model row stops reading GPT-5.6 Sol (set `MPP_STRICT_BASE_MODEL=1` to make that fatal).
+**Terminology note:** "Extended Pro" (to 2026-06) and "Sol Pro" (2026-07 to 2026-09) are earlier names of this target. Docs, prompt templates, function names (`ensureExtendedPro`), and slash commands (`/set-model-extended`) keep the legacy name — wherever you see "Extended Pro", read "the Pro target" (GPT-6 Pro today).
 
 ## Key Documentation
 

@@ -120,7 +120,7 @@ The smart-orchestrator rules:
 - Keep routing decisions and breakdown approval under orchestrator review even if the browser loop is automated.
 - Do not use subagents for analytical proof roles. Formal mathematical arguments, proof repair, route search, and reviewer audits go through ChatGPT Extended Pro; subagents are only for explicit coding/simulation tasks and Lean formalization proof-engineering.
 
-The current browser lane enforces the Extended Pro target: reasoning `Pro` plus model `5.5`.
+The current browser lane enforces the Pro target (legacy name "Extended Pro"): GPT-6, top `Power` level — the composer pill reads `6 Pro`.
 If ChatGPT or Cloudflare blocks the Playwright-owned profile, use `scripts/chatgpt_browser_cdp.sh` and attach the runner with `--cdp-url http://127.0.0.1:9222`.
 Browser submits default to a 90-minute wait budget.
 They also accept repeated `--attach-file` arguments so branch-local proof artifacts can travel with a request without becoming durable project sources.

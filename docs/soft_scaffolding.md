@@ -206,10 +206,11 @@ Rules:
 
 ## Model And Effort Policy
 
-For the browser workflow, the live policy is the Extended Pro target:
+For the browser workflow, the live policy is the Pro target (legacy name "Extended Pro"; GPT-6 Pro as of 2026-09):
 
-- reasoning `Pro`
-- model `5.5`
+- model family `Latest` (GPT-6)
+- `Power` at its top step, `Pro`
+- composer pill reads `6 Pro`
 
 Operationally:
 
@@ -337,8 +338,8 @@ Browser execution is not reliable enough to trust a single monitoring mechanism.
 
 Preferred approach:
 
-1. submit through the browser runner
-2. keep an independent direct inspect loop on the live chat URL
+1. submit through the browser runner (`--return-after-submit`)
+2. watch the live chat URL with `wait_chat_done.mjs` running as a background job; its exit (answer written, chat error, or timeout) is the signal to act
 3. recover the response from the chat explicitly before accepting completion
 4. treat wrapper-text recovery as a failed capture, not as a proof result
 
@@ -355,7 +356,7 @@ In soft scaffolding mode, the orchestrator should not stop at the first browser 
 If something looks off, it should actively check and repair the state with the available tools:
 
 - re-open the project page and verify the correct project URL
-- re-check the Extended Pro target (current UI: reasoning `Pro` + model `5.5`)
+- re-check the Pro target (current UI: pill `6 Pro` — `Latest` family, `Power` at `Pro`)
 - open the `Sources` tab and confirm the requested durable files are actually present
 - if source sync looks incomplete, retry one file at a time and verify the post-sync list
 - inspect a live chat URL before deciding a worker is dead

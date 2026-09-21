@@ -9,9 +9,14 @@ loop checks the browser for the latest submission's state, fires the next
 role if appropriate, keeps durable sources tidy, and recovers from glitches.
 
 This is the **orchestrator-pace loop only** — it is unrelated to any
-browser-agent telemetry or status-poll machinery (those layers were removed
-during the heartbeat-deprecation pass; this skill survives because the loop
-behavior is independently useful for long unattended runs).
+browser-agent telemetry or status-poll machinery.
+
+**Prefer the chat watcher for waiting on a submission.** Running
+`scripts/chatgpt_browser_agent/wait_chat_done.mjs` as a background job wakes
+the orchestrator the moment an answer is written (see CLAUDE.md §Waiting on a
+submission), with no idle wake-ups and no latency. Use this loop only as a
+long-interval safety net for very long unattended runs (e.g. `1h`), in case a
+watcher dies silently or no watcher was started.
 
 **Interval:** use `$ARGUMENTS` if it is non-empty (e.g. `10m`, `1h`);
 otherwise default to `15m`. Shorter intervals (≤5m) burn cache and cost

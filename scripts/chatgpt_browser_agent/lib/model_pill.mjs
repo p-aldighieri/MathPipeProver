@@ -1,6 +1,6 @@
 /**
- * lib/model_pill.mjs — Composer model-pill detection and Sol Pro enforcement
- * (GPT-5.6 Sol, Pro intelligence lane — formerly "Extended Pro").
+ * lib/model_pill.mjs — Composer model-pill detection and Pro-target enforcement
+ * (current target: GPT-6 Pro — "Latest" model family at the top Power level).
  *
  * Single source of truth for everything related to reading and setting the
  * ChatGPT composer's model+effort state. Both `cdp_submit.mjs` (the thin
@@ -9,88 +9,111 @@
  * logic in other scripts; if the ChatGPT DOM changes again, this is the only
  * file that needs to be updated.
  *
- * ## Background: the 2026-05-21 / 2026-05-25 DOM changes
+ * ## UI history (short)
  *
- * ChatGPT removed the `model-switcher-gpt-5-5-pro` and
- * `model-switcher-gpt-5-5-pro-thinking-effort` data-testids. The new composer
- * pill menu carries `[role="menuitemradio"]` rows for reasoning
- * ("Instant | 5s" / "Medium | 5–30s" / "High | 15–60s" / "Pro | 5+ min")
- * with no stable testid; matched by role + innerText prefix.
+ *   2026-05: reasoning radios ("Instant | Medium | High | Pro") in the pill menu.
+ *   2026-06: "Intelligence" menu, lanes up to "Pro Extended", GPT-5.5 submenu row.
+ *   2026-07: GPT-5.6 Sol; lanes "Instant | Medium | High | Extra High | Pro";
+ *            pill read just "Pro". Pipeline target was called "Sol Pro"
+ *            (legacy name "Extended Pro" — function names keep that name).
  *
- * On 2026-05-25 the picker collapsed the separate GPT-5.x submenu into a
- * single combined reasoning radio "Pro | • Extended"; the composer pill then
- * reads either "Extended Pro" or simply "Pro". When the pill already reads
- * one of those two labels the state is correct AND the (now-absent) GPT
- * submenu must NOT be probed — hovering it hangs for 30s. Accept and skip.
+ * ## Current UI (verified live 2026-09-21, GPT-6 era)
  *
- * On 2026-06-12 the picker became an "Intelligence" menu with levels
- * "Instant | Medium | High | Extra High | Pro Extended" plus a separate
- * "GPT-5.5 >" model submenu row at the bottom (do NOT probe the submenu).
- * The composer pill reads the current level text (e.g. "Extra High").
+ * The composer pill (`button.__composer-pill[aria-haspopup="menu"]`, tooltip
+ * "Thinking effort", shortcut Ctrl+Shift+M) renders two spans: the model
+ * family token and the power level, e.g. "6" + "Pro" (innerText "6\nPro";
+ * textContent glues them to "6Pro", so always read innerText).
  *
- * ## Current target: GPT 5.6 Sol Pro (UI verified live 2026-07-13)
+ * Clicking the pill opens `[data-testid="composer-intelligence-picker-content"]`:
  *
- * ChatGPT's flagship is now **GPT-5.6 Sol** and "Extended Pro" no longer
- * exists. The Intelligence picker levels are
- * "Instant | Medium | High | Extra High | Pro" with a "GPT-5.6 Sol"
- * model submenu row at the bottom (do NOT probe/click the submenu row —
- * hovering the model submenu has historically hung for ~30s). The
- * "Instant" row carries a "5.5" badge (Instant runs the older model);
- * every other lane runs the selected GPT-5.6 Sol.
+ *   - `[role="menuitem"][aria-label="Select model"]` — header, reads "6 Pro".
+ *   - `[role="menuitem"][aria-label="Power"]` — a 5-step slider (Radix;
+ *     inner `[role="slider"]` has aria-valuemin=0, aria-valuemax=4,
+ *     aria-valuenow; the slider root carries data-max="true" at the top step).
+ *     The menuitem takes ArrowLeft/ArrowRight (aria-keyshortcuts) to move one
+ *     step; screen-reader text reads e.g. "Pro, 5 of 5.". The top step is Pro.
+ *   - `[role="menuitemradio"]` family radios: "Latest" (= GPT-6 today),
+ *     "GPT-5.6 Sol", "GPT-5.5" ("Leaving on October 14").
  *
- * The pipeline target ("Sol Pro") is the **Pro** level on GPT-5.6 Sol;
- * after selection the composer pill reads "Pro". Rows are still
- * [role="menuitemradio"]; matching stays label-prefix-based. Legacy
- * labels "Pro Extended"/"Extended Pro" are kept as accepted pill states
- * for back-compat with any A/B'd or stale UI.
+ * Pipeline target: family radio "Latest" + Power at max ⇒ pill "6 Pro".
+ * The pill is the authoritative gate: tier must read "Pro" and the family
+ * token must be a model version ≥ MPP_MIN_MODEL_VERSION (default 6), so a
+ * future "6.1"/"7" passes while a silent fallback to 5.x is refused.
+ *
+ * Overrides (env):
+ *   MPP_MODEL_FAMILY        family radio to select (default "Latest").
+ *   MPP_MIN_MODEL_VERSION   minimum accepted pill family version (default 6).
  *
  * ## Public API
  *
  *   readPill(page) -> string
- *       Best-effort pill text reader with retries. Returns 'unknown' if the
- *       pill never resolves. Never throws.
+ *       Pill text normalized to one line ("6 Pro"). 'unknown' if it never
+ *       resolves. Never throws.
  *
- *   ensureExtendedPro(page) -> void
- *       Idempotent enforcement of the Sol Pro target (function keeps its
- *       legacy name so callers don't churn). Returns silently if the pill
- *       already reads Pro (or a legacy Pro variant). Otherwise opens the
- *       menu, selects the Pro lane, and re-verifies. Throws if the pill
- *       cannot be brought to the target state — callers should treat this
- *       as a hard "refuse to submit" gate.
+ *   parsePill(text) -> { family, tier }
+ *   isTargetPill(text) -> boolean
+ *       Pure helpers for the gate above.
  *
- *   PILL_SELECTOR, EXTENDED_PRO_LABELS, BASE_MODEL_LABEL, EFFORT_LABEL
+ *   readPickerState(page) -> { pill, family, powerNow, powerMax, familyRadio }
+ *       Opens the picker read-only, reports its state, closes it.
+ *
+ *   ensureExtendedPro(page) -> void      (alias: ensureProTarget)
+ *       Idempotent enforcement of the Pro target. Returns silently if the
+ *       pill already passes the gate. Otherwise selects the family radio,
+ *       pushes Power to max, and re-verifies. Throws if the pill cannot be
+ *       brought to the target — callers must treat that as a hard
+ *       "refuse to submit" gate.
+ *
+ *   ensureDeepResearch / isDeepResearchActive / isDeepResearchWorking
+ *       Deep Research mode helpers (literature role only).
+ *
+ *   assertModeBeforeSend(page, { deepResearch }) -> void
+ *       Final pre-send gate: DR chip present for DR submissions; pill on the
+ *       Pro target and no DR chip otherwise. Throws if not.
+ *
+ *   PILL_SELECTOR, TARGET_TIER, BASE_MODEL_LABEL, EFFORT_LABEL, EFFORT_LABEL_DR
  *       Exported constants. BASE_MODEL_LABEL/EFFORT_LABEL feed the
- *       session-log JSON's `base_model` / `effort_mode` fields — change
- *       their string values only if you also coordinate downstream consumers.
+ *       session-log JSON's `base_model` / `effort_mode` fields.
  */
 
 export const PILL_SELECTOR = 'button.__composer-pill[aria-haspopup="menu"]';
-// Accepted pill states for the Sol Pro target. "Pro" is the current
-// (2026-07) label; the other two are legacy labels kept for back-compat.
-export const EXTENDED_PRO_LABELS = ['Pro', 'Pro Extended', 'Extended Pro'];
+const PICKER_SELECTOR = '[data-testid="composer-intelligence-picker-content"]';
 
-// These two constants are the strings emitted into the session-log JSON
-// (`base_model`, `effort_mode` fields). Updated 2026-07-13 for the
-// GPT-5.6 Sol UI; downstream consumers treat them as informational.
-export const BASE_MODEL_LABEL = 'GPT-5.6 Sol';
-export const EFFORT_LABEL = 'Sol Pro';
+export const TARGET_TIER = 'Pro';
+const FAMILY_RADIO_LABEL = process.env.MPP_MODEL_FAMILY || 'Latest';
+const MIN_MODEL_VERSION = Number(process.env.MPP_MIN_MODEL_VERSION || '6');
+
+// Strings emitted into the session-log JSON (`base_model`, `effort_mode`).
+// Informational for downstream consumers.
+export const BASE_MODEL_LABEL = 'GPT-6';
+export const EFFORT_LABEL = 'GPT-6 Pro';
 // Heartbeat/log effort_mode value when the wrapper is told `--deep-research`.
-// Used by both cdp_submit.mjs and chatgpt_browser_agent.mjs.
 export const EFFORT_LABEL_DR = 'Deep Research';
 
-// Acceptable target rows in preference order. "Pro" is the 2026-07
-// "Intelligence" UI's top lane (GPT-5.6 Sol era); "Pro Extended" was the
-// 2026-06-12 label, kept as fallback.
-const DESIRED_REASONING_LABELS = ['Pro', 'Pro Extended'];
-
-// Expected base-model text on the picker's bottom model-submenu row.
-// Checked read-only (never clicked/hovered). If the row text stops
-// matching, ensureExtendedPro logs a loud warning; set
-// MPP_STRICT_BASE_MODEL=1 to make the mismatch fatal.
-const EXPECTED_MODEL_ROW = /5\.6|sol/i;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Read the composer pill text with retries.
+ * Split pill text into its family token and power tier.
+ * "6 Pro" -> { family: "6", tier: "Pro" }; "6 Extra High" -> { "6", "Extra High" };
+ * a bare "Pro" (2026-07 UI) -> { family: null, tier: "Pro" }.
+ */
+export function parsePill(text) {
+  const t = String(text || '').trim().replace(/\s+/g, ' ');
+  const m = t.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+  if (m) return { family: m[1], tier: m[2] };
+  return { family: null, tier: t };
+}
+
+/** Gate: Pro tier on a model family at or above MIN_MODEL_VERSION. */
+export function isTargetPill(text) {
+  const { family, tier } = parsePill(text);
+  if (tier !== TARGET_TIER) return false;
+  const version = Number.parseFloat(family);
+  return Number.isFinite(version) && version >= MIN_MODEL_VERSION;
+}
+
+/**
+ * Read the composer pill text with retries, normalized to one line.
  *
  * The pill can lag several seconds behind navigation/domcontentloaded;
  * retry up to 5 times (~30s total) before giving up.
@@ -102,16 +125,14 @@ export async function readPill(page) {
     } catch { /* keep trying */ }
     const txt = await page.evaluate((sel) => {
       const el = document.querySelector(sel);
-      return el ? (el.textContent || '').trim() : 'unknown';
-    }, PILL_SELECTOR);
+      if (!el) return 'unknown';
+      return (el.innerText || el.textContent || '')
+        .split('\n').map((s) => s.trim()).filter(Boolean).join(' ');
+    }, PILL_SELECTOR).catch(() => 'unknown');
     if (txt && txt !== 'unknown') return txt;
-    await new Promise(r => setTimeout(r, 1500));
+    await sleep(1500);
   }
   return 'unknown';
-}
-
-function isPillOk(pillText) {
-  return EXTENDED_PRO_LABELS.includes(pillText);
 }
 
 async function isMenuOpen(page) {
@@ -122,100 +143,141 @@ async function isMenuOpen(page) {
 async function closeMenu(page) {
   if (await isMenuOpen(page)) {
     await page.keyboard.press('Escape').catch(() => {});
-    await new Promise(r => setTimeout(r, 250));
+    await sleep(300);
   }
 }
 
 async function openMenu(page) {
   await closeMenu(page);
   await page.locator(PILL_SELECTOR).first().click();
-  // wait for the reasoning radios to appear
-  await page.locator('[role="menuitemradio"]').first()
+  await page.locator(`${PICKER_SELECTOR}, [role="menuitemradio"]`).first()
     .waitFor({ state: 'visible', timeout: 5000 });
+  await sleep(300);
 }
 
-/**
- * Read the picker's current state: the checked reasoning radio label
- * (e.g. "Pro", "High") and the bottom model-submenu row text (e.g.
- * "GPT-5.6 Sol"). The model row is read from innerText only — NEVER
- * clicked or hovered (probing the submenu hangs ~30s). Best-effort;
- * fields are null if not found or the menu cannot be opened.
- */
-async function readMenuState(page) {
-  await openMenu(page);
-  const state = await page.evaluate(() => {
-    let reasoning = null;
+/** Snapshot of the open picker. Caller must have opened it. */
+async function snapshotOpenPicker(page) {
+  return await page.evaluate(() => {
+    const slider = document.querySelector('[role="slider"]');
+    const now = slider ? Number(slider.getAttribute('aria-valuenow')) : null;
+    const max = slider ? Number(slider.getAttribute('aria-valuemax')) : null;
+    let familyRadio = null;
+    const radios = [];
     for (const r of document.querySelectorAll('[role="menuitemradio"]')) {
-      if (r.getAttribute('aria-checked') === 'true') {
-        const t = (r.innerText || '').trim();
-        // Text shape: "Pro\n5+ min" or "Pro | • Extended"; first segment is the label.
-        reasoning = t.split(/[\n|]/)[0].trim();
-        break;
-      }
+      const label = (r.innerText || '').split('\n')[0].trim();
+      radios.push(label);
+      if (r.getAttribute('aria-checked') === 'true') familyRadio = label;
     }
-    // The model submenu is the [role="menuitem"] row (radios are the
-    // reasoning lanes). Current UI has exactly one, reading "GPT-5.6 Sol".
-    let modelRow = null;
-    for (const m of document.querySelectorAll('[role="menuitem"]')) {
-      const t = (m.innerText || '').trim();
-      if (/^GPT/i.test(t)) { modelRow = t.split(/\n/)[0].trim(); break; }
-    }
-    return { reasoning, modelRow };
+    return { powerNow: now, powerMax: max, familyRadio, radios };
   });
-  await closeMenu(page);
-  return state;
 }
 
 /**
- * Idempotent: ensure the composer pill reads Pro (Sol Pro target).
- *
- * Fast path: if `readPill` already returns Pro (or a legacy Pro variant),
- * return. Otherwise open the menu, click the Pro reasoning radio, close,
- * and re-verify via the pill. Throws if the final pill state is not OK —
- * the caller MUST refuse to submit on throw, since silently proceeding
- * would use a weaker model.
+ * Open the picker read-only, report its state, close it. Best-effort:
+ * fields are null if the picker cannot be opened.
  */
+export async function readPickerState(page) {
+  const pill = await readPill(page);
+  let snap = { powerNow: null, powerMax: null, familyRadio: null, radios: [] };
+  try {
+    await openMenu(page);
+    snap = await snapshotOpenPicker(page);
+  } catch { /* leave nulls */ } finally {
+    await closeMenu(page).catch(() => {});
+  }
+  const { family, tier } = parsePill(pill);
+  return { pill, family, tier, ...snap };
+}
+
 /**
- * Deep Research mode — DOM re-verified live 2026-06-26 on chatgpt.com
- * (the 2026-05-26 UI it was originally written against has since drifted).
+ * Click the configured family radio unless it is already checked.
  *
- * ## How ChatGPT exposes DR (current UI, 2026-06)
+ * The picker has two panels: a simple view (header "6 Pro ›" + the Power
+ * slider) and an advanced view holding the family radios. The radios stay
+ * in the DOM while hidden behind the simple view, so clicking them directly
+ * fails ("subtree intercepts pointer events"); the "Select model" header
+ * slides the advanced view in first. Picking a radio slides back to the
+ * simple view with the menu still open.
+ */
+async function selectFamily(page) {
+  const idx = await page.evaluate((label) => {
+    const rows = [...document.querySelectorAll('[role="menuitemradio"]')];
+    return rows.findIndex((r) => (r.innerText || '').split('\n')[0].trim() === label);
+  }, FAMILY_RADIO_LABEL);
+  if (idx < 0) {
+    const { radios } = await snapshotOpenPicker(page);
+    throw new Error(`No model-family radio "${FAMILY_RADIO_LABEL}" in picker (saw ${JSON.stringify(radios)}).`);
+  }
+  const radio = page.locator('[role="menuitemradio"]').nth(idx);
+  if ((await radio.getAttribute('aria-checked')) === 'true') return;
+
+  const advancedActive = async () => page.evaluate(() =>
+    document.querySelector('[data-testid="composer-model-picker-slider-advanced-view"]')
+      ?.getAttribute('data-active') === 'true');
+  if (!(await advancedActive())) {
+    await page.locator('[role="menuitem"][aria-label="Select model"]').first().click();
+    await sleep(700);
+  }
+  await radio.click({ timeout: 8000 });
+  await sleep(700);
+  if ((await radio.getAttribute('aria-checked').catch(() => null)) !== 'true' && await isMenuOpen(page)) {
+    throw new Error(`Clicked family radio "${FAMILY_RADIO_LABEL}" but it did not become checked.`);
+  }
+  // Selecting a radio may close the menu; reopen so Power can be set.
+  if (!(await isMenuOpen(page))) await openMenu(page);
+}
+
+/** Push the Power slider to its top step (Pro) via the menuitem's arrow keys. */
+async function maxOutPower(page) {
+  const power = page.locator('[role="menuitem"][aria-label="Power"]').first();
+  if ((await power.count()) === 0) throw new Error('Power slider not found in picker.');
+  await power.focus();
+  for (let i = 0; i < 8; i++) {
+    const { powerNow, powerMax } = await snapshotOpenPicker(page);
+    if (powerNow != null && powerMax != null && powerNow >= powerMax) return;
+    await page.keyboard.press('ArrowRight');
+    await sleep(250);
+  }
+  const { powerNow, powerMax } = await snapshotOpenPicker(page);
+  if (!(powerNow != null && powerMax != null && powerNow >= powerMax)) {
+    throw new Error(`Power slider stuck at ${powerNow}/${powerMax} after ArrowRight presses.`);
+  }
+}
+
+/**
+ * Deep Research mode — DOM re-verified live 2026-06-26 on chatgpt.com.
+ * (2026-09-21: the "+" menu still lists "Deep research | Get a detailed
+ * report" among bare-div rows; the chip/removal behaviour below is
+ * unchanged unless noted.)
  *
- *   - DR is toggled from the composer "+" button menu (the same button
- *     whose aria-label is "Add files and more"). The menu rows are now bare
- *     `<div>`s inside a `.popover` (grouped under role="group" sections) —
- *     there is NO `[role="menuitemradio"]` anymore. Find the row by its text
+ * ## How ChatGPT exposes DR
+ *
+ *   - DR is toggled from the composer "+" button menu (aria-label "Add files
+ *     and more"). The menu rows are bare `<div>`s inside a `.popover` —
+ *     there is NO `[role="menuitemradio"]`. Find the row by its text
  *     "Deep research" and click it with a REAL Playwright click (a raw JS
  *     `.click()` on the bare div does not reliably fire React's handler).
  *
  *   - When DR is active, the active tool renders as an inline accent-coloured
  *     CHIP at the start of the ProseMirror composer:
- *     `<span class="...text-token-text-accent...">Deep research</span>` living
- *     inside `[role="textbox"].ProseMirror`. The old toolbar chip button with
- *     `aria-label="Deep research, click to remove"` is GONE. `isDeepResearchActive`
- *     detects the inline accent chip (with a legacy fallback to the old button).
- *     To turn DR off, re-click the "Deep research" row in the "+" menu (toggle).
+ *     `<span class="...text-token-text-accent...">Deep research</span>`.
+ *     `isDeepResearchActive` detects that chip (with a legacy fallback to the
+ *     old `aria-label="Deep research, click to remove"` button).
  *
- *   - The composer pill STAYS on the intelligence-lane label while DR is
- *     active ("Pro Extended" in the 2026-06 UI; "Pro" in the 2026-07
- *     GPT-5.6 Sol UI). So the pill cannot distinguish DR from plain Sol
- *     Pro; `ensureExtendedPro` must still explicitly disable DR (via
- *     the inline-chip detection) before trusting its pill fast-path.
+ *   - The composer pill STAYS on the power label while DR is active, so the
+ *     pill cannot distinguish DR from plain Pro; `ensureExtendedPro` must
+ *     explicitly disable DR (via the chip detection) before trusting its
+ *     pill fast-path.
  *
  *   - The "+" button itself does NOT respond to JS `.click()` — it needs
- *     a real input event. Playwright's `locator.click()` dispatches the
- *     right events, so the lib code works in production; only ad-hoc JS
- *     `document.querySelector(...).click()` fails on the "+" button.
+ *     a real input event (Playwright's `locator.click()` is fine).
  *
- * ## DR semantics differ from Extended Pro
+ * ## DR semantics differ from Pro
  *
- *   - Submissions take 5–30 min (vs Extended Pro's 8–20 min). The
- *     existing `wait_chat_done.mjs` `--max-mins 180` default is generous.
- *   - DR uses its own "thinking phase" UI ("Researching...", "Reading
- *     sources..."). The existing `isInterimAssistantText` filter catches
- *     these along with "Thinking", "Analyzing", etc.
- *   - DR cannot be combined with explicit Pro effort — they're
- *     mutually exclusive modes on the composer.
+ *   - Submissions take 5–30 min. DR shows its own research-phase UI with no
+ *     stop button; see isDeepResearchWorking.
+ *   - DR cannot be combined with an explicit Power level — they're mutually
+ *     exclusive modes on the composer.
  */
 
 const DR_MENUITEM_TEXT_PATTERN = /^\s*Deep research\s*$/i;
@@ -223,17 +285,11 @@ const DR_MENUITEM_TEXT_PATTERN = /^\s*Deep research\s*$/i;
 /**
  * Is Deep Research currently active on the composer?
  *
- * Looks for the toolbar chip whose aria-label contains both
- * "deep research" and "click to remove". This is ChatGPT's only
- * reliable DOM signal — the menuitemradio's aria-checked lies.
+ * Looks for the inline accent chip reading "Deep research" inside the
+ * ProseMirror editor (legacy fallback: the removable chip button).
  */
 export async function isDeepResearchActive(page) {
   return await page.evaluate(() => {
-    // 2026-06 UI: an active composer tool (Deep research) renders as an inline
-    // accent-coloured chip at the START of the ProseMirror composer, e.g.
-    // <span class="...text-token-text-accent...">Deep research</span>. The old
-    // aria-label="Deep research, click to remove" button no longer exists, and
-    // the composer pill stays "Pro Extended" (it no longer drops to "Pro").
     const editor = document.querySelector(
       '[role="textbox"].ProseMirror, .ProseMirror[contenteditable="true"], #prompt-textarea'
     );
@@ -244,7 +300,6 @@ export async function isDeepResearchActive(page) {
       );
       if (chip) return true;
     }
-    // Legacy fallback: the old removable chip button.
     return [...document.querySelectorAll('button')].some((b) => {
       const al = (b.getAttribute('aria-label') || '').toLowerCase();
       return al.includes('deep research') && al.includes('click to remove');
@@ -257,13 +312,9 @@ export async function isDeepResearchActive(page) {
  *
  * DR's research phase shows a plan/activity UI but NO stop button, so
  * isGenerating (composer.mjs) reads false the entire time it works — verified
- * live 2026-05-27. The copy button is NOT a usable signal either: the
- * research-plan turn carries its own copy button while nAssistant is still 0.
- * The reliable discriminator is the assistant-role message node: the plan UI
- * is not one (no [data-message-author-role="assistant"] text during research),
- * whereas the final DR report is. So "still working" = DR active AND no
- * assistant-role node has any text yet. poll.mjs ORs this into its generating
- * signal so it doesn't declare the (empty) research phase "stable & done".
+ * live 2026-05-27. The reliable discriminator is the assistant-role message
+ * node: the plan UI is not one, whereas the final DR report is. So "still
+ * working" = DR active AND no assistant-role node has any text yet.
  */
 export async function isDeepResearchWorking(page) {
   if (!(await isDeepResearchActive(page))) return false;
@@ -279,18 +330,17 @@ export async function isDeepResearchWorking(page) {
  * Turn Deep Research off. No-op if DR isn't currently active.
  * Internal helper — callers must re-verify via isDeepResearchActive.
  *
- * 2026-07 UI (verified live 2026-07-13): the DR chip is a ProseMirror
- * atom node at the start of the composer. Clicking the chip, its svg, or
- * re-clicking the "Deep research" row in the "+" menu all do NOTHING.
- * The only working removal is keyboard deletion inside the editor.
- * Safe in the submit flow because mode enforcement always runs BEFORE
- * the prompt is filled; any pre-existing composer text is captured and
- * re-typed as a belt-and-braces safety.
+ * 2026-07 UI (verified live 2026-07-13): the DR chip is a ProseMirror atom
+ * node at the start of the composer; clicking it or re-clicking the menu row
+ * does nothing. The only working removal is keyboard deletion inside the
+ * editor. Safe in the submit flow because mode enforcement always runs
+ * BEFORE the prompt is filled; any pre-existing composer text is captured
+ * and re-typed as a belt-and-braces safety. Key chords are platform-aware
+ * (macOS has no Control+Home / Control+a select-all in text fields).
  */
 async function disableDeepResearch(page) {
   if (!(await isDeepResearchActive(page))) return;
 
-  // Legacy fast path: the old removable-chip button, if this UI still has it.
   const legacyClicked = await page.evaluate(() => {
     const chip = [...document.querySelectorAll('button')].find((b) => {
       const al = (b.getAttribute('aria-label') || '').toLowerCase();
@@ -301,7 +351,7 @@ async function disableDeepResearch(page) {
     return true;
   });
   if (legacyClicked) {
-    await new Promise((r) => setTimeout(r, 500));
+    await sleep(500);
     if (!(await isDeepResearchActive(page))) return;
   }
 
@@ -310,8 +360,6 @@ async function disableDeepResearch(page) {
   ).first();
   if ((await editor.count()) === 0) return;
 
-  // Capture any non-chip composer text so we can restore it if we have to
-  // nuke the whole composer. (Normally empty: enforcement precedes fill.)
   const preText = await page.evaluate(() => {
     const ed = document.querySelector(
       '[role="textbox"].ProseMirror, .ProseMirror[contenteditable="true"], #prompt-textarea'
@@ -327,15 +375,16 @@ async function disableDeepResearch(page) {
   await editor.click();
 
   // Targeted: cursor to start (chip is the first node), forward-delete it.
-  await page.keyboard.press('Control+Home').catch(() => {});
+  const docStart = process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home';
+  await page.keyboard.press(docStart).catch(() => {});
   await page.keyboard.press('Delete').catch(() => {});
-  await new Promise((r) => setTimeout(r, 500));
+  await sleep(500);
   if (!(await isDeepResearchActive(page))) return;
 
   // Fallback: select-all + backspace (nukes the composer), then restore text.
-  await page.keyboard.press('Control+a').catch(() => {});
+  await page.keyboard.press('ControlOrMeta+a').catch(() => {});
   await page.keyboard.press('Backspace').catch(() => {});
-  await new Promise((r) => setTimeout(r, 500));
+  await sleep(500);
   if (preText && !(await isDeepResearchActive(page))) {
     await page.keyboard.insertText(preText).catch(() => {});
   }
@@ -346,8 +395,8 @@ async function disableDeepResearch(page) {
  *
  * Flow: if not already active, open the composer "+" menu via Playwright
  * (real click — JS click does not work on this button), click the
- * "Deep research" menuitemradio, verify the chip appears, succeed.
- * Throws if the "+" button is missing, the menuitem is missing, or the
+ * "Deep research" row, verify the chip appears, succeed.
+ * Throws if the "+" button is missing, the row is missing, or the
  * chip never appears.
  */
 export async function ensureDeepResearch(page) {
@@ -359,10 +408,6 @@ export async function ensureDeepResearch(page) {
   }
   await addBtn.click();
 
-  // Wait for the menu to populate. As of the 2026-06 composer UI the "+" menu
-  // rows are bare <div>s inside a `.popover` (role="group" sections) — there is
-  // NO [role="menuitemradio"] anymore, so the old role-based wait timed out even
-  // though the menu was open. Wait for the "Deep research" row text instead.
   const drRow = page.getByText(DR_MENUITEM_TEXT_PATTERN).first();
   try {
     await drRow.waitFor({ state: 'visible', timeout: 6000 });
@@ -371,87 +416,92 @@ export async function ensureDeepResearch(page) {
     throw new Error('Composer "+" menu did not open within 6s after click (no "Deep research" row).');
   }
 
-  // Click the row via a real Playwright click so React's delegated handler fires
-  // (a raw JS .click() on the bare <div> is unreliable). The anchored regex keeps
-  // us off the ancestor group div whose text concatenates several row labels.
   try {
     await drRow.click({ timeout: 3000 });
   } catch {
     await page.keyboard.press('Escape').catch(() => {});
     throw new Error('"Deep research" option found but could not be clicked in composer "+" menu.');
   }
-  await new Promise((r) => setTimeout(r, 800));
+  await sleep(800);
 
-  // Verify by polling the chip up to ~2s.
   for (let attempt = 0; attempt < 5; attempt += 1) {
     if (await isDeepResearchActive(page)) return;
-    await new Promise((r) => setTimeout(r, 400));
+    await sleep(400);
   }
   throw new Error('Deep Research mode toggle failed — composer chip did not appear after click.');
 }
 
+/**
+ * Idempotent: ensure the composer is on the Pro target (pill "6 Pro").
+ *
+ * Fast path: pill already passes isTargetPill → return. Otherwise open the
+ * picker, select the family radio, push Power to max, close, and re-verify
+ * via the pill. Throws if the final pill state is not the target — the
+ * caller MUST refuse to submit on throw, since silently proceeding would
+ * use a weaker model.
+ */
 export async function ensureExtendedPro(page) {
-  // DR also shows pill "Pro" — chip is the only discriminator. If DR is
-  // active, toggle it off before the pill fast-path; otherwise we'd
-  // silently submit a DR job when the caller wanted Sol Pro. This must be
-  // a hard gate: on the 2026-07 UI several plausible removal paths are
-  // silent no-ops, so re-verify and throw rather than trust the attempt.
+  // DR keeps the power label on the pill — the chip is the only
+  // discriminator. Turn DR off first, and treat failure as fatal.
   if (await isDeepResearchActive(page)) {
     await disableDeepResearch(page);
     if (await isDeepResearchActive(page)) {
       throw new Error(
         'Deep Research is active on the composer and could not be turned off. ' +
-        'Refusing to proceed (the prompt would submit as a DR job, not Sol Pro). ' +
+        'Refusing to proceed (the prompt would submit as a DR job, not Pro). ' +
         'Remove the "Deep research" chip manually and retry.'
       );
     }
   }
 
   let pillText = await readPill(page);
-  if (isPillOk(pillText)) return;
+  if (isTargetPill(pillText)) return;
 
-  // Read current selection to confirm what needs changing, and check the
-  // base-model row (read-only) while the menu is open.
-  const menuState = await readMenuState(page).catch(() => ({ reasoning: null, modelRow: null }));
-  const currentReasoning = menuState.reasoning;
-  if (menuState.modelRow && !EXPECTED_MODEL_ROW.test(menuState.modelRow)) {
-    const msg = `Model picker's base-model row reads "${menuState.modelRow}", expected GPT-5.6 Sol. ` +
-      `ChatGPT may have changed/downgraded the default model — verify manually.`;
-    if (process.env.MPP_STRICT_BASE_MODEL === '1') throw new Error(msg);
-    console.error(`WARNING: ${msg}`);
+  try {
+    await openMenu(page);
+    await selectFamily(page);
+    await maxOutPower(page);
+  } catch (e) {
+    await closeMenu(page).catch(() => {});
+    throw new Error(`Failed to set the Pro target (was "${pillText}"): ${e.message}`);
   }
-
-  if (!DESIRED_REASONING_LABELS.includes(currentReasoning)) {
-    try {
-      await openMenu(page);
-      const clicked = await page.evaluate((targets) => {
-        // menuitem fallback covers UI drift; exact label match keeps the
-        // "GPT-5.5 >" model-submenu row from ever being clicked.
-        const rows = document.querySelectorAll('[role="menuitemradio"], [role="menuitem"]');
-        for (const target of targets) {
-          for (const r of rows) {
-            const label = (r.innerText || '').split(/[\n|]/)[0].trim();
-            if (label === target) { r.click(); return target; }
-          }
-        }
-        return null;
-      }, DESIRED_REASONING_LABELS);
-      if (!clicked) throw new Error(`No reasoning radio matching ${JSON.stringify(DESIRED_REASONING_LABELS)} found in pill menu`);
-      await new Promise(r => setTimeout(r, 600));
-      await closeMenu(page);
-    } catch (e) {
-      await closeMenu(page).catch(() => {});
-      throw new Error(`Failed to set reasoning to ${DESIRED_REASONING_LABELS[0]}: ${e.message}`);
-    }
-  }
+  await closeMenu(page);
 
   // Authoritative recheck via pill — this is the gate.
   pillText = await readPill(page);
-  if (!isPillOk(pillText)) {
+  if (!isTargetPill(pillText)) {
     throw new Error(
-      `Composer pill is "${pillText}" after fix attempt, not "Pro" (Sol Pro target). ` +
+      `Composer pill is "${pillText}" after fix attempt, not the Pro target ` +
+      `(tier "${TARGET_TIER}" on model family >= ${MIN_MODEL_VERSION}). ` +
       `Refusing to proceed (would silently use a weaker model). ` +
-      `Set the Pro intelligence lane manually in the composer and retry.`
+      `Set "${FAMILY_RADIO_LABEL}" + Power "Pro" manually in the composer and retry.`
     );
+  }
+}
+
+export const ensureProTarget = ensureExtendedPro;
+
+/**
+ * Last gate before clicking Send, after attachments and prompt text are in
+ * place. Filling the composer can silently undo mode selection (select-all +
+ * replace deletes the inline Deep research chip), so the mode chosen at the
+ * start of the submit flow must be re-verified here. Throws — the caller must
+ * not send — when the composer is not in the requested mode.
+ */
+export async function assertModeBeforeSend(page, { deepResearch = false } = {}) {
+  const drActive = await isDeepResearchActive(page);
+  if (deepResearch) {
+    if (!drActive) {
+      throw new Error('Deep research chip is not in the composer right before send; ' +
+        'refusing to submit (the prompt would run as a plain Pro chat).');
+    }
+    return;
+  }
+  if (drActive) {
+    throw new Error('Deep research is active right before send; refusing to submit a Pro role as a DR job.');
+  }
+  const pill = await readPill(page);
+  if (!isTargetPill(pill)) {
+    throw new Error(`Composer pill reads "${pill}" right before send, not the Pro target; refusing to submit.`);
   }
 }

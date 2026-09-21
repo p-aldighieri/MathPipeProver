@@ -69,7 +69,9 @@ follow the same procedure.
 - If ChatGPT shows an account chooser and there is one clear account entry
   to continue with, select it and keep going. Escalate only when the login
   state is ambiguous or blocked.
-- For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace
-  loop that wakes the orchestrator periodically and advances the pipeline
-  on its own. This is the orchestrator-loop skill — unrelated to the older
-  Python heartbeat-watcher chain, which was removed.
+- To wait on a submission, submit with `--return-after-submit` and run
+  `scripts/chatgpt_browser_agent/wait_chat_done.mjs --chat-url URL --out PATH`
+  as a background job: it exits when the answer is complete (and written),
+  when the chat fails, or on timeout, so its exit is the wake-up signal (see
+  CLAUDE.md §Waiting on a submission for exit codes). `/heartbeat <interval>`
+  remains a long-interval fallback loop for very long unattended runs.

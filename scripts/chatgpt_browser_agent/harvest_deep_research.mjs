@@ -50,7 +50,7 @@
  */
 import fs from 'fs';
 import { attachCDP } from './lib/browser.mjs';
-import { latestAssistantText, extractChatId } from './lib/poll.mjs';
+import { latestAssistantText, extractChatId, assistantMarkdown } from './lib/poll.mjs';
 import { isGenerating, fillComposer, clickSend } from './lib/composer.mjs';
 import { ensureExtendedPro } from './lib/model_pill.mjs';
 
@@ -187,7 +187,10 @@ try {
   }
 
   // ── Phase 3: harvest the inline answer ──
-  const text = await pollInline(page, { minLen: 600, label: 'harvest' });
+  // Poll on innerText for stability, then write the DOM rebuild (markdown
+  // structure + TeX math) when it is available.
+  const stableText = await pollInline(page, { minLen: 600, label: 'harvest' });
+  const text = stableText ? ((await assistantMarkdown(page).catch(() => '')).trim() || stableText) : '';
   if (!text) {
     console.log('No inline text harvested before deadline.');
     await close(); process.exit(2);

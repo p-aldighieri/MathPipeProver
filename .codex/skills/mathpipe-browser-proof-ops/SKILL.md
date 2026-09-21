@@ -47,12 +47,12 @@ scripts/chatgpt_browser_agent.sh submit --project-url URL --request-file PATH --
 6. Treat browser drift as part of the job, not as an automatic stop condition.
 
 - Re-open the project page and verify you are still in the intended project.
-- Re-check the Extended Pro target before important prompts: reasoning `Pro` plus model `5.5`.
+- Re-check the Pro target before important prompts: the composer pill must read `6 Pro` (GPT-6, top `Power` level).
 - If `prepare` reports missing durable sources, retry one file at a time and verify again.
 - If a response file is missing but the chat URL exists, recover the existing chat before resubmitting (use `/inspect-chat` for a one-shot status read, `/recover-chat` to harvest).
 - If ChatGPT lands on an account chooser and there is a single clear account entry, select it and continue.
 - Keep natural-language analytical proof roles on ChatGPT Extended Pro via `external_agent`. Use subagents only for explicit coding/simulation tasks or Lean formalization proof-engineering.
-- For unattended runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes the orchestrator periodically and advances the pipeline on its own (this is the orchestrator-loop skill, not the old Python watcher chain which was removed).
+- To wait on a submission, run `scripts/chatgpt_browser_agent/wait_chat_done.mjs --chat-url URL --out PATH` as a background job; it exits when the answer is written, the chat fails, or it times out (exit codes in CLAUDE.md §Waiting on a submission). `/heartbeat <interval>` remains a long-interval fallback loop.
 - For the literature role specifically (`prompts/soft/02_literature_soft.md`), submit with `--deep-research` instead of Extended Pro — DR can browse the open web and academic repositories and return long-form synthesis with citations.
 
 ## Durable Source Policy

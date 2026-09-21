@@ -1,36 +1,52 @@
 #!/usr/bin/env node
 /**
- * wait_chat_done.mjs — poll a ChatGPT chat URL until generation completes,
- * then dump the last assistant message to disk.
- *
- * Uses lib/poll.mjs's waitForStableAssistantReply with the chat-ID-pin
- * and re-navigation hardening (added 2026-05-23 PIOTR session, bug
- * where parallel pollers grabbed each other's chat content).
+ * wait_chat_done.mjs — watch a ChatGPT chat until the model finishes, then
+ * write the answer to disk and EXIT. Built to run as a background job whose
+ * exit is the wake-up signal for the orchestrator (e.g. Claude Code's Bash
+ * `run_in_background`, which re-invokes the session when the process exits),
+ * replacing fixed-interval heartbeat loops.
  *
  * Usage:
- *   node wait_chat_done.mjs --chat-url URL [--port PORT] --out PATH \
- *     [--poll-secs N] [--max-mins N] [--min-stable-length N] [--deep-research]
+ *   node wait_chat_done.mjs --chat-url URL --out PATH [--port PORT]
+ *     [--poll-secs N] [--max-mins N] [--min-stable-length N]
+ *     [--deep-research] [--keep-tab] [--verbose]
  *
- * Polls every --poll-secs (default 60). Generation is "done" when the
- * assistant text stays stable across 2 polls AND no stop button is
- * present AND text length >= --min-stable-length (default 200, blocks
- * premature triggers on short interim outputs).
+ * Done means: no stop button, the last turn is an assistant turn with a
+ * non-empty message, its copy button is shown, and the answer text is
+ * unchanged across two consecutive polls (length >= --min-stable-length,
+ * default 200). The answer is written as markdown rebuilt from the rendered
+ * DOM with math restored to TeX (lib/poll.mjs assistantMarkdown); plain
+ * innerText is the fallback.
  *
- * --deep-research: harvest a Deep Research chat. DR's research phase shows
- * no stop button, so the normal "no stop button = done" signal would declare
- * done during research. This flag treats DR-active-with-no-answer-yet as
- * still-generating (via isDeepResearchWorking) and finalizes only on stable,
- * non-empty report text. Use it whenever the chat was submitted with
- * `cdp_submit.mjs --deep-research`.
+ * Exit codes (the orchestrator branches on these):
+ *   0  answer written to --out
+ *   1  transport/auth/URL-drift error (nothing written)
+ *   2  timeout (whatever is visible is written to --out, marked partial)
+ *   3  the chat itself failed: error banner, stopped response, or rate limit
+ *   4  (--deep-research) research finished but the report is a canvas card,
+ *      not chat text — harvest with harvest_deep_research.mjs --repost-now
  *
- * Exits 0 on success, 1 on transport/auth/URL-drift errors, 2 on timeout.
+ * Output is deliberately quiet — one line per state change plus a final
+ * DONE/TIMEOUT/CHAT_ERROR line — so a background job's captured stdout
+ * stays small. --verbose prints every poll.
+ *
+ * --deep-research: DR's research phase shows no stop button, so a DR chat is
+ * treated as still working while DR is active with no answer yet (via
+ * isDeepResearchWorking). Heavy DR reports land in a canvas that is not in
+ * the chat DOM; harvest those with harvest_deep_research.mjs --repost-now.
+ *
+ * Tab hygiene: the watcher opens its own tab on the chat and closes it on
+ * every exit path (generation is server-side; closing never kills a job).
+ * A tab it merely found already on the chat is left open. --keep-tab opts out.
  */
 import fs from 'fs';
 import { attachCDP } from './lib/browser.mjs';
-import { waitForStableAssistantReply, extractChatId, latestAssistantText } from './lib/poll.mjs';
+import { extractChatId, latestAssistantText, chatTurnState, assistantMarkdown } from './lib/poll.mjs';
+import { isDeepResearchWorking } from './lib/model_pill.mjs';
 
 const args = process.argv.slice(2);
-let chatUrl = '', port = 9222, outPath = '', pollSecs = 60, maxMins = 180, minStableLength = 200, deepResearch = false, keepTab = false;
+let chatUrl = '', port = 9222, outPath = '', pollSecs = 45, maxMins = 180, minStableLength = 200;
+let deepResearch = false, keepTab = false, verbose = false;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--chat-url') chatUrl = args[++i];
   else if (args[i] === '--port') port = parseInt(args[++i], 10);
@@ -40,6 +56,7 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--min-stable-length') minStableLength = parseInt(args[++i], 10);
   else if (args[i] === '--deep-research') deepResearch = true;
   else if (args[i] === '--keep-tab') keepTab = true;
+  else if (args[i] === '--verbose') verbose = true;
 }
 if (!chatUrl || !outPath) { console.error('Need --chat-url and --out'); process.exit(1); }
 
@@ -50,86 +67,142 @@ if (!chatId) {
 }
 
 const startMs = Date.now();
-let pollIdx = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const elapsed = () => `${Math.round((Date.now() - startMs) / 60000)}min`;
+const RENAVIGATE_EVERY = 6;   // polls; refreshes a background tab's stale DOM
+const ERROR_CONFIRMATIONS = 2; // consecutive polls showing an error banner
+
+let close = async () => {};
+let page = null;
+let createdPage = false;
+const disposeTab = async () => {
+  if (keepTab || !createdPage || !page) return;
+  try { await page.close(); } catch { /* tab already gone */ }
+};
+const finish = async (code) => { await disposeTab(); await close(); process.exit(code); };
+
+async function goToChat() {
+  try {
+    await page.goto(chatUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  } catch (e) {
+    // Chat pages intermittently exceed goto timeouts; the next poll retries.
+    return `navigation failed (${String(e.message).split('\n')[0]})`;
+  }
+  await sleep(4000);
+  return null;
+}
+
+async function readAnswer() {
+  const md = (await assistantMarkdown(page).catch(() => '')).trim();
+  if (md) return md;
+  return (await latestAssistantText(page)).trim();
+}
 
 try {
-  const { context, close } = await attachCDP({ port });
-
-  // Prefer a page already loaded on THIS chat; else open a new page.
-  // Tab hygiene: close any page WE created (or adopted for this chat) on
-  // every exit path — generation is server-side, so closing a tab never
-  // kills a running job. --keep-tab opts out. Pages found on OTHER content
-  // are never touched.
-  let page = context.pages().find(p => p.url().includes(chatId));
-  const createdPage = !page;
-  if (!page) page = await context.newPage();
-  const disposeTab = async () => {
-    if (keepTab || !createdPage) return;
-    try { await page.close(); } catch { /* tab already gone */ }
-  };
-
-  // Initial navigation with one retry: chat pages intermittently exceed the
-  // 30s goto timeout (observed 2026-07-13); one transient miss shouldn't fail
-  // the whole poll run.
-  try {
-    await page.goto(chatUrl, { waitUntil: 'domcontentloaded' });
-  } catch (e) {
-    console.log(`[nav retry] initial goto failed (${String(e.message).split('\n')[0]}); retrying once`);
-    await new Promise(r => setTimeout(r, 5000));
-    await page.goto(chatUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  const att = await attachCDP({ port });
+  close = att.close;
+  page = att.context.pages().find((p) => p.url().includes(chatId)) || null;
+  createdPage = !page;
+  if (!page) page = await att.context.newPage();
+  const navNote = await goToChat();
+  if (navNote) {
+    await sleep(5000);
+    const retry = await goToChat();
+    if (retry) { console.error(`ERROR: ${retry}`); await finish(1); }
   }
-  await new Promise(r => setTimeout(r, 4000));
   if (!page.url().includes(chatId)) {
     console.error(`Navigation drifted off target chat ${chatId}; current URL: ${page.url()}`);
-    await disposeTab();
-    await close();
-    process.exit(1);
+    await finish(1);
   }
 
-  try {
-    const stableText = await waitForStableAssistantReply(page, {
-      pollSeconds: pollSecs,
-      maxWaitSeconds: maxMins * 60,
-      // Trust length-stability, not the copy button: DR's research-plan turn
-      // carries a stray copy button and the DR report turn doesn't match the
-      // copy-button heuristic's "ChatGPT said:" filter. DR completion is gated
-      // instead by stable non-empty report text + the deepResearch generating
-      // augmentation below (which keeps the empty research phase "generating").
-      requireCopyButton: false,
-      minStableLength,
-      chatIdPin: chatId,
-      chatUrl,
-      renavigateEveryNPolls: 5,
-      deepResearch,
-      onPoll: ({ chatUrl: u, currentTextLength, generating, note }) => {
-        if (note) { console.log(`[poll note] ${note}`); return; }
-        pollIdx += 1;
-        const elapsedMin = Math.round((Date.now() - startMs) / 60000);
-        console.log(`[poll ${pollIdx} @ ${elapsedMin}min] generating=${generating} lastLen=${currentTextLength}`);
-      },
-    });
-    fs.writeFileSync(outPath, stableText, 'utf-8');
-    console.log(`DONE: wrote ${stableText.length} chars to ${outPath}`);
-    await disposeTab();
-    await close();
-    process.exit(0);
-  } catch (e) {
-    if (/Timed out/i.test(e.message)) {
-      // Best-effort: still write whatever's visible, then exit 2.
-      const tail = (await latestAssistantText(page)).trim();
-      if (tail) {
-        fs.writeFileSync(outPath, tail, 'utf-8');
-        console.log(`TIMEOUT: ${maxMins} min reached. Wrote partial ${tail.length} chars to ${outPath}.`);
-      } else {
-        console.log(`TIMEOUT: ${maxMins} min reached without completion.`);
-      }
-      await disposeTab();
-      await close();
-      process.exit(2);
+  const deadline = startMs + maxMins * 60000;
+  let pollIdx = 0;
+  let lastText = '';
+  let stableCycles = 0;
+  let errorCycles = 0;
+  let lastPhase = '';
+
+  while (Date.now() < deadline) {
+    pollIdx += 1;
+    if (pollIdx > 1 && pollIdx % RENAVIGATE_EVERY === 0) {
+      const note = await goToChat();
+      if (note && verbose) console.log(`[${elapsed()}] ${note}; retrying next cycle`);
     }
-    throw e;
+    if (!page.url().includes(chatId)) {
+      console.error(`Navigation drifted off target chat ${chatId}; current URL: ${page.url()}`);
+      await finish(1);
+    }
+
+    let state;
+    try {
+      state = await chatTurnState(page);
+      if (deepResearch && !state.generating) {
+        state.generating = await isDeepResearchWorking(page);
+      }
+    } catch (e) {
+      const msg = String(e.message).split('\n')[0];
+      if (/context was destroyed|navigation|Target closed/i.test(msg)) {
+        await sleep(3000);
+        continue;
+      }
+      throw e;
+    }
+
+    const phase = state.generating ? 'generating'
+      : state.errorText ? 'error'
+        : state.messageCount > 0 ? 'answer-visible'
+          : 'waiting';
+    if (phase !== lastPhase || verbose) {
+      const detail = phase === 'generating' ? (state.statusText ? ` (${state.statusText})` : '')
+        : phase === 'answer-visible' ? ` (${state.textLength} chars)`
+          : phase === 'error' ? ` (${state.errorText})` : '';
+      console.log(`[${elapsed()}] ${phase}${detail}`);
+      lastPhase = phase;
+    }
+
+    if (phase === 'error') {
+      errorCycles += 1;
+      if (errorCycles >= ERROR_CONFIRMATIONS) {
+        console.log(`CHAT_ERROR after ${elapsed()}: ${state.errorText}`);
+        await finish(3);
+      }
+    } else {
+      errorCycles = 0;
+    }
+
+    if (deepResearch && state.researchCompleted && state.textLength < minStableLength) {
+      console.log(`DR_REPORT_IN_CANVAS after ${elapsed()}: research finished but the report is a canvas ` +
+        'card, not chat text. Harvest with harvest_deep_research.mjs --repost-now.');
+      await finish(4);
+    }
+
+    if (phase === 'answer-visible') {
+      const text = await readAnswer();
+      stableCycles = (text && text === lastText) ? stableCycles + 1 : 0;
+      lastText = text || lastText;
+      const ready = state.hasCopyButton || deepResearch;
+      if (stableCycles >= 1 && ready && lastText.length >= minStableLength) {
+        fs.writeFileSync(outPath, `${lastText}\n`, 'utf-8');
+        console.log(`DONE after ${elapsed()}: wrote ${lastText.length} chars to ${outPath}`);
+        await finish(0);
+      }
+      // Answer visible but not yet settled: re-check sooner than a full poll.
+      await sleep(Math.min(pollSecs, 15) * 1000);
+      continue;
+    }
+    stableCycles = 0;
+    await sleep(pollSecs * 1000);
   }
+
+  const tail = await readAnswer().catch(() => '');
+  if (tail) {
+    fs.writeFileSync(outPath, `<!-- PARTIAL: watcher timed out after ${maxMins} min -->\n${tail}\n`, 'utf-8');
+    console.log(`TIMEOUT after ${maxMins} min: wrote partial ${tail.length} chars to ${outPath}`);
+  } else {
+    console.log(`TIMEOUT after ${maxMins} min without an answer.`);
+  }
+  await finish(2);
 } catch (e) {
   console.error(`ERROR: ${e.message}`);
-  process.exit(1);
+  await finish(1);
 }

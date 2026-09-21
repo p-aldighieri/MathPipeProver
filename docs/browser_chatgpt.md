@@ -12,7 +12,7 @@ The browser runner in `scripts/chatgpt_browser_agent.sh` turns that contract int
 
 1. Open a ChatGPT project in a persistent browser profile.
 2. Ensure the composer is in the right mode for the role:
-   - **Sol Pro** (default; legacy name "Extended Pro") for every analytical role — `Pro` intelligence lane on `GPT-5.6 Sol`, pill reads `Pro`.
+   - **GPT-6 Pro** (default; legacy names "Sol Pro", "Extended Pro") for every analytical role — `Latest` model family at the top `Power` level, pill reads `6 Pro`.
    - **Deep Research** when `--deep-research` is passed (literature role only). 5–30 min wall-clock; web-browsing + multi-source synthesis.
 3. Verify the visible composer state before submitting.
 4. Optionally add or remove durable project sources.
@@ -21,7 +21,7 @@ The browser runner in `scripts/chatgpt_browser_agent.sh` turns that contract int
 7. Write the reply to `branches/<branch>/external_agent/<role>_response.md`.
 8. Optionally write a JSON session log beside the response file.
 
-The DOM logic for both Sol Pro and Deep Research lives in `scripts/chatgpt_browser_agent/lib/model_pill.mjs` — single source of truth shared by every script. ChatGPT's composer DOM changes every few weeks; when it does, fix the lib once, not each entry point.
+The DOM logic for both the Pro target and Deep Research lives in `scripts/chatgpt_browser_agent/lib/model_pill.mjs` — single source of truth shared by every script. ChatGPT's composer DOM changes every few weeks; when it does, fix the lib once, not each entry point.
 
 For proof projects, keep a durable proof-state markdown file attached as a project source and update it after each accepted reviewer pass or major proof amendment.
 
@@ -67,7 +67,7 @@ This avoids the separate Playwright-owned browser profile entirely.
 
 ### Prepare the project
 
-Use this to open the project, pin the Sol Pro target (legacy name "Extended Pro"), and sync durable project sources.
+Use this to open the project, pin the Pro target (legacy name "Extended Pro"), and sync durable project sources.
 
 ```bash
 scripts/chatgpt_browser_agent.sh prepare \
@@ -82,7 +82,7 @@ scripts/chatgpt_browser_agent.sh prepare \
 `prepare` should be treated as a verified sync step, not a best-effort hint. If the requested durable set is not confirmed:
 
 1. reopen the project page
-2. re-check the Sol Pro target (current UI: `Pro` intelligence lane + model `GPT-5.6 Sol`)
+2. re-check the Pro target (current UI: pill `6 Pro` — `Latest` family, `Power` slider at `Pro`)
 3. reopen `Sources`
 4. retry the missing file one at a time
 5. confirm the final source list before continuing
@@ -179,7 +179,8 @@ For iterative proof development, update the durable proof-state source after eac
 
 - Default max wait is 90 minutes (`5400` seconds).
 - Override with `--max-wait-seconds` if a role needs a different budget.
-- Use `/inspect-chat` to one-shot read the current state of the chat (generating? assistant turn count? last text length?). For unattended long runs, `/heartbeat <interval>` starts an orchestrator-pace loop that wakes up periodically and advances the pipeline on its own.
+- Preferred: submit with `--return-after-submit` and run `wait_chat_done.mjs --chat-url URL --out RESPONSE_FILE` as a background job. It exits as soon as the answer is complete (exit `0`, answer written as markdown with TeX math), on a chat failure (`3`), on timeout (`2`), or — for `--deep-research` — when the report landed in a canvas (`4`). The exit is the orchestrator's wake-up call.
+- Use `/inspect-chat` to one-shot read the current state of the chat (generating? assistant turn count? last text length?). `/heartbeat <interval>` remains a long-interval fallback loop for very long unattended runs.
 
 ## Orchestrator handoff
 
@@ -194,8 +195,8 @@ After every soft role, control returns to the orchestrator, which judges the nex
 
 This first pass hard-codes two browser policies:
 
-- always use the Sol Pro target (current UI: `Pro` intelligence lane + model `GPT-5.6 Sol`)
-- always verify the visible composer pill before sending
+- always use the Pro target (current UI: pill `6 Pro` — `Latest` family, `Power` at `Pro`)
+- always verify the visible composer pill before sending, and re-verify the mode after the prompt is filled (`assertModeBeforeSend`)
 
 That is deliberate. The goal is a working browser path first, then a more flexible browser config later.
 

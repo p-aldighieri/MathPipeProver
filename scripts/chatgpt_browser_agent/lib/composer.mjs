@@ -13,9 +13,11 @@
  *   getComposer(page) -> locator
  *       Multi-candidate composer locator. Throws if none becomes visible.
  *
- *   fillComposer(page, text) -> locator
+ *   fillComposer(page, text, { verify?, append? }) -> locator
  *       Find the composer, click it, fill with `text`. Returns the locator
  *       so the caller can pass it to clickSend() without re-querying.
+ *       `append` inserts at the end instead of replacing, preserving inline
+ *       tool chips (required for Deep Research submissions).
  *
  *   clearComposerText(page) -> locator
  *       Clear visible composer draft text.
@@ -51,8 +53,11 @@ export const SEND_BUTTON_FALLBACK_SELECTORS = [
 ];
 
 // Aria-label / innerText fragments that signal "model is generating right now".
-// Lower-cased for case-insensitive substring matching.
+// Lower-cased for case-insensitive substring matching. "stop answering" is the
+// GPT-6 era label (2026-09: <button data-testid="stop-button"
+// aria-label="Stop answering">, shown for the whole Pro thinking phase).
 const STOP_GENERATING_PATTERNS = [
+  'stop answering',
   'stop streaming',
   'stop generating',
   'stop response',
@@ -94,7 +99,11 @@ export async function composerTextLength(page) {
       for (const element of document.querySelectorAll(selector)) {
         if (!visible(element)) continue;
         if ('value' in element) return (element.value || '').length;
-        return (element.innerText || element.textContent || '').length;
+        // Ignore inline tool chips (e.g. "Deep research", an accent-coloured
+        // atom at the start of the editor): they are not prompt text.
+        const clone = element.cloneNode(true);
+        for (const chip of clone.querySelectorAll('[class*="text-token-text-accent"]')) chip.remove();
+        return (clone.textContent || '').length;
       }
     }
     return -1;
@@ -152,11 +161,20 @@ export async function assertComposerLength(page, expectedLength, { minRatio = 0.
  * leads to silent no-ops on some UI revisions.
  */
 export async function fillComposer(page, text, opts = {}) {
-  const { verify = false } = opts;
+  const { verify = false, append = false } = opts;
   const composer = await getComposer(page);
   await composer.click();
   await new Promise(r => setTimeout(r, 500));
-  await composer.fill(text);
+  if (append) {
+    // Keep inline tool chips: the "Deep research" chip is a ProseMirror atom
+    // at the start of the editor, and fill() (select-all + replace) deletes
+    // it — which silently turned DR submissions into plain Pro chats
+    // (observed 2026-09-21). Move to the end and insert instead.
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End');
+    await page.keyboard.insertText(text);
+  } else {
+    await composer.fill(text);
+  }
   if (verify) await assertComposerLength(page, text.length);
   return composer;
 }
@@ -206,6 +224,7 @@ export async function clickSend(page, composer) {
  */
 export async function isGenerating(page) {
   return await page.evaluate((patterns) => {
+    if (document.querySelector('[data-testid="stop-button"]')) return true;
     return [...document.querySelectorAll('button')].some((button) => {
       const label = `${button.getAttribute('aria-label') || ''} ${(button.innerText || '').trim()}`.toLowerCase();
       return patterns.some((p) => label.includes(p));

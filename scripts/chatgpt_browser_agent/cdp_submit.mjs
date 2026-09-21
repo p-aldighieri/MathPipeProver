@@ -14,7 +14,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { dirname, resolve } from 'path';
 import { attachCDP } from './lib/browser.mjs';
 import { ensureChatReady } from './lib/auth.mjs';
-import { readPill, ensureExtendedPro, ensureDeepResearch } from './lib/model_pill.mjs';
+import { readPill, ensureExtendedPro, ensureDeepResearch, assertModeBeforeSend, isDeepResearchActive } from './lib/model_pill.mjs';
 import {
   fillComposer, clickSend, isGenerating,
   clearComposerText, clearStoredComposerDrafts, composerTextLength,
@@ -156,23 +156,26 @@ try {
   console.log('Model pill before submit:', composerPill);
   if (deepResearch) {
     await ensureDeepResearch(page);
-    console.log('Model: Deep Research (confirmed at submission time)');
+    console.log('Model: Deep Research (selected)');
   } else {
     await ensureExtendedPro(page);
-    console.log('Model: Pro + Extended (confirmed at submission time)');
+    console.log(`Model: Pro target (selected; pill "${await readPill(page)}")`);
   }
 
-  const composer = await fillComposer(page, promptText, { verify: true });
+  const composer = await fillComposer(page, promptText, { verify: true, append: deepResearch });
   console.log('Filled prompt');
   await page.waitForTimeout(1500);
 
   if (dryRun) {
-    console.log('DRY RUN: prompt filled but NOT sent; clearing draft.');
+    console.log(`DRY RUN: prompt filled but NOT sent. Deep research chip after fill: ${await isDeepResearchActive(page)}; pill: "${await readPill(page)}". Clearing draft.`);
     await composer.fill('');
     await disposeTab();
     await close();
     process.exit(0);
   }
+
+  await assertModeBeforeSend(page, { deepResearch });
+  console.log('Mode re-verified after fill');
 
   const sent = await clickSend(page, composer);
   console.log(sent ? 'SENT' : 'WARNING: send fallback chain exhausted');

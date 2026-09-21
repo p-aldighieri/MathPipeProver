@@ -4,7 +4,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import { ensureExtendedPro, ensureDeepResearch, BASE_MODEL_LABEL, EFFORT_LABEL, EFFORT_LABEL_DR } from "./lib/model_pill.mjs";
+import {
+  ensureExtendedPro, ensureDeepResearch, assertModeBeforeSend,
+  BASE_MODEL_LABEL, EFFORT_LABEL, EFFORT_LABEL_DR,
+} from "./lib/model_pill.mjs";
 import {
   fillComposer, clickSend, isGenerating,
   clearComposerText, clearStoredComposerDrafts, composerTextLength,
@@ -63,10 +66,9 @@ Options:
                                waiting for the assistant response.
   --deep-research              Submit via ChatGPT Deep Research mode instead of
                                Extended Pro. Used by the literature role. DR
-                               jobs run 5-30 min (Extended Pro: 8-20 min).
+                               jobs run 5-30 min (Pro: 8-20+ min).
                                Applies to 'submit' only; ignored by other
-                               subcommands. NOTE: DR DOM selector is a stub
-                               pending live-inspect wiring.
+                               subcommands.
   --keep-tab                   Do not close the tab this command opened. By
                                default submit (--page new), recover, and inspect
                                open a dedicated tab and close it on exit
@@ -238,12 +240,15 @@ async function verifySources(page, expectedPresent, expectedAbsent, waitForLogin
 // clickSourceActionsByName + removeSource (with confirmation dialog handling)
 // live in lib/sources.mjs.
 
-async function submitPrompt(page, requestText) {
+async function submitPrompt(page, requestText, { deepResearch = false } = {}) {
   // Wrapper-specific orchestration: ensure Chats tab is active (sources flow
   // may have left us on the Sources tab), submit via lib primitives, then
-  // wait for the conversation route to appear.
+  // wait for the conversation route to appear. DR prompts are appended so
+  // the inline Deep research chip survives; the mode is re-verified after
+  // filling and before sending.
   await openChatsTab(page);
-  const composer = await fillComposer(page, requestText, { verify: true });
+  const composer = await fillComposer(page, requestText, { verify: true, append: deepResearch });
+  await assertModeBeforeSend(page, { deepResearch });
 
   const currentUrl = page.url();
   await clickSend(page, composer);
@@ -423,7 +428,7 @@ async function runSubmit(page, args) {
   for (const attachmentPath of args.attachFiles) {
     await attachFileToComposer(page, attachmentPath);
   }
-  const chatUrl = await submitPrompt(page, submissionPrompt);
+  const chatUrl = await submitPrompt(page, submissionPrompt, { deepResearch: args.deepResearch });
   await writeTextFileIfSet(args.chatUrlFile, chatUrl);
 
   if (args.returnAfterSubmit) {

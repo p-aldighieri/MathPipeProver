@@ -20,8 +20,10 @@ orchestrator needs to fulfill the pending request manually. The skill:
 2. Submits via `scripts/chatgpt_browser_agent.sh submit ...` (preferred) or
    `scripts/chatgpt_browser_agent/cdp_submit.mjs` (lower-level).
 3. Reports the chat URL.
-4. Suggests monitoring tools: `/inspect-chat` (one-shot), `/recover-chat`
-   (harvest), `/heartbeat <interval>` (unattended orchestrator-pace loop).
+4. Waits with the chat watcher (`wait_chat_done.mjs` as a background job,
+   which exits when the answer is written); `/inspect-chat` (one-shot),
+   `/recover-chat` (harvest) and `/heartbeat <interval>` (fallback loop)
+   remain available.
 
 Read `.claude/commands/submit-role.md` for the full step-by-step, CLI
 argument shapes, and error-recovery guidance.
