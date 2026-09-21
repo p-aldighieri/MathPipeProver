@@ -125,9 +125,13 @@ If ChatGPT changes the DR DOM again, update `lib/model_pill.mjs` only.
   Nm · K citations · S searches" line and the report itself all render **inside the
   widget**; the chat DOM does not change when research finishes, so no DOM watcher can
   see completion. Confirm completion with a screenshot of the widget (or wait out the
-  typical 5–30 min), then harvest with `harvest_deep_research.mjs --repost-now`
-  (validated 2026-09-21: 9-min job, 24 citations). `wait_chat_done.mjs --deep-research`
-  still covers the older inline/canvas flows.
+  typical 5–30 min), then harvest with **`harvest_deep_research.mjs --widget-copy`**:
+  it opens the widget's download menu, picks "Copy contents" and reads the clipboard
+  (macOS; clipboard restored afterwards), yielding the report byte-identical to the
+  widget's own "Export to Markdown" (validated 2026-09-21: 9-min job, 24 citations,
+  42 KB). Do **not** use `--repost-now` in this UI: the follow-up goes to the chat's
+  DR orchestrator (GPT-5.6 Instant), streamed half the report, and never finished.
+  `wait_chat_done.mjs --deep-research` still covers the older inline/canvas flows.
 - **A heavy DR job delivers its report as a canvas / artifact "document"** (collapsed card
   titled by the report's first heading, with download + expand icons, e.g.
   *"Research completed in 19m · 12 citations · 131 searches"*), **not** as chat text. While
@@ -135,11 +139,10 @@ If ChatGPT changes the DR DOM again, update `lib/model_pill.mjs` only.
   (assistant-role attr / `article` scan / body scrape) returns empty and
   `wait_chat_done.mjs --deep-research` will WAIT then TIME OUT even though the report is
   finished. Only a trivial DR query (which skips the canvas flow) answers inline.
-- The copy button does **not** write to the OS clipboard under CDP (even with
-  `clipboard-read`/`clipboard-write` granted), so clipboard extraction is a dead end on
-  this transport — this is why `extractAssistantResponse`'s clipboard path is macOS-only.
-  A Windows `Get-Clipboard` path was tried 2026-05-27 and abandoned: the JS-clicked copy is
-  a no-op under CDP, so the OS clipboard returns STALE content. Non-darwin falls back to innerText.
+- Clipboard: on macOS the copy buttons do reach the OS clipboard under CDP (verified
+  2026-09-21), but `pbpaste`/`pbcopy` must run with a UTF-8 `LANG`, otherwise every
+  non-ASCII character comes back as `?` (the lib sets it). On Windows the JS-clicked copy
+  was a no-op under CDP (2026-05-27), so non-darwin paths fall back to DOM extraction.
 - DR chat DOM is genuinely **flaky across reloads** (the canvas card appears/vanishes;
   content lazy-renders only when the document is opened) — the "open it twice / refresh the
   URL" behavior operators have hit.

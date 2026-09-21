@@ -381,14 +381,18 @@ export function extractChatId(url) {
 // would hand back junk instead of the answer. On non-darwin the safe behaviour is
 // to return null here and let callers fall back to innerText.
 
+// pbcopy/pbpaste transcode through the locale: without a UTF-8 LANG every
+// non-ASCII character comes back as "?", which silently corrupts math.
+const CLIPBOARD_ENV = { ...process.env, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' };
+
 function readClipboardText() {
   if (process.platform !== 'darwin') return null;
-  try { return execFileSync('pbpaste', { encoding: 'utf8' }); } catch { return null; }
+  try { return execFileSync('pbpaste', { encoding: 'utf8', env: CLIPBOARD_ENV }); } catch { return null; }
 }
 
 function restoreClipboardText(text) {
   if (process.platform !== 'darwin' || text == null) return;
-  try { execFileSync('pbcopy', { input: text, encoding: 'utf8' }); } catch { /* best-effort */ }
+  try { execFileSync('pbcopy', { input: text, encoding: 'utf8', env: CLIPBOARD_ENV }); } catch { /* best-effort */ }
 }
 
 /**

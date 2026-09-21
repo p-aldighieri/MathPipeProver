@@ -42,13 +42,20 @@
  * instructed to copy verbatim and did so in testing, but for citation-critical use
  * spot-check against the open canvas document.
  *
+ *   --widget-copy  2026-09 UI (macOS). The report lives in a sandboxed research
+ *                  widget; open its download menu, choose "Copy contents", read
+ *                  the clipboard (restored afterwards). Byte-faithful to the
+ *                  widget, no repost, no file download. Run only after the
+ *                  widget shows "Research completed" — the chat DOM cannot see it.
+ *
  * Usage:
  *   node harvest_deep_research.mjs --chat-url URL --port PORT --out PATH \
- *     [--repost-now | --no-repost] [--max-mins N] [--poll-secs N]
+ *     [--widget-copy | --repost-now | --no-repost] [--max-mins N] [--poll-secs N]
  *
  * Exits 0 on success, 1 on transport/URL errors, 2 on timeout.
  */
 import fs from 'fs';
+import { execFileSync } from 'node:child_process';
 import { attachCDP } from './lib/browser.mjs';
 import { latestAssistantText, extractChatId, assistantMarkdown } from './lib/poll.mjs';
 import { isGenerating, fillComposer, clickSend } from './lib/composer.mjs';
@@ -68,7 +75,7 @@ const DR_ACTIVITY_RE = /(Searching the web|Reading sources?|Researching|Searched
 
 const args = process.argv.slice(2);
 let chatUrl = '', port = 9222, outPath = '', maxMins = 30, pollSecs = 30;
-let repostNow = false, noRepost = false, autoWait = false;
+let repostNow = false, noRepost = false, autoWait = false, widgetCopy = false;
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--chat-url') chatUrl = args[++i];
   else if (args[i] === '--port') port = parseInt(args[++i], 10);
@@ -78,6 +85,7 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--repost-now') repostNow = true;
   else if (args[i] === '--no-repost') noRepost = true;
   else if (args[i] === '--auto-wait') autoWait = true;
+  else if (args[i] === '--widget-copy') widgetCopy = true;
 }
 if (!chatUrl || !outPath) { console.error('Need --chat-url and --out'); process.exit(1); }
 const chatId = extractChatId(chatUrl);
@@ -126,6 +134,48 @@ async function pollInline(page, { minLen = 600, label = 'harvest' } = {}) {
   return last;
 }
 
+// pbcopy/pbpaste transcode through the locale: without a UTF-8 LANG every
+// non-ASCII character (math symbols, dashes, citation markers) becomes "?".
+const CLIPBOARD_ENV = { ...process.env, LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8' };
+const readClipboard = () => { try { return execFileSync('pbpaste', { encoding: 'utf8', env: CLIPBOARD_ENV }); } catch { return null; } };
+const writeClipboard = (t) => { try { execFileSync('pbcopy', { input: t, encoding: 'utf8', env: CLIPBOARD_ENV }); } catch { /* best-effort */ } };
+
+/**
+ * 2026-09 Deep Research UI: the report renders inside a nested, cross-origin
+ * sandbox iframe (title "internal://deep-research") that neither the chat DOM
+ * nor Playwright frame handles can read. Its card header has a download icon
+ * (62px from the widget's right edge, 58px down) opening a menu whose first
+ * item is "Copy contents" (~176px from the right edge, 100px down); the other
+ * items export Markdown/Word/PDF files. Pointer clicks at page coordinates
+ * reach the sandbox; the copy lands on the OS clipboard (macOS, verified).
+ */
+async function copyFromResearchWidget(page) {
+  if (process.platform !== 'darwin') {
+    throw new Error('--widget-copy reads the macOS clipboard; elsewhere use the widget\'s Export to Markdown.');
+  }
+  const frame = page.locator('iframe[title="internal://deep-research"]').last();
+  if ((await frame.count()) === 0) throw new Error('No Deep Research widget in this chat.');
+  await frame.scrollIntoViewIfNeeded();
+  await sleep(1500);
+  const box = await frame.boundingBox();
+  const previous = readClipboard();
+  const sentinel = `__mpp_widget_copy_${Date.now()}__`;
+  writeClipboard(sentinel);
+  try {
+    await page.mouse.click(box.x + box.width - 62, box.y + 58);
+    await sleep(1200);
+    await page.mouse.click(box.x + box.width - 176, box.y + 100);
+    await sleep(2500);
+    const text = readClipboard();
+    if (!text || text === sentinel) return '';
+    // Drop ChatGPT's private-use citation spans (U+E200 … U+E201), which only
+    // resolve inside that chat session.
+    return text.replace(/[ \t]*\ue200[^\ue201]*\ue201/g, '').trim();
+  } finally {
+    writeClipboard(previous ?? '');
+  }
+}
+
 try {
   const { context, close } = await attachCDP({ port });
   let page = context.pages().find((p) => p.url().includes(chatId)) || await context.newPage();
@@ -135,6 +185,19 @@ try {
   if (!page.url().includes(chatId)) {
     console.error(`Navigation drifted off target chat ${chatId}; current URL: ${page.url()}`);
     await close(); process.exit(1);
+  }
+
+  // ── Widget copy (2026-09 UI): read the report straight out of the widget ──
+  if (widgetCopy) {
+    await sleep(4000);
+    const text = await copyFromResearchWidget(page);
+    if (text.length < 1000) {
+      console.error(`Widget copy returned ${text.length} chars — is research finished (widget shows "Research completed")?`);
+      await close(); process.exit(2);
+    }
+    fs.writeFileSync(outPath, `${text}\n`, 'utf-8');
+    console.log(`DONE: wrote ${text.length} chars to ${outPath} (research widget, Copy contents)`);
+    await close(); process.exit(0);
   }
 
   // ── Phase 1 (--auto-wait, EXPERIMENTAL): wait for research to go quiet ──

@@ -70,7 +70,7 @@ after the prompt is filled and refuse to send on a mismatch.
    widget and the chat DOM never changes when it finishes, so the watcher cannot
    see completion. Check the widget with a screenshot after ~10 min (it shows
    "Research completed in Nm · K citations"), then harvest with
-   `node scripts/chatgpt_browser_agent/harvest_deep_research.mjs --port PORT --chat-url CHAT_URL --out RESPONSE_FILE --repost-now`
+   `node scripts/chatgpt_browser_agent/harvest_deep_research.mjs --port PORT --chat-url CHAT_URL --out RESPONSE_FILE --widget-copy`
    (see CLAUDE.md "Model modes" → DR harvest).
 
 ## Recovery
