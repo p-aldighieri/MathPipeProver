@@ -528,7 +528,11 @@ async function main() {
     page = await runtime.context.newPage();
     createdPage = true;
   } else {
-    const existing = runtime.context.pages()[0];
+    // Reuse a non-chat ChatGPT tab (the project tab). Never adopt a tab that
+    // sits on a chat: it may be a watcher's pinned tab, and navigating it
+    // away makes that watcher exit (observed 2026-09-21).
+    const isChatTab = (p) => /\/c\/[0-9a-f-]{8,}/i.test(p.url());
+    const existing = runtime.context.pages().find((p) => p.url().includes("chatgpt.com") && !isChatTab(p));
     if (existing) { page = existing; createdPage = false; }
     else { page = await runtime.context.newPage(); createdPage = true; }
   }

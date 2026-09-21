@@ -73,6 +73,7 @@ const RENAVIGATE_EVERY = 6;   // polls; refreshes a background tab's stale DOM
 const ERROR_CONFIRMATIONS = 2; // consecutive polls showing an error banner
 
 let close = async () => {};
+let context = null;
 let page = null;
 let createdPage = false;
 const disposeTab = async () => {
@@ -101,9 +102,10 @@ async function readAnswer() {
 try {
   const att = await attachCDP({ port });
   close = att.close;
-  page = att.context.pages().find((p) => p.url().includes(chatId)) || null;
+  context = att.context;
+  page = context.pages().find((p) => p.url().includes(chatId)) || null;
   createdPage = !page;
-  if (!page) page = await att.context.newPage();
+  if (!page) page = await context.newPage();
   const navNote = await goToChat();
   if (navNote) {
     await sleep(5000);
@@ -120,18 +122,35 @@ try {
   let lastText = '';
   let stableCycles = 0;
   let errorCycles = 0;
+  let driftCycles = 0;
   let lastPhase = '';
 
   while (Date.now() < deadline) {
     pollIdx += 1;
+    if (page.isClosed()) {
+      // Someone closed our tab; generation is server-side, so just reopen.
+      console.log(`[${elapsed()}] watcher tab was closed; reopening`);
+      page = await context.newPage();
+      createdPage = true;
+      await goToChat();
+    }
     if (pollIdx > 1 && pollIdx % RENAVIGATE_EVERY === 0) {
       const note = await goToChat();
       if (note && verbose) console.log(`[${elapsed()}] ${note}; retrying next cycle`);
     }
+    // Another script may navigate this tab away (a tab-reusing command). Go
+    // back rather than dying; give up only if the drift keeps recurring.
     if (!page.url().includes(chatId)) {
-      console.error(`Navigation drifted off target chat ${chatId}; current URL: ${page.url()}`);
-      await finish(1);
+      driftCycles += 1;
+      console.log(`[${elapsed()}] tab drifted to ${page.url()}; returning to the chat (${driftCycles}/3)`);
+      if (driftCycles >= 3) {
+        console.error(`Navigation keeps drifting off target chat ${chatId}; giving up.`);
+        await finish(1);
+      }
+      await goToChat();
+      continue;
     }
+    driftCycles = 0;
 
     let state;
     try {
@@ -141,7 +160,7 @@ try {
       }
     } catch (e) {
       const msg = String(e.message).split('\n')[0];
-      if (/context was destroyed|navigation|Target closed/i.test(msg)) {
+      if (/context was destroyed|navigation|Target closed|has been closed/i.test(msg)) {
         await sleep(3000);
         continue;
       }
