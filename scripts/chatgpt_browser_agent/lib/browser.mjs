@@ -79,6 +79,13 @@ export async function attachCDP({ port, url, attempts, timeoutMs } = {}) {
       };
     } catch (error) {
       lastErr = error;
+      // A Chrome whose last window was closed keeps running with zero page
+      // targets, and connectOverCDP then fails with "Browser context
+      // management is not supported" (observed 2026-09-21). Open one blank
+      // tab through the plain HTTP endpoint and retry.
+      if (/context management is not supported/i.test(String(error && error.message))) {
+        await fetch(`${cdpUrl.replace(/\/$/, '')}/json/new?about:blank`, { method: 'PUT' }).catch(() => {});
+      }
       if (i < maxAttempts) {
         await new Promise((r) => setTimeout(r, 3000));
       }
